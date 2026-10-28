@@ -87,10 +87,10 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-041 | Data | `schemaVersion` + lenient `Json` + committed v1 fixtures + `DataMigration` for breaking changes |
 | D-042 | Data | Exact document fields; Base64 for cells, the log and binary snapshots |
 | D-043 | Data | Persist after every accepted move, undo, keep-going and new game; conflated, never cancelled mid-write |
-| D-044 | Data | Per-size records. Bests never decrease (except Reset). Games finalize on New game, idempotently by `gameId`, with a recovery entry in the fresh game file |
+| D-044 | Data | Per-size records. Bests never decrease (except Reset). Games finalize on New game, idempotently by `gameId`; the game file carries recovery entries until a records write holding them has returned normally |
 | D-045 | Data | A corrupt file falls back to that file's defaults only. Never crash |
-| D-046 | Data | Budgets: 8×8 game with 10k moves ≤ 256 KiB and ≤ 50 ms encode+decode; records ≤ 64 KiB |
-| D-047 | Data | The UI is a pure function of persisted state; no replay on resume or recreate; animated presentations are one-shot and settle in the ViewModel once shown; JVM process-death test |
+| D-046 | Data | Budgets: 8×8 game with 10k moves ≤ 256 KiB and ≤ 50 ms encode+decode; records ≤ 64 KiB; ≤ 16 recovery entries per game file |
+| D-047 | Data | The UI is a pure function of persisted state; no replay on resume or recreate; animated presentations are one-shot and settle in the ViewModel once shown, held back only per presentation scope; JVM process-death test |
 | D-048 | Data | Auto Backup and D2D include `datastore/`; both rule XMLs present and tested |
 | D-050 | Input | Default: commit during the drag at 24 dp with dominant ratio ≥ 1.4. "On release" setting; fling ≥ 600 dp/s |
 | D-051 | Input | Swipe anywhere on the game content (on the board only in SCROLL, D-188); a swipe that starts on a button never triggers it; board inset from gesture insets |
@@ -118,7 +118,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-081 | A11y | Polite live-region status line; assertive win/game-over with `paneTitle` + focus |
 | D-082 | A11y | Direction pad auto-shown when touch exploration is on |
 | D-083 | A11y | Contrast: tile ink ≥ 3.0 (1–3 digits) / ≥ 4.5 (≥ 4 digits); CVD ΔE gates; `PaletteContrastTest` |
-| D-084 | A11y | Touch targets ≥ 48 dp; chrome survives 200 % font scale; visible focus ≥ 3:1 |
+| D-084 | A11y | Touch targets ≥ 48 dp; chrome survives 200 % font scale; scores never truncated (fit chain); visible focus ≥ 3:1 |
 | D-085 | A11y | ATF checks (Roborazzi, LATEST preset, Error level) on every screen golden |
 | D-090 | Layout | No orientation lock; `appCategory="game"`; no `configChanges`; touchscreen not required |
 | D-091 | Layout | Preferred modes: height < 480 → 3-column; width ≥ 840 → board + side panel; else stacked (D-188 resolves the drawn one). Postures deferred |
@@ -1144,7 +1144,7 @@ detekt = { id = "dev.detekt", version.ref = "detekt" }
 | `bestAtStart` | `Long` | |
 | `newBestAnnounced` | `Boolean` | |
 | `gameId` | `Long` | Finalization identity (D-044): ≥ 1 whenever `size != 0`; unique and strictly increasing per size |
-| `previousFinalization` | object or absent | Recovery entry (D-044): the finalization input of the game this one replaced, present only when that game was counted. Fields `gameId`, `status`, `score`, `moveCount`, `elapsedMs`, `undoCount`, `maxExp` |
+| `pendingFinalizations` | list of objects (default empty) | Recovery entries (D-044): the finalization inputs of the counted games that earlier New games on this size replaced and that the records file is not yet known to hold, oldest first (strictly ascending `gameId`, each below this game's `gameId`), at most 16 (D-046). Fields `gameId`, `status`, `score`, `moveCount`, `elapsedMs`, `undoCount`, `maxExp` |
 
 Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 
@@ -1192,6 +1192,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rejected:** a JSON array for cells; protobuf.
 - **Source:** [ORCH] O10 · [RESEARCH] research/05 §7.
 - **Amended in plan review (Codex r1):** added the `gameId` and `previousFinalization` game fields and the `records.json` map `lastFinalizedGameId` for D-044's recoverable finalization. v1 has not shipped, so this changes the v1 schema in place: `schemaVersion` stays 1 and no `DataMigration` is needed.
+- **Amended in plan review (Codex r2):** the single `previousFinalization` object became the list `pendingFinalizations` (D-044). v1 has not shipped, so the key is replaced in place: `schemaVersion` stays 1, no `DataMigration`, and the write-once fixtures (QUALITY.md §1.5) are first written with the list. Before, one slot was overwritten by the next New game, so a records write that failed before a score-0 New game lost the counted game's stats.
 
 #### D-043 — Write policy
 - **Decision.** Enqueue a save of the full game document (D-024) after each of:
@@ -1204,11 +1205,13 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - Records are updated **live** on accepted moves when `bestScore`, `bestScoreNoUndo` (only if `undoCount == 0`) or `bestTileExp` increases.
 - Writes are conflated and never cancelled. If the process dies, at most the single in-flight change is lost; this is documented in README.
   - New game is one change that writes two files, `records.json` and `game-N.json`, with no order between them. D-044's finalization protocol makes it all-or-nothing after the next load: any subset of the two writes may land, and the old game is still counted exactly once.
+  - A failed `records.json` write is retried: every New game and every `ON_PAUSE` resubmit the current records document when its latest write threw and nothing newer is queued (ARCHITECTURE.md §4.5, §4.9). There is no retry timer.
 - `elapsedMs` accumulates `MonotonicClock` time only while the Game destination is `RESUMED` and the status is `PLAYING` or `KEEP_PLAYING` after the first move.
 - **Rationale:** O10 ("commit after every accepted move"); research/07 G9.
 - **Rejected:** writing only in `onStop` (loses moves on a kill); blocking `onStop`.
 - **Source:** [ORCH] O10.
 - **Amended in plan review (Codex r1):** New game's two writes are covered by D-044's recovery. Before, a kill between them could count the old game twice or lose it.
+- **Amended in plan review (Codex r2):** a failed records write is retried at the next New game and `ON_PAUSE`. Before, a records write that failed stayed unwritten until some later change happened to rewrite the document, and with D-044's single recovery entry a score-0 New game in between lost the counted game.
 
 #### D-044 — Records and statistics
 - **Decision.**
@@ -1221,9 +1224,11 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Finalization identity and recovery.** New game changes two independent files, so finalization is keyed by a game identity and can be recovered (ARCHITECTURE.md §4.9):
   - **Identity.** Every saved game has `gameId: Long ≥ 1`, unique and strictly increasing per size. A fresh game gets `max(replaced game's gameId, lastFinalizedGameId[size]) + 1`, with 0 standing in for a missing value. `records.json` keeps `lastFinalizedGameId[size]`, the highest `gameId` finalized on that size, in the same document as the counters it guards, so each records write is atomic.
   - **Idempotent finalization.** Finalizing a game whose `gameId ≤ lastFinalizedGameId[size]` changes nothing. Otherwise it applies the counters above and sets `lastFinalizedGameId[size] = gameId`. A game is **finalized** iff `gameId ≤ lastFinalizedGameId[size]`. This holds because ids on a size grow in creation order and only the current game is ever finalized: every lower id was counted or was replaced uncounted by a New game that already took place.
-  - **Order at New game** (main thread, no suspension): (1) finalize the old game in the in-memory records and submit `records.json`; (2) create the fresh game, whose `previousFinalization` is the old game's finalization input (`gameId`, `status`, `score`, `moveCount`, `elapsedMs`, `undoCount`, `maxExp`) when the old game was counted, else absent; (3) submit `game-N.json`. The two writes may land in either order, or not at all.
-  - **Recovery on every game load** (the start size, and every size switch): (R1) if the loaded game has a `previousFinalization` that is not finalized yet, finalize it; (R2) if the loaded game is itself finalized, a New game already replaced it but that New game's game write was lost, so finish that New game (steps 2–3, with step 1 a no-op) without counting the old game again. After `ready`, R1 alone also runs over the saved games of the other sizes.
-  - **Outcomes of a kill during New game:** neither write landed → the old game comes back, counted once at the next New game; only records landed → R2; only the game file landed → R1; both landed → nothing to do. Every outcome counts the old game exactly once.
+  - **Order at New game** (main thread, no suspension): (0) retry the records write if its latest attempt threw; (1) finalize the old game in the in-memory records and submit `records.json`; (2) create the fresh game, whose `pendingFinalizations` is the old game's list followed by the old game's finalization input (`gameId`, `status`, `score`, `moveCount`, `elapsedMs`, `undoCount`, `maxExp`) when the old game was counted, minus every entry the records file is known to hold, and capped at the newest 16; (3) submit `game-N.json`. The two writes may land in either order, or not at all.
+  - **Pending entries and durable records.** The records file is known to hold an entry when its `gameId ≤ lastFinalizedGameId[size]` in the last records document this process read at load or wrote with a write that returned normally (the writer reports exactly those writes, ARCHITECTURE.md §4.5). Only a replacement (New game, R2) drops entries, and only those; every other save carries the list unchanged. So a counted game stays in the game file through any number of later New games, counted or not, until a records write that includes it has returned normally.
+  - **Overflow.** The list holds at most 16 entries (D-046). A replacement that would carry more keeps the newest 16. The dropped oldest entry stays counted in the in-memory records, and the writer keeps retrying (every counted New game, every New game and pause retry, a raised best, R1, Reset), so it is stored by the first records write that returns normally. It is lost only if `records.json` cannot be written at all from its own New game through at least 16 more counted New games on that size until the process dies.
+  - **Recovery on every game load** (the start size, and every size switch): (R1) finalize every entry of the loaded game's `pendingFinalizations` that is not finalized yet, in list order (ascending `gameId`; applied out of order, a newer entry would raise the watermark past an older one); (R2) if the loaded game is itself finalized, a New game already replaced it but that New game's game write was lost, so finish that New game (steps 2–3, with step 1 a no-op) without counting the old game again. After `ready`, R1 alone also runs over the saved games of the other sizes.
+  - **Outcomes of a kill during New game:** neither write landed → the old game comes back, counted once at the next New game; only records landed → R2; only the game file landed → R1; both landed → nothing to do. Every outcome counts the old game exactly once. A records write that failed earlier is covered the same way, because its entry is still in the game file.
 - **Bests.** `bestScore`, `bestScoreNoUndo` and `bestTileExp` never decrease, except through **Reset statistics**.
   - Reset lives in the Statistics screen's top bar. It takes two sequential confirmation dialogs.
   - It clears all sizes' records (`sizes` becomes empty) and leaves in-progress games untouched. It **keeps** `lastFinalizedGameId`, so a recovery entry still held by a game file, or a stale game file, can never re-count a game after the reset.
@@ -1241,15 +1246,18 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - total moves;
   - time played;
   - undos used.
-- **Rationale:** research/05 §4.5 (schema; histogram stored for later); O7 (per size); O8 (undo count). The recovery entry rides inside the game file, which must be written anyway, so neither file ever waits for the other.
+- **Rationale:** research/05 §4.5 (schema; histogram stored for later); O7 (per size); O8 (undo count). The recovery entries ride inside the game file, which must be written anyway, so neither file ever waits for the other.
 - **Rejected:**
   - finalizing on game over, which double-counts after an undo; a top-10 list (v1.x);
   - `seed` (+ size) as the identity: `FixedSeedSource` repeats seeds in every test container, and a later seeded mode (daily, replay) repeats them by design;
-  - ordering the files (holding the game write until the records write lands): `ConflatedWriter` swallows an `IOException` with no retry (ARCHITECTURE.md §9.3), so a failed records write would still lose the stats, and holding the game write back risks losing moves;
-  - one combined file (D-045 rejects it).
+  - ordering the files (holding the game write until the records write lands): `ConflatedWriter` swallows an `IOException` and retries only at the next New game or pause (ARCHITECTURE.md §9.3), so holding the game write back would hold back moves for as long as records writes fail;
+  - one combined file (D-045 rejects it);
+  - a single recovery entry overwritten by the next New game (the Codex r1 design): a records write that failed, followed by a New game from a score-0 game before the next load, dropped the counted game;
+  - an unbounded entry list: the cap of 16 with in-memory counting and retries keeps the file bounded (D-046) and loses an entry only when `records.json` cannot be written at all.
 - **Source:** [ORCH] O7, O8 · [RESEARCH].
 - **Note:** Clarified by D-198.
 - **Amended in plan review (Codex r1):** added the finalization identity, the idempotent finalization, the `previousFinalization` recovery entry with the R1/R2 load-time recovery, and Reset keeping `lastFinalizedGameId`. Before, a kill between New game's records and game writes either restored an already counted game, which D-198's fold and the next New game then counted again, or lost the old game's stats.
+- **Amended in plan review (Codex r2):** the single `previousFinalization` became `pendingFinalizations`, a list carried by every replacement until the records file is known to hold each entry (durable success reported by the writer), capped at 16 with the overflow rule above; R1 and D-198's fold apply every entry in id order; New game and pause retry a failed records write (D-043). Before, if New game's records write failed with the swallowed `IOException` and the player started New game again before a move, the second New game set the entry to absent (the score-0 game was not counted) and overwrote the only durable copy, so after a relaunch neither file held the first game's finalization.
 
 #### D-045 — Corruption and failure handling
 - **Decision.** Each store's `ReplaceFileCorruptionHandler` returns that document's defaults:
@@ -1269,9 +1277,11 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - `records.json` with all sizes populated is **≤ 64 KiB**;
   - `settings.json` is **≤ 4 KiB**.
 - Expected size for the 10k-move game: about 3.4 KB of Base64 log plus 313 snapshots × 85 B ≈ 36 KB of Base64 snapshots, so about 40 KB in total.
+- **Recovery entries.** A game document carries at most **16** `pendingFinalizations` (`MAX_PENDING_FINALIZATIONS`, D-044), about 120 B each, so at most about 2 KB on top of the figures above. The game document mapper rejects a longer list as corruption (ARCHITECTURE.md §4.4), and D-044's overflow rule keeps the newest 16.
 - **Rationale:** research/07 G12 (stricter than research/06 §4.2's "< 5 MB at 20k moves", because the whole file is rewritten on every move).
 - **Rejected:** research/06 §4.2's 5 MB at 20k moves (too loose for a file that is rewritten on every move).
 - **Source:** [ORCH] O10 · [RESEARCH].
+- **Amended in plan review (Codex r2):** added the 16-entry cap for D-044's recovery entries, which became a list. Before, the single entry was bounded by construction.
 
 #### D-047 — Process death and restore
 - **Decision:**
@@ -1280,17 +1290,19 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - **Presentations are one-shot** (ARCHITECTURE.md §4.11). The activity-scoped `GameViewModel` survives recreation, so its animated values (a `Moved` or other non-`Restored` `BoardUi`, a header with `lastDelta > 0`, an `OverlayEntry.Animated` card) are consumed by the first composition that starts presenting them:
     - `BoardView` calls `onBoardPresented(moveId)` at the origin, `GameHeader` calls `onHeaderPresented(deltaMoveId)` and `OverlayController` calls `onOverlayPresented(moveId)` from an effect of the composition that read the value;
     - the ViewModel then replaces the value with its static equivalent for the same committed state: `BoardPresenter.settled(board)` (same `moveId`, `epoch` and tile ids, every tile `Static`, event `Restored`), `lastDelta = 0`, entry `Restored`. No game, history, clock, records or settings change and no save;
-    - the Game screen reads `board`, `header` and `overlay` through `collectPresentedAsState`, which hides that replacement from a composition already presenting the value, so a running animation is never cut short;
-    - any composition created later (recreation, return from a sub-screen, a board composed anew by an arrangement switch, D-095) renders the final static frame at once. Recreation in the middle of an animation snaps to its final frame. Pending haptics and timeline waits die with the old composition and are never fired again;
+    - the Game screen collects `board`, `header` and `overlay` once each, and every reader reads them through a `rememberPresented` retention state of its **presentation scope**: the screen scope for what `GameScreen` composes outside `GameLayout`'s arrangement slots (`OverlayController`, cards, scrim, `HapticsController`'s effects), and one arrangement scope made inside each slot for its `BoardView`, `GameHeader` and status line (ARCHITECTURE.md §4.11 item 2). A retention state hides the replacement from the scope already presenting the value, so a running animation is never cut short, and it is created and forgotten with its scope, so it never hands a retained animated value to a composition created after it;
+    - any scope created later (recreation, return from a sub-screen, the arrangement slot that an arrangement switch composes, D-095) starts from the ViewModel's current values and renders the final static frame at once. Recreation in the middle of an animation snaps to its final frame. Pending haptics and timeline waits die with the old composition and are never fired again; an arrangement switch disposes neither, because `MoveTimeline` and `HapticsController` belong to the screen scope, and `MoveTimeline.publish` keeps the first origin of a `moveId`;
     - a nudge has no end state: `BoardView` and `HapticsController` never play the nudge that already existed at their first composition.
   - **Tests:**
     - `ProcessDeathRestoreTest` (JVM): container A applies N moves and undos on every size to temporary files, then its scope is cancelled. Container B, built on the same files, must reproduce board, score, `rngState`, log, snapshots, `undoCount`, `elapsedMs` and status exactly.
     - `RecreateNoReplayTest` (Robolectric): `ActivityScenario.recreate()` and a pause/resume cycle produce only `Static` tiles and an unchanged history. From M3 part 2 it also recreates the composition after a settled move, in the middle of a move, during and after the win sequence, during and after the game-over sequence, and after an invalid move: the first frame is the final static frame and no haptic fires again (FEATURES.md F07-AC26–AC30).
     - `GameViewModelTest.presentationReportsSettleWithoutStateChange` and `BoardPresenterTest.settledKeepsIdentityAndIsStatic` (JVM, M2); `RestoreNoMotionTest` AC-RESTORE-2 (a live composition keeps animating after the report; board case M3 part 1, win-card case M3 part 2).
+    - `LayoutMotionTest.arrangementSwitchAfterPresentedMoveReplaysNothing` (M4, FEATURES.md F18-AC14, MOTION_SPEC.md AC-LAYOUT-3): arrangement switches after a presented, settled move start no animation, float or haptic and publish no new origin.
   - Transient UI state (open sheets) uses `rememberSaveable` and the Nav3 back stack.
 - **Amended in plan review (Codex r1):** added one-shot presentations. Before, nothing replaced the activity-scoped `GameViewModel`'s last animated `BoardUi`, "+N" delta or `OverlayEntry.Animated` after the UI had shown them, so recreating the activity after an accepted move gave the new `BoardView` a fresh animator and a first run of `LaunchedEffect(board.moveId)` that replayed the last move, its haptic and any win or game-over entry.
+- **Amended in plan review (Codex r2):** presentation retention is scoped to each presentation scope. Before, `GameScreen` made one `collectPresentedAsState` per flow and passed it into every arrangement. That retention outlived the arrangement slot, so after a presented move an arrangement switch composed a new `BoardView` and `GameHeader` that still read the retained `Moved` board and `lastDelta > 0` instead of the settled values. Their fresh effects replayed the move and its "+N" float. `collectPresentedAsState` is replaced by one collector per flow plus `rememberPresented` in each scope, and `MoveTimeline.publish` now keeps the first origin of a `moveId`.
 - **Rationale:** research/01 §4.9 (the legacy reload defects); research/07 G9.
-- **Rejected:** rebuilding from scratch on resume (legacy B7–B9); `SavedStateHandle` as the game store (not durable for long histories); settling by `presenter.reset(state, Restored)` (new ids and a new `moveId` would snap the live composition's slide); settling without `collectPresentedAsState` (the live composition would drop its ghosts mid-slide and recompose); a UI-only "a new composition never animates its first board" rule (the ViewModel would keep exposing an animated board, header and card entry as current state).
+- **Rejected:** rebuilding from scratch on resume (legacy B7–B9); `SavedStateHandle` as the game store (not durable for long histories); settling by `presenter.reset(state, Restored)` (new ids and a new `moveId` would snap the live composition's slide); settling without presentation retention (the live composition would drop its ghosts mid-slide and recompose); one retention state for the whole Game screen (it outlives an arrangement slot, so the new arrangement replays a move already shown); a UI-only "a new composition never animates its first board" rule (the ViewModel would keep exposing an animated board, header and card entry as current state).
 - **Source:** [ORCH] O10, O11.
 
 #### D-048 — Backup and device transfer
@@ -1782,13 +1794,16 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Decision:**
   - Every interactive element is ≥ 48×48 dp (`minimumInteractiveComponentSize`).
   - Chrome text is in sp and must not clip or truncate at `fontScale` 2.0. Labels wrap to two lines.
+  - **Score and Best values** are always printed in full (`Long.toString`, every digit; no ellipsis, no "K"/"M") and never below 14 sp. When a value does not fit, the header falls back in order: (1) the chips share the row with the title or size chip (INLINE); (2) the chips move to a full-width row of their own, side by side (OWN_ROW); (3) each chip takes a full-width row (STACKED); (4) a STACKED value too long for its row wraps between digits. The pure `scoreFit` of DESIGN_SYSTEM.md §7.2 decides from the measured 14 sp digit advance at the current font scale; the measured chrome uses the live digit count, so the board shrinks or the arrangement changes instead (D-188). Accessibility text is unchanged: the chip still reads the full value.
   - Tile numerals ignore `fontScale` (D-077).
   - Focus indicators are visible with ≥ 3:1 contrast.
   - Color is never the only cue, because the number is always printed.
-- **Rationale:** research/04 §6.3–§6.5 (48 dp; non-linear font scaling to 200 %); WCAG 1.4.11.
-- **Rejected:** scaling tile numerals with `fontScale` (they already fill the fixed geometry, research/04 §6.5).
+- **Rationale:** research/04 §6.3–§6.5 (48 dp; non-linear font scaling to 200 %); WCAG 1.4.11. At `fontScale` 2.0, 14 sp is 26 dp, so a 9-digit value at the 0.665 em digit advance is 156 dp wide before padding.
+- **Rejected:** scaling tile numerals with `fontScale` (they already fill the fixed geometry, research/04 §6.5); a minimum below 14 sp, compact K/M scores and ellipsized values for long scores (the exact score is the point of the chip, and K/M would differ from the spoken value).
 - **Source:** [RESEARCH] research/04 §6.3–6.5.
 - **Note:** Extended by D-205.
+- **Amended in plan review (Codex r2):** added the score-value fallback chain and its measurement. Before, a value that needed less than 14 sp stayed at 14 sp and its chip widened only "up to its slot", a width no document defined, and the measurement probe sized the header with scores of 0. At `fontScale` 2.0 an 8×8 game's 9-digit Score and Best need about 367 dp side by side (2 × (156 + 24) + 8, before the title or size chip) in a 328 dp header (360 dp window), so they clipped. F17-AC22 and F17-AC23 were added.
+- **Amended in plan review (Codex r2), game-over card:** the game-over card's Score and Best values (Regular and Compact) follow the same rule: one fitted size from 14 sp up to the card's maximum (40 sp for the Regular score, 24 sp for the boxes) for the value's width, then wrapping between digits at 14 sp (`scoreLines`). `Text(autoSize = …)` with `maxLines = 1` is not used for any score value, because at its minimum it clips (F17-AC24).
 
 #### D-085 — Automated accessibility checks
 - **Decision:**
@@ -1899,10 +1914,12 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - Activity recreation (rotation, resize, fold, locale, `uiMode`) restores from the ViewModel and DataStore with `Static` tiles (D-047).
   - Live layout changes that keep the resolved arrangement (D-188), such as the first-launch hint leaving, the TalkBack pad, Immersive mode or an inset change, animate the board and panel bounds with `animateBounds` under Full motion only.
   - A live change that switches the arrangement is not animated. `GameLayout` gives each arrangement its own subcomposition and does not use `movableContentOf`, so the new arrangement composes the board anew: it renders its settled static frame at its new size with no bounds animation, and a move animation in flight snaps to its end, per D-047's one-shot presentations.
+  - Each arrangement slot makes its own presentation scope (D-047; ARCHITECTURE.md §4.11 item 2) before composing its board and header, so a new arrangement starts from the ViewModel's current, settled values and never replays a move, "+N" or moment that the previous arrangement already showed. A live arrangement keeps its retained instances and is not recomposed by a report. What `GameScreen` composes outside the slots (cards, scrim, haptics, `MoveTimeline`) outlives the switch and keeps running. `GameLayout` keeps no slot for reuse. Tests: `LayoutMotionTest.arrangementSwitchRendersSettledBoard` (FEATURES.md F18-AC13) and `LayoutMotionTest.arrangementSwitchAfterPresentedMoveReplaysNothing` (F18-AC14).
 - **Rationale:** research/07 G9 (recreation must not replay animations); research/04 §7.3 (`animateBounds` for mode changes).
 - **Rejected:** `configChanges` to avoid recreation (fold, locale and `uiMode` changes still recreate; research/01 §3); `movableContentOf` to carry the board across arrangements (more state to move through the `SubcomposeLayout` for a rare transition, when the static frame of D-047 already covers it).
 - **Source:** [RESEARCH] research/04 §7.3.
 - **Amended in plan review (Codex r1):** bounds animate only within one arrangement; an arrangement switch renders the board statically, like a recreation. Before, MOTION_SPEC.md §3.16 and FEATURES.md F18 had the bounds animate when the pad or the hint switched the arrangement (for example STACKED → SCROLL), which `GameLayout`'s per-arrangement subcomposition cannot do: the board in the new arrangement is a new composition and renders the settled frame of D-047.
+- **Amended in plan review (Codex r2):** each arrangement slot now has its own presentation scope. Before, the new arrangement's `BoardView` and `GameHeader` read the retention states that `GameScreen` made once for the whole screen. Those still held the animated values of a move the old arrangement had presented, so the new arrangement replayed the move and its "+N" float instead of drawing the settled frame. F18-AC14 was added for a switch after the move has settled.
 
 ---
 
@@ -3016,7 +3033,7 @@ jobs:
 #### D-188 — Board layout amendments (amends D-051, D-075, D-091; clarifies D-009)
 - **Decision:**
   - **Margins.** D-075's margins (16 / 24 / 32 dp) apply per axis: horizontal margins by width class, vertical margins by height class.
-  - **STACKED chrome** is measured, not fixed: header + controls + 2 × 24 dp, which is 240 dp at fontScale 1.0. The COMPACT header is one 64 dp row (size chip, Score, Best; no title) with 8 dp gaps above and below the board: 160 dp, or 264 dp with the TalkBack pad.
+  - **STACKED chrome** is measured, not fixed: header + controls + 2 × 24 dp, which is 240 dp at fontScale 1.0. The COMPACT header is one 64 dp row (size chip, Score, Best; no title) with 8 dp gaps above and below the board: 160 dp, or 264 dp with the TalkBack pad. Either header grows when D-084's fallback chain moves the score chips to their own row or stacks them.
   - **Width-aware resolution.** D-091's order gives only the *preferred* mode. The pure `resolveGameLayout(window, chrome)` (DESIGN_SYSTEM.md §5.3) computes the board each candidate arrangement would give for the window, with the TalkBack rail width (208 dp) and the measured chrome, and the first rule that holds wins:
     1. the preferred THREE_COLUMN or SIDE_PANEL, when its board is at least `BoardFloor` = 220 dp, its rail or panel content fits, and its board is at least STACKED's (or STACKED does not fit);
     2. STACKED, with the full header while the board stays at least 280 dp and the COMPACT header otherwise, when its board is at least 220 dp (full-header chrome is as wide as the board and re-measured at that width; COMPACT chrome spans the content width);
@@ -3024,6 +3041,7 @@ jobs:
     4. **SCROLL**, a board-first scrolling column: the COMPACT header, then the board sized to fill the first screen (with the status line while the pad is shown), between 220 and 720 dp, then the rest of the chrome below the fold.
   - The board is never below 220 dp, never above 720 dp and never negative. Only SCROLL lets chrome leave the screen, and there it scrolls. A 360×450 split-screen pane is STACKED with the COMPACT header (board 234 dp), and SCROLL (274 dp) with the TalkBack pad; its THREE_COLUMN board would be −16 dp (−112 dp with the pad).
   - The status line enters the resolution at its reserved two-line height, so an announcement never changes the arrangement.
+  - **Score chips are measured with the live digit count.** The measurement probe shows placeholder scores with as many digits as the larger of Score and Best, so the header, rails and panel are measured in the chip layout D-084's fallback chain will draw (DESIGN_SYSTEM.md §5.3, §7.2). A change in that digit count is a live layout change. A FULL header is kept only when its re-measured board is at least 280 dp and still fits with its chrome; otherwise STACKED uses the COMPACT header.
   - **SCROLL input** (amends D-051 for this arrangement only): `swipeToMove` is attached to the board, so a drag that starts on the board is a move and a drag that starts elsewhere scrolls. When a win or game-over card composes, the column scrolls the whole board into view.
   - **First-launch hint placement:**
     - STACKED and SCROLL: above the board;
@@ -3040,6 +3058,7 @@ jobs:
 - **Rejected:** the literal fixed chrome; a scrolling Game screen as the normal layout (it is only the SCROLL last resort, where nothing else keeps a 220 dp board); rails narrower than 160 dp (the score chips and buttons no longer fit); a board below 220 dp.
 - **Source:** [RESEARCH] DESIGN_SYSTEM.md §5.2–§5.4.
 - **Amended in plan review (Codex r1):** the arrangement is now resolved from the board each candidate gives, and SCROLL was added. Before, the height rule chose THREE_COLUMN for every window under 480 dp tall, so a 360×450 split-screen pane got a −16 dp board (35 dp at 411×450, −61 dp there with the 208 dp TalkBack rails), and the fit guard fell back to THREE_COLUMN without checking its width.
+- **Amended in plan review (Codex r2):** the score chips enter the measured chrome with the live digit count, and the FULL header is dropped when its one re-measure still overflows. Before, the probe measured the header with scores of 0, so a header whose long values had to stack (D-084) was measured one row tall and overlapped the board; and a header that grows in steps as it narrows could leave the single re-measure short of `availH`. F18-AC15 was added.
 
 #### D-189 — Theme token additions (extends D-070, D-071)
 - **Decision:**
@@ -3219,12 +3238,13 @@ jobs:
   - Reset statistics leaves in-progress games untouched, including their `bestAtStart`, and keeps `lastFinalizedGameId` (D-044).
   - **Display-time fold.**
     - `StatsViewModel` combines `records` with `GameRepository.peek(n)` for n = 3..8.
-    - For each size it displays `RecordsMath.displayed(records, game)` without persisting it. That function first finalizes the saved game's `previousFinalization`, if any, and then the saved game itself if it is `OVER`. Both go through the identity-guarded `RecordsMath.finalize` (D-044), so a game whose `gameId` is already finalized (an interrupted New game not yet completed) is skipped, and a recovery entry not yet applied is shown once.
+    - For each size it displays `RecordsMath.displayed(records, game)` without persisting it. That function first finalizes every entry of the saved game's `pendingFinalizations`, in list order (ascending `gameId`), and then the saved game itself if it is `OVER`. All go through the identity-guarded `RecordsMath.finalize` (D-044), so a game whose `gameId` is already finalized (an interrupted New game not yet completed) is skipped, and each recovery entry not yet applied is shown once.
     - Persisted finalization still happens only at New game (and in D-044's recovery), so nothing is counted twice. Undoing out of `OVER` removes the game from the display.
 - **Rationale:** FEATURES.md §3.1 and F08-AC3. Without the fold, a player who loses their first game sees an empty Statistics screen.
 - **Rejected:** finalizing at game over (it double-counts after an undo).
 - **Source:** [ORCH] O7, O8 · [RESEARCH] FEATURES.md F08.
 - **Amended in plan review (Codex r1):** the fold now goes through D-044's identity check. Before, a game restored after its records write (a kill between New game's two writes) was folded in again even though the records already counted it. Reset now keeps `lastFinalizedGameId`.
+- **Amended in plan review (Codex r2):** the fold applies every entry of D-044's `pendingFinalizations` list, oldest first, instead of one `previousFinalization`. Before, it could show only the latest recovery entry, and applying a list newest first would skip the older entries.
 
 #### D-199 — Controls and keys while a card is shown (clarifies D-007, D-054; amends D-053)
 - **Decision:**

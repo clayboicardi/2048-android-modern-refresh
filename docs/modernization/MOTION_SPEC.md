@@ -436,7 +436,9 @@ Consequence under Reduced: a sheet appears without sliding, and it still hides w
 // game/motion/MoveTimeline.kt
 @Stable
 class MoveTimeline {
-    /** Called by BoardView: LaunchedEffect(board.moveId) { publish(board.moveId, withFrameNanos { it }) }. */
+    /** Called by BoardView: LaunchedEffect(board.moveId) { publish(board.moveId, withFrameNanos { it }) }.
+     *  A moveId that already has an origin keeps it: the BoardView an arrangement switch composes anew
+     *  publishes the current moveId again, and the waits of the screen scope go on unchanged (§3.16). */
     fun publish(moveId: Long, originNanos: Long)
     /** Suspends until the first frame >= origin(moveId) + ms × scale. Returns false if a newer moveId was
      *  published first (the caller then drops its work, see §4). Returns at once when the scale is 0. */
@@ -586,7 +588,7 @@ At most **3** floats are alive (D-062). Starting a 4th removes the oldest at onc
 
 - **Displayed value.** `ScoreChip` shows `displayedScore`. It updates to the true score at `awaitOffset(moveId, 80)` after an accepted move (mechanism B: the new digits are targeted on frame ⌈80⌉ and roll from the next frame) (D-061: "+N float and score odometer start" at 80 ms). It updates at once (t = 0) after undo, and with no animation at all after new game, size switch and restore. If a newer move publishes first, the pending update is dropped and the newer one applies at its own +80 ms. Semantics always carry the true score (D-080).
 - **Best value.** BEST shows `max(records[size].bestScore, displayedScore)`, so it rolls together with the score once the score passes the stored best.
-- **Size.** Every digit renders at the one size `ScoreValue` picks for the value's digit count and slot width (14..28 sp in 1 sp steps, `DESIGN_SYSTEM.md` §7.2), so digits never resize independently while they roll. `Text(autoSize = …)` is not used for the value.
+- **Size.** Every digit renders at the one size `ScoreValue` picks for the value's digit count and its `ScoreFit.valueWidth` (14..28 sp in 1 sp steps, `DESIGN_SYSTEM.md` §7.2), so digits never resize independently while they roll. `Text(autoSize = …)` is not used for the value. A value too long for its row at 14 sp wraps between digits (`scoreLines`, `DESIGN_SYSTEM.md` §7.2); the odometer then places its digit positions, still keyed by place value, in those lines.
 - **Full** (`game/header/ScoreOdometer.kt`): one `AnimatedContent` per digit position, keyed by place value (units, tens, …), so a units change never animates the tens. Increase: `slideInVertically(GameMotion.slide(IntOffset(1, 1))) { it } + fadeIn(fastEffects)` togetherWith `slideOutVertically(slide) { -it } + fadeOut(fastEffects)`. Decrease (undo): the signs are reversed. No stagger. A new leading digit enters with `expandHorizontally(overlaySpatial(IntSize(1, 1))) + fadeIn(fastEffects)`; a removed one leaves with `shrinkHorizontally(overlaySpatial) + fadeOut(fastEffects)`. Each changed digit rolls once to its new value; it never counts through intermediate values. The digit slide settles in 146 ms for a 60 px glyph (computed).
 - **Reduced and Off:** one plain `Text` at the same `ScoreValue` size. `displayedScore` follows the true score directly, so it changes in the F0 composition.
 
@@ -736,8 +738,8 @@ This covers cold start after the splash (D-112), `ActivityScenario.recreate()`, 
 **Recreation after a move: one-shot presentations** (D-047, `ARCHITECTURE.md` §4.11). The activity-scoped `GameViewModel` outlives the composition, so each animated value is presented once and then settled:
 - `BoardView` reports the board at its origin F1 (`onBoardPresented(moveId)`, right after `MoveTimeline.publish`); `GameHeader` reports the "+N" delta (`onHeaderPresented`) and `OverlayController` an `Animated` card entry (`onOverlayPresented`), each from an effect of the composition that read it, on the same F1 for a move;
 - the ViewModel replaces the value with its static form for the same state: `BoardPresenter.settled(board)` (same `moveId`, `epoch` and ids; every tile `Static`; event `Restored`), `lastDelta = 0`, entry `Restored`;
-- the live composition reads these flows through `collectPresentedAsState`, which treats the replacement as the same presentation. Nothing it is animating changes, no effect relaunches and nothing recomposes (§7.2);
-- a composition created afterwards (recreation, return from a sub-screen, an arrangement switch of §3.16) starts from the static values: the end state above on its first frame. Recreation in the middle of a move, a win or a game-over sequence therefore snaps to the final frame. A haptic still pending in the disposed composition (for example the win's second `Confirm`, or a `SegmentTick` due at 80 ms) is dropped and never fired later; no haptic already fired is repeated;
+- each live presentation scope (the screen, and the arrangement `GameLayout` draws; `ARCHITECTURE.md` §4.11 item 2) reads these flows through its own `rememberPresented` retention state, which treats the replacement as the same presentation. Nothing it is animating changes, no effect relaunches and nothing recomposes (§7.2);
+- a scope created afterwards (recreation, return from a sub-screen, the arrangement composed by a switch of §3.16) makes its own retention state and starts from the static values: the end state above on its first frame. Recreation in the middle of a move, a win or a game-over sequence therefore snaps to the final frame. A haptic still pending in the disposed composition (for example the win's second `Confirm`, or a `SegmentTick` due at 80 ms) is dropped and never fired later; no haptic already fired is repeated. An arrangement switch disposes no haptic: `HapticsController` belongs to the screen scope (§3.16);
 - a nudge has no end state: a new composition never plays the nudge that existed before it (no shake, no `Reject`).
 
 ### 3.15 Theme, palette and contrast switch
@@ -755,7 +757,11 @@ This covers cold start after the splash (D-112), `ActivityScenario.recreate()`, 
 
 `animateBounds` runs only for layout changes without recreation **within one arrangement**: the first-launch hint exit, the TalkBack direction pad showing or hiding (D-082), Immersive mode toggles (D-093) and inset changes, while the resolved arrangement (`DESIGN_SYSTEM.md` §5.3, D-188) stays the same. Rotation, resize, fold and locale changes recreate the activity and render statically (D-095).
 
-**Arrangement switch: no bounds animation** (D-095). Any of these live changes can also change the resolved arrangement, for example the pad turning a 411×450 window from STACKED into SCROLL. `GameLayout` composes each arrangement in its own subcomposition, so a switch disposes the old arrangement and composes the new one, board and header included; `movableContentOf` is not used. The new board is a new composition under the one-shot presentation contract (§3.14, `ARCHITECTURE.md` §4.11): on its first frame it draws the settled static frame of the committed state at its final bounds, with no bounds animation at any motion level. A move, merge, spawn or "+N" in flight snaps to its end as on recreation (F07-AC27): nothing replays, a haptic still pending in a disposed composition is dropped, and no haptic fires twice. Bounds animate again for the next change that keeps the new arrangement.
+**Arrangement switch: no bounds animation** (D-095). Any of these live changes can also change the resolved arrangement, for example the pad turning a 411×450 window from STACKED into SCROLL. `GameLayout` composes each arrangement in its own subcomposition, so a switch disposes the old arrangement and composes the new one, board and header included; `movableContentOf` is not used. The new board is a new composition under the one-shot presentation contract (§3.14, `ARCHITECTURE.md` §4.11): on its first frame it draws the settled static frame of the committed state at its final bounds, with no bounds animation at any motion level. A move, merge, spawn or "+N" in flight snaps to its end as on recreation (F07-AC27), and nothing replays.
+- **Each arrangement has its own presentation scope.** The new slot makes its own `rememberPresented` retention states for `board` and `header` before composing its `BoardView` and `GameHeader`, so their first values are the ViewModel's current ones: the settled board and `lastDelta = 0` once the move was presented at its F1. The retained animated instances die with the old slot. This holds whether the switch comes during the move (AC-LAYOUT-2) or long after it settled (AC-LAYOUT-3): the new `BoardAnimator` launches nothing, no "+N" float or new-best moment starts, and switching back composes yet another scope that is equally settled.
+- **The screen scope lives on.** `GameScreen` provides `MoveTimeline` and composes `HapticsController`'s effects, `OverlayController`, the scrim, the cards and `ContentEffectsCanvas` outside the arrangement slots. They keep their presented values and their running sequences, fire what they had scheduled at its time (the move's `SegmentTick` at t = 80 in AC-LAYOUT-2) and schedule nothing new. The new `BoardView` publishes the current `moveId` again; `MoveTimeline` keeps the origin it holds for it (§2.4), so no wait of the screen scope moves.
+
+Bounds animate again for the next change that keeps the new arrangement.
 - **Full** (within one arrangement):
   - Board, panel and rails use `Modifier.animateBounds(lookaheadScope, boundsTransform = { _, _ -> GameMotion.overlaySpatial(Rect.VisibilityThreshold) })` (`DESIGN_SYSTEM.md` §5.8). A 300 px change settles in 399 ms.
   - The hint card exits with `shrinkVertically(overlaySpatial) + fadeOut(fastEffects)`.
@@ -957,8 +963,8 @@ The confetti frames get the same targets, with the particle system costing ≤ 1
 | Composable | Budget per accepted move (no interruption) | Gate |
 |---|---|---|
 | `TileView` (each key; `onTile(id)`) | ≤ 1: the F0 composition when its `TileUi` changed or the tile is new. **0 on every later frame until the next change** | `TileRecompositionTest` (D-150) |
-| `BoardView` (`onBoard()`) | ≤ 2: F0 (new `BoardUi` + frame-rate High) and idle (frame-rate Default). Ghost hiding is an alpha snap, not a recomposition. The settled board that follows the presentation report (§3.14) causes none, because `collectPresentedAsState` keeps the presented instance | `BoardRecompositionBudgetTest` |
-| `GameScreen` root (`onScreen()`) | 0 (it reads no per-move state: it obtains the D-024 flows' `collectPresentedAsState` `State`s, `ARCHITECTURE.md` §4.11, and only its children read their values) | `BoardRecompositionBudgetTest` |
+| `BoardView` (`onBoard()`) | ≤ 2: F0 (new `BoardUi` + frame-rate High) and idle (frame-rate Default). Ghost hiding is an alpha snap, not a recomposition. The settled board that follows the presentation report (§3.14) causes none, because its arrangement scope's `rememberPresented` state keeps the presented instance | `BoardRecompositionBudgetTest` |
+| `GameScreen` root (`onScreen()`) | 0 (it reads no per-move state: it collects the D-024 flows and makes its screen scope's `rememberPresented` `State`s, `ARCHITECTURE.md` §4.11, and only its children read their values) | `BoardRecompositionBudgetTest` |
 | `ScoreChip` | 1 when `displayedScore` changes, plus `AnimatedContent`'s own internal compositions | not gated |
 | Theme crossfade | M3 consumers recompose for ≈ 19 frames (§3.15) | exempt |
 
@@ -1388,8 +1394,17 @@ Times below are relative to Ft, the exit origin (§3.12; `MotionHarness.tapCardB
 - **AC-LAYOUT-2** (`LayoutMotionTest.arrangementSwitchRendersSettledBoard`, with F18-AC13; §3.16, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED with the COMPACT header and, with Robolectric's zero insets, a 258 dp board) and LEFT committed, when touch exploration turns on at t = 48 (mid-slide, before the reveal, the spawn, the "+N" and the `SegmentTick` due at 80), so the pad shows and the arrangement becomes SCROLL (a 298 dp board), then:
   - the board node measures 258 dp on every frame before the switch and 298 dp from the first frame that draws SCROLL; no frame shows another size;
   - on that frame every probe tile is `Static` at its engine cell with scale 1 and alpha 1, `displayedScore == vm.header.value.score`, and nothing is running; no "+N" float exists on it or on any later frame;
-  - `vm.board.value.moveId` and the move log are unchanged, and through t = 1,000 the recorded haptics are at most the move's one `SegmentTick`.
+  - `vm.board.value.moveId`, the move log and `probe.originMs` are unchanged, and through t = 1,000 the recorded haptics are exactly the move's one `SegmentTick`, at t = 80: the screen scope's `HapticsController` keeps it and `MoveTimeline` keeps the origin (§2.4, §3.16).
   - Given then touch exploration off again with nothing running, the first frame that draws STACKED has the 258 dp board, with no intermediate size.
+- **AC-LAYOUT-3** (`LayoutMotionTest.arrangementSwitchAfterPresentedMoveReplaysNothing`, with F18-AC14; §3.16, D-047, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED, 258 dp board with zero insets), LEFT committed and run to t = 1,000, so the move was presented and has settled (nothing running, `vm.board.value` is `BoardPresenter.settled` of the move's board, `vm.header.value.lastDelta == 0`, and the haptics fake holds exactly the one `SegmentTick` at t = 80), when touch exploration turns on (the arrangement becomes SCROLL, 298 dp board) and, 1,000 ms after that switch with nothing running, turns off again (STACKED, 258 dp board), then after each switch, on every frame from the first frame that draws the new arrangement through 1,000 ms later:
+  - every probe tile is `Static` at its engine cell with scale 1 and alpha 1, and no tile is `outgoing`;
+  - `floats` is empty and `displayedScore == vm.header.value.score`;
+  - `isAnyRunning` is false: the new arrangement's `BoardAnimator` launches nothing;
+  - `probe.originMs` still equals the move's origin;
+  - the haptics fake still holds exactly the one `SegmentTick` at t = 80;
+  - `vm.board.value`, `vm.header.value` and the move log equal their values before the switch.
+
+  With one retention state for the whole screen, the new `BoardView` and `GameHeader` would read the move's retained `Moved` board and `lastDelta > 0`, and this criterion fails on its first frame (`ARCHITECTURE.md` §4.11 item 2).
 - **AC-NAV-1** Given Game (Full), when Settings is pushed, then:
   - at t = 0 the Settings content is offset +30 dp (LTR) with alpha 0;
   - at t = 256 it is at offset 0 with alpha 1 and Game is no longer composed.
