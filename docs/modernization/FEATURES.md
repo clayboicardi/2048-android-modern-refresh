@@ -23,7 +23,7 @@ What it does not restate: build files, module layout and class APIs (`ARCHITECTU
 
 ### 0.1 IDs and traceability
 
-- Features are `F01`–`F30`. Acceptance criteria are `Fnn-ACk`; there are 381, numbered without gaps within each feature.
+- Features are `F01`–`F30`. Acceptance criteria are `Fnn-ACk`; there are 383, numbered without gaps within each feature.
 - Every AC maps to **exactly one** test method, written `Class.method`, or to one gate step (`Gate: …`). Every test method named in §1 implements exactly one AC of this file. The few cross-cutting rules (the ATF rule on every golden except `motion_*`) say so explicitly.
 - A test method may prove several ACs that assert the same fact, for example an F-AC of this file and an AC of MOTION_SPEC.md or L10N_STORE_LEGAL.md; its first KDoc line lists every ID (e.g. `/** F13-AC8, AC-GOLD-1 */`). The Test column names those extra IDs as "(also …)".
 - The first line of each test method's KDoc lists its AC IDs, for example `/** F05-AC4 */`, so `grep -rn "F05-AC4" app/src/test core/engine/src/test` finds the proof.
@@ -517,6 +517,7 @@ The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
 | F07-AC30 | `FIX_INVALID_4` under `MotionHarness` (Full); LEFT is invalid and its nudge has settled (t = 400) | `harness.recreate()` | `boardNudgeDp == (0, 0)` on every frame through 400 ms after recreation; the recorded haptics stay exactly the one `Reject` | `RecreateNoReplayTest.recreateAfterInvalidMoveDoesNotNudge` |
 | F07-AC31 | A `ConflatedWriter` with a recording `onWritten` and a write lambda that throws `IOException` while a flag is set | (a) Flag set: submit v1, `awaitIdle()`; clear the flag; `retryFailed()`, `awaitIdle()`; `retryFailed()` again, `awaitIdle()`. (b) Flag set: submit v1, `awaitIdle()`; clear the flag; submit v2; `retryFailed()`; `awaitIdle()` | (a) The throwing attempt reports nothing; the first `retryFailed()` writes v1 again and `onWritten` records exactly `[v1]`; the second `retryFailed()` writes nothing. (b) `retryFailed()` is a no-op because v2 is newer: one more write, v2, and `onWritten` records exactly `[v2]` (D-044, ARCHITECTURE.md §4.5) | `ConflatedWriterTest.reportsWrittenValuesAndRetriesFailedOne` |
 | F07-AC32 | A `GameViewModel` restored from a 4×4 game that every invariant accepts but the engine cannot play: the 40-move game of `UndoTest.undoOfInconsistentHistoryThrows` (its `snapshots[1].board` replaced by a lone tile in the top-left corner); separately, a move-0 game whose row 0 starts with two exponent-127 tiles | `onUndo`; respectively `onMove(LEFT)` | No exception escapes. The game is replaced as a corrupt file is: `replaceWithFresh(null, size)` gives a fresh 4×4 game (`moveCount == 0`), saved once, emitted with event `NewGame` and overlay `None`; nothing is finalized and `records.json` is untouched (D-045, D-214) | `GameViewModelTest.engineCheckFailureIsCorruption` |
+| F07-AC33 | A resumed 4×4 game in progress with score 4,000 and a saved `elapsedMs` of 50,000; `FakeClock` advanced 30,000 ms with no move and no pause since the load | `onNewGame` | The running play time is folded in before the old game is finalized: `records.sizes["4"].totalTimeMs == 80000`, in memory and in `records.json`; the fresh game's recovery entry for the old game has `elapsedMs == 80000`; the fresh game has `elapsedMs == 0` (D-043, D-044) | `GameViewModelTest.newGameFoldsRunningPlayTime` |
 
 ### F08 — Statistics and records
 
@@ -1979,7 +1980,7 @@ Every test class named in §1, plus the motion classes of MOTION_SPEC.md §8.5 a
 | `LongGameGeneratorTest` | App JVM | `data/` | M2 | F07-AC22 |
 | `ProcessDeathRestoreTest` | App JVM | root | M2 | F04-AC10, F05-AC15, F05-AC16, F07-AC1 |
 | `FinalizationRecoveryTest` | App JVM | root | M2 | F06-AC14…AC22, F08-AC22 |
-| `GameViewModelTest` | App JVM | `game/` | M2 | F01-AC21, F01-AC22, F02-AC3…AC6, F03-AC8…AC10, F03-AC15, F04-AC1, F04-AC9, F04-AC11, F05-AC8, F06-AC7…AC9, F06-AC13, F06-AC23, F07-AC2, F07-AC3, F07-AC10, F07-AC24, F07-AC32, F08-AC8, F08-AC16, F09-AC1…AC4, F13-AC14, F22-AC1…AC4, F22-AC10 |
+| `GameViewModelTest` | App JVM | `game/` | M2 | F01-AC21, F01-AC22, F02-AC3…AC6, F03-AC8…AC10, F03-AC15, F04-AC1, F04-AC9, F04-AC11, F05-AC8, F06-AC7…AC9, F06-AC13, F06-AC23, F07-AC2, F07-AC3, F07-AC10, F07-AC24, F07-AC32, F07-AC33, F08-AC8, F08-AC16, F09-AC1…AC4, F13-AC14, F22-AC1…AC4, F22-AC10 |
 | `InputBurstOrderingTest` | App JVM | `game/` | M2 | F15-AC13 |
 | `PlayClockTest` | App JVM | `game/` | M2 | F04-AC12, F05-AC14, F07-AC4 |
 | `BoardPresenterTest` | App JVM | `game/board/` | M2 | F05-AC9, F06-AC11, F07-AC25 |

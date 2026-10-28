@@ -600,6 +600,27 @@ class GameViewModelTest {
         moveCase.assertReplacedLikeCorruptFile { onMove(Direction.LEFT) }
     }
 
+    /** F07-AC33 */
+    @Test
+    fun newGameFoldsRunningPlayTime() = runTest {
+        val clock = FakeClock()
+        val rig = rig(tmp.newFolder(), clock) { seedGame(IN_PROGRESS_4000) }
+        val vm = rig.loadedViewModel()
+        vm.onResumed()
+
+        clock.advance(30_000)
+        vm.onNewGame()
+        testScheduler.runCurrent()
+        rig.awaitIdle()
+
+        val played = IN_PROGRESS_4000.copy(elapsedMs = 80_000).toFinalization()
+        assertThat(recordOf(rig.records.state.value, FOUR).totalTimeMs).isEqualTo(80_000)
+        assertThat(recordOf(rig.fileRecords(), FOUR).totalTimeMs).isEqualTo(80_000)
+        val fresh = checkNotNull(rig.fileGame(FOUR))
+        assertThat(fresh.pendingFinalizations).containsExactly(played)
+        assertThat(fresh.elapsedMs).isEqualTo(0)
+    }
+
     /** F08-AC8 */
     @Test
     fun headerBestTracksLiveScore() = runTest {

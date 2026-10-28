@@ -119,10 +119,18 @@ class GameViewModel(
         publishUi()
     }
 
-    /** §4.9 New game: D-044's [replaceWithFresh], then a `NewGame` epoch. The UI confirms first. */
+    /**
+     * §4.9 New game: folds the running play time into the old game (D-043), then D-044's
+     * [replaceWithFresh] and a `NewGame` epoch. The UI confirms first.
+     */
     fun onNewGame() {
         val game = current?.takeIf { acceptsInput() } ?: return
-        becomeCurrent(replaceWithFresh(game, game.state.size), BoardEvent.NewGame, OverlayUi.None)
+        val folded = game.copy(elapsedMs = playClock.elapsed(clock.nowMs()))
+        becomeCurrent(
+            replaceWithFresh(folded, folded.state.size),
+            BoardEvent.NewGame,
+            OverlayUi.None,
+        )
     }
 
     /**
