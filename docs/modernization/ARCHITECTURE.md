@@ -141,11 +141,11 @@ M0 (D-162, D-211) leaves a buildable, gated skeleton. `.github/workflows/ci.yml`
 - `app/` with:
   - `Game2048Application` (an empty `Application` subclass in M0; it creates `AppContainer` from M2);
   - `MainActivity`, which calls `installSplashScreen()`, `super.onCreate`, `enableEdgeToEdge()` and then only `setContent { App() }`;
-  - `App.kt`, which holds the M0 placeholder: `GameTheme` around a centered `Text(stringResource(R.string.settings))` with test tag `placeholder`, so the migrated string is used;
+  - `App.kt`, which holds the M0 placeholder: `GameTheme` around a centered `Text(stringResource(R.string.settings), color = MaterialTheme.colorScheme.onBackground)` with test tag `placeholder`, so the migrated string is used. The color role is explicit (D-083) because the theme provides no content color and nothing draws a background over the light or dark window background;
   - a minimal `ui/theme/GameTheme.kt` (`MaterialExpressiveTheme` with the default light/dark scheme and `MotionScheme.expressive()`);
   - the full manifest of §8.1, the adaptive icon (D-111), the splash and window themes (D-112, theme only), the migrated `values*/strings.xml` (D-101) and the debug label override;
 - `core/engine/` with `Direction.kt` and its JUnit 6 test (enough for Kover and the test-count floor to have data), and `core/engine/AGENTS.md` with its `## Code Review Rules` section (D-171, D-192);
-- `testing/Goldens.kt` and `testing/Accessibility.kt` (the D-174 opt-in), `LaunchSmokeTest` (`@Config(sdk = [24, 37])`, asserts launch and the placeholder text, captures nothing) and `PlaceholderScreenshotTest` (default SDK 36) with the one golden `app/src/test/screenshots/launch_placeholder.png`. A golden captured under two SDKs would write two different images to one file;
+- `testing/Goldens.kt` and `testing/Accessibility.kt` (the D-174 opt-in), `LaunchSmokeTest` (`@Config(sdk = [24, 37])`, asserts launch, the placeholder text and its D-083 contrast against the window background in light and dark mode, captures nothing) and `PlaceholderScreenshotTest` (default SDK 36) with the one golden `app/src/test/screenshots/launch_placeholder.png`. A golden captured under two SDKs would write two different images to one file;
 - `fastlane/metadata/android/` after the `git mv`, with the 16 listing-only locales and `promoGraphic.png` deleted and the legacy images moved under `en-US/images/` (content is rewritten in M5);
 - `docs/modernization/legacy-credits.md` (D-124, D-209), written **before** the submodule is removed.
 
@@ -354,7 +354,7 @@ gradle wrapper --gradle-version 9.7.1 --distribution-type bin \
   --gradle-distribution-sha256-sum acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a
 ```
 
-The first `wrapper` call uses the locally installed Gradle 8.14.3; the second runs the new wrapper in that same directory, so the wrapper JAR comes from 9.7.1. Then copy only `gradlew`, `gradlew.bat` and `gradle/wrapper/*` into the repository (never the temporary `settings.gradle.kts`) and run `git update-index --chmod=+x gradlew`. The resulting `gradle-wrapper.properties` is byte-identical to the listing above. A directory without a settings file is not a Gradle build, and the repository root is not a build between M0.6 and M0.8 (TC-4).
+The first `wrapper` call uses the locally installed Gradle 8.14.3; the second runs the new wrapper in that same directory, so the wrapper JAR comes from 9.7.1. Then copy only `gradlew`, `gradlew.bat` and `gradle/wrapper/*` into the repository (never the temporary `settings.gradle.kts`) and run `git update-index --chmod=+x gradlew`. Gradle 9.7.1's `wrapper` task also writes `retries=0` and `retryBackOffMs=500` (the wrapper JAR's defaults for absent keys); delete both lines, so the committed `gradle-wrapper.properties` is byte-identical to the listing above (D-212). A directory without a settings file is not a Gradle build, and the repository root is not a build between M0.6 and M0.8 (TC-4).
 
 Do not add `--warning-mode=fail` anywhere. detekt 2.0.0-alpha.6 prints one Gradle-10 deprecation from `:app:detektRelease` ("Querying the output of an artifact transform from a task action without declaring it as a task input"); it is harmless and outside the project's control.
 

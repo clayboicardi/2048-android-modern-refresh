@@ -60,7 +60,7 @@ What it does not restate: build files and the manifest (`ARCHITECTURE.md` §2, �
 9. The Apache-2.0 text from `https://www.apache.org/licenses/LICENSE-2.0.txt`: 11,358 bytes, sha256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`.
 10. The final `LICENSE` of §4.2: 1,151 bytes, sha256 `ad96d837d59c50cb3c8e23a17d7ee19a396c5a1a6c4bc952a269896fcbdbfd19`.
 11. The en-US store texts of §2.3 measure 4 / 63 / 2,295 / 345 characters (limits 30 / 80 / 4,000 / 500). The listing and image checker (now `check_store_listing` and `check_store_images` in `QUALITY.md` §1.16) passed on a synthetic 22-locale tree and failed, as intended, on an untranslated file, an RGBA feature graphic and Persian digits.
-12. Legacy contributors (§4.5) come from `git log --format='%an' e097460` and `git -C assets/2048 log --format='%an' fc1ef4f..7a477eb`. Translators per locale come from `git log --follow` on each `res/values-xx/strings.xml`.
+12. Legacy contributors (§4.5) come from `git log --format='%an' e097460` and `git -C assets/2048 log --format='%an' fc1ef4f..7a477eb`. Translators per locale come from `git log --follow` on each `res/values-xx/strings.xml`. All of these run on the full history: a clone that is shallow at `8a04f5d` misses `pierre`, the French translator (`74990c4`), and makes `8a04f5d` look like the creator of `values-fr` (D-213).
 13. Android developer verification (developer.android.com, pages dated 2026-09-30 and 2026-10-23): since 2026-09-30, unregistered apps cannot be installed **from participating stores** on certified devices in Brazil, Indonesia, Singapore and Thailand. Direct sideloading is outside this first phase, `adb` installs are exempt, a one-time "advanced flow" lets power users install unregistered apps, and Google plans a global rollout from 2027 (§5.6).
 14. The Kotlin snippets of §1.10, §1.13 and §2.5 and the store-icon code of §3.7 compiled under `allWarningsAsErrors` and passed a Robolectric SDK 36 test on a copy of the architecture scratch build:
     - `formatCount(24680, locale)` gave "24,680" (en), "24.680" (de), "24,680" (fa) and "24 680" with U+00A0 (ru);
@@ -1324,12 +1324,12 @@ material below. Each item keeps its own license and copyright notice.
    Ukrainian game strings, the vector paths of the "2048" glyphs in the
    launcher icon, and the release history shown under About > Legacy history.
    Translators of the reused strings: Mongata (cs), dark159123 (da),
-   uberspot and alexara (de), uberspot (el, fr, pl), Robin van der Vliet
-   (eo, nl), Laura Arjona Reina (es), SMahdiFaghih (fa), Balázs Meskó (hu),
-   RyuzakiKK (it), amoseui (ko), zygimantus (lt), Caio Melo (pt), Igor A
-   (ru; Russian and Ukrainian game strings), Matej (sl), djura-san (sr),
-   TeknoCepni (tr), Vladyslav Pohrebniakov (uk). Every legacy contributor is
-   credited in the app under About > Credits.
+   uberspot and alexara (de), uberspot (el, pl), Robin van der Vliet
+   (eo, nl), Laura Arjona Reina (es), SMahdiFaghih (fa), pierre (fr),
+   Balázs Meskó (hu), RyuzakiKK (it), amoseui (ko), zygimantus (lt),
+   Caio Melo (pt), Igor A (ru; Russian and Ukrainian game strings),
+   Matej (sl), djura-san (sr), TeknoCepni (tr), Vladyslav Pohrebniakov (uk).
+   Every legacy contributor is credited in the app under About > Credits.
 
 3. Google Sans Flex (numeral subset)
    https://github.com/googlefonts/googlesans-flex
@@ -1678,15 +1678,15 @@ When a dependency change adds a group, the same commit adds it here and in the J
 3. "Translators of reused strings": the table below.
 4. "Legacy releases": `res/raw/changelog_master.xml` verbatim in a code block.
 
-Expected deduplicated contributor list (§0.3 item 12):
+Expected deduplicated contributor list (§0.3 item 12; both commands run on the full history, D-213):
 - Alias merges: uberspot = Paul Sarbinowski, who gets his own credit row; Taco = TacoTheDank.
 - Gabriele Cirulli and Paul Sarbinowski are excluded from this list because they have their own rows.
 - gurshabad is added: legacy commit `f889036` credits the night-mode idea to him (D-209; research/02 §7 item 3).
 - Sorted case-insensitively.
 
-Result, 31 names: alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark159123, Diogo Pereira, djura-san, fraggerfox, gurshabad, Hans-Christoph Steiner, Igor A, Laura Arjona Reina, lishoujun, Matej, Mauro Scomparin, Mongata, Oluwaleke Fakorede, Paul Verest, Poussinou, princessruthie, Robin van der Vliet, RyuzakiKK, shubham1701, SMahdiFaghih, Steven Lee, TacoTheDank, TeknoCepni, Vladyslav Pohrebniakov, xin, zygimantus.
+Result, 32 names: alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark159123, Diogo Pereira, djura-san, fraggerfox, gurshabad, Hans-Christoph Steiner, Igor A, Laura Arjona Reina, lishoujun, Matej, Mauro Scomparin, Mongata, Oluwaleke Fakorede, Paul Verest, pierre, Poussinou, princessruthie, Robin van der Vliet, RyuzakiKK, shubham1701, SMahdiFaghih, Steven Lee, TacoTheDank, TeknoCepni, Vladyslav Pohrebniakov, xin, zygimantus.
 
-**Translators of reused strings** (`git log --follow res/values-xx/strings.xml`, earliest content author):
+**Translators of reused strings** (`git log --follow res/values-xx/strings.xml` on the full history, earliest content author):
 
 | Locale | Translator | Commit |
 |---|---|---|
@@ -1697,7 +1697,7 @@ Result, 31 names: alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark15912
 | eo | Robin van der Vliet | `238b152` (2016) |
 | es | Laura Arjona Reina | `f7b3ff4` (2014) |
 | fa | SMahdiFaghih | `e097460` (2021) |
-| fr | uberspot | `8a04f5d` (2014) |
+| fr | pierre | `74990c4` (2014) |
 | hu | Balázs Meskó | `825e39f` (2019) |
 | it | RyuzakiKK | `ea3b08d` (2018) |
 | ko | amoseui | `d9acf52` (2017) |
@@ -1726,7 +1726,7 @@ Result, 31 names: alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark15912
     },
     {
       "name": "Contributors",
-      "role": "alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark159123, Diogo Pereira, djura-san, fraggerfox, gurshabad, Hans-Christoph Steiner, Igor A, Laura Arjona Reina, lishoujun, Matej, Mauro Scomparin, Mongata, Oluwaleke Fakorede, Paul Verest, Poussinou, princessruthie, Robin van der Vliet, RyuzakiKK, shubham1701, SMahdiFaghih, Steven Lee, TacoTheDank, TeknoCepni, Vladyslav Pohrebniakov, xin, zygimantus"
+      "role": "alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark159123, Diogo Pereira, djura-san, fraggerfox, gurshabad, Hans-Christoph Steiner, Igor A, Laura Arjona Reina, lishoujun, Matej, Mauro Scomparin, Mongata, Oluwaleke Fakorede, Paul Verest, pierre, Poussinou, princessruthie, Robin van der Vliet, RyuzakiKK, shubham1701, SMahdiFaghih, Steven Lee, TacoTheDank, TeknoCepni, Vladyslav Pohrebniakov, xin, zygimantus"
     },
     {
       "name": "clayboicardi",

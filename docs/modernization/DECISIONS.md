@@ -216,6 +216,8 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-209 | Legal | "gurshabad" credited |
 | D-210 | Quality | Motion verification: binding event frames, library-derived curve values |
 | D-211 | Process | Milestone refinements: M2 presenter, M3 in two pushes, M4/M5 goldens, per-milestone AC audit |
+| D-212 | Toolchain | Wrapper properties stay the 8-line D-010 file; the two default-valued lines Gradle 9.7.1 adds are dropped (supersedes TC-4's byte-identical claim) |
+| D-213 | Legal | Legacy credits come from the full history: 32 contributors including `pierre`, who translated French (`74990c4`) |
 
 ---
 
@@ -579,7 +581,7 @@ Not in the research/05 roadmap but **In v1.0**:
     3. then `./gradlew wrapper` with the same arguments in that same directory, so the JAR comes from 9.7.1;
     4. copy `gradlew`, `gradlew.bat` and `gradle/wrapper/*` into the repository, but not the temporary `settings.gradle.kts`.
 
-    The resulting `gradle-wrapper.properties` is byte-identical to the file above (technical correction TC-4).
+    The resulting `gradle-wrapper.properties` is byte-identical to the file above (technical correction TC-4). Superseded by D-212: the 9.7.1 step also writes `retries=0` and `retryBackOffMs=500`, which are deleted.
   - Commit `gradlew` as executable (`git update-index --chmod=+x gradlew`).
 - **Rationale:**
   - AGP 9.4 needs Gradle ≥ 9.6.0.
@@ -588,6 +590,7 @@ Not in the research/05 roadmap but **In v1.0**:
 - **Rejected:** 8.14.3 (cannot run AGP 9; research/01 is wrong here); 9.8.2 (emits an AGP-originated deprecation, which blocks `--warning-mode=fail`).
 - **Source:** [ORCH] O1.
 - **Note:** Technical correction TC-4.
+- **Note:** Amended by D-212.
 
 #### D-011 — AGP 9.4.1 with built-in Kotlin
 - **Decision:**
@@ -2179,7 +2182,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/01 §5.2, §8.3 (9 releases, contributor credits); research/07 G3 (named contributors).
 - **Rejected:** dropping the legacy history; translating it (credits and history are static English data).
 - **Source:** [ORCH] O11, O15 · [RESEARCH] research/01 §8.3.
-- **Note:** Extended by D-209.
+- **Note:** Extended by D-209; clarified by D-213.
 
 ---
 
@@ -3430,6 +3433,35 @@ jobs:
 
 ---
 
+## 19. Entries added during execution
+
+#### D-212 — Wrapper properties keep the D-010 listing (supersedes TC-4's byte-identical claim; amends D-010)
+- **Decision:**
+  - `gradle/wrapper/gradle-wrapper.properties` stays exactly the 8-line D-010 file (ARCHITECTURE.md §2.4, `research/smoke-build/`).
+  - The TC-4 bootstrap runs unchanged; `gradlew`, `gradlew.bat` and `gradle-wrapper.jar` are copied from its 9.7.1 step unchanged.
+  - The 9.7.1 step writes two further lines, `retries=0` and `retryBackOffMs=500`. Both are deleted before the copy is committed.
+- **Rationale:**
+  - Gradle 9.7.1's `wrapper` task always writes these two keys (`./gradlew help --task wrapper` lists `--retries` and `--retry-back-off-ms`). The 8.14.3 step alone writes the 8-line file. So TC-4's claim that the result is byte-identical to D-010 does not hold (M0, 2026-10-28).
+  - The values are the wrapper JAR's defaults for absent keys: `WrapperConfiguration` initializes `retries = 0` and `retryBackOffMs = 500` (`javap` on the 9.7.1 `gradle-wrapper.jar`, sha256 `7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d`). Dropping them changes no behavior and keeps D-010 and the PLAN.md traceability diff (ARCHITECTURE.md §2.4) exact.
+- **Rejected:** committing the 10-line output and rewriting D-010, ARCHITECTURE.md §2.4 and the smoke-build reference to match it.
+- **Source:** [ORCH] O17 (D-173 change control, M0 execution).
+
+#### D-213 — Legacy credits from the full history (clarifies D-124; corrects L10N_STORE_LEGAL.md §0.3, §4.3, §4.5)
+- **Decision:**
+  - The D-124 captures (git authors up to `e097460`, the submodule range `fc1ef4f..7a477eb`, and the `git log --follow` translator per locale) run on the full history, never on a shallow clone.
+  - The deduplicated contributor list has **32 names**: the 31 of the planning-time L10N_STORE_LEGAL.md §4.5, plus `pierre` (between Paul Verest and Poussinou).
+  - The French translator is `pierre`, commit `74990c4` (2014), not uberspot `8a04f5d`. The NOTICE translator line reads "uberspot (el, pl)" and "pierre (fr)", and the `legacy_history.json` "Contributors" role includes `pierre`.
+  - `docs/modernization/legacy-credits.md` and L10N_STORE_LEGAL.md §0.3 item 12, §4.3 and §4.5 carry the corrected values. D-209's gurshabad credit is unchanged.
+- **Rationale:**
+  - The planning capture and the first M0 capture ran in a checkout that is shallow at `8a04f5d`: `git rev-parse --is-shallow-repository` prints `true`, and `git rev-list --count e097460` prints 67. In a full-history clone of this repository the count is 92, and `git log --format='%an' e097460 | sort -u` prints one more line, `pierre` (commits `74990c4` "Added french translation" and `60d22bd`, both 2014-08-18) (M0 review, 2026-10-28).
+  - On the full history, `git log --follow --diff-filter=A -- res/values-fr/strings.xml` prints `74990c4 pierre 2014-08-18`. That file already holds `action_settings` = "Paramètres", the value M0 keeps as `settings`, and it is unchanged at `e097460`. `8a04f5d` adds `res/values-el` and does not touch `res/values-fr`. It looked like the creator only because it is the shallow boundary.
+  - The other 19 translator rows are unchanged on the full history. On a full clone of `uberspot/2048`, `fc1ef4f..7a477eb` gives the same 6 authors, and `f889036` is the gurshabad credit.
+  - D-124 already credits "every legacy contributor (git authors of this repository up to `e097460` …)", so the decision stands. Only the values derived from the shallow history were wrong.
+- **Rejected:** keeping the shallow-history values. A translator whose string ships would go uncredited, and the French translation would be credited to uberspot (D-121, D-124).
+- **Source:** [ORCH] O17 (D-173 change control, M0 review).
+
+---
+
 ## Appendix A: Conflict-resolution index
 
 ### A.1 Research contradictions (research/07 §1, C1–C25)
@@ -3549,7 +3581,7 @@ A technical correction changes only the spelling of a command, or an expected to
 | TC-1 | D-131 ([USER] U5) | keytool's `-dname` escapes the `;` as `\;`: `-dname "CN=2048 CI sideload key (public\; not for store uploads), O=clayboicardi"`. The resulting subject is unchanged: `CN="2048 CI sideload key (public; not for store uploads)", O=clayboicardi` | ARCHITECTURE.md §0, §2.9: the unescaped command prints `keytool error: java.io.IOException: Incorrect AVA format` (JDK 21.0.12) |
 | TC-2 | D-148 ([USER] U6) | Item 1: `aapt2 dump badging` (build-tools 37.0.0) prints `minSdkVersion:'24'`, not `sdkVersion:'24'`. Item 6: the signer digest is read from the `apksigner verify --print-certs` lines that contain `certificate SHA-256 digest:` | ARCHITECTURE.md §0; QUALITY.md V12 |
 | TC-3 | D-101 | Lint reports a translated `app_name` as `Untranslatable`, not `ExtraTranslation`. Both are fatal under D-142 | L10N_STORE_LEGAL.md §0.3 item 15 |
-| TC-4 | D-010 | Run the bootstrap in a new, empty temporary directory outside the repository: `touch settings.gradle.kts`; then `gradle wrapper --gradle-version 9.7.1 --distribution-type bin --gradle-distribution-sha256-sum acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a`; then `./gradlew wrapper` with the same arguments in that same directory. Copy `gradlew`, `gradlew.bat` and `gradle/wrapper/*` into the repository, but not the temporary `settings.gradle.kts`. Then run `git update-index --chmod=+x gradlew`. The resulting `gradle-wrapper.properties` is byte-identical to D-010's | A directory without a settings file is not a Gradle build, and both 8.14.3 and 9.7.1 fail there. The repository root is not a build between M0.6 and M0.8. With the empty settings file, both steps succeed (reproduced 2026-10-28) |
+| TC-4 | D-010 | Run the bootstrap in a new, empty temporary directory outside the repository: `touch settings.gradle.kts`; then `gradle wrapper --gradle-version 9.7.1 --distribution-type bin --gradle-distribution-sha256-sum acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a`; then `./gradlew wrapper` with the same arguments in that same directory. Copy `gradlew`, `gradlew.bat` and `gradle/wrapper/*` into the repository, but not the temporary `settings.gradle.kts`. Then run `git update-index --chmod=+x gradlew`. The resulting `gradle-wrapper.properties` is byte-identical to D-010's (superseded by D-212) | A directory without a settings file is not a Gradle build, and both 8.14.3 and 9.7.1 fail there. The repository root is not a build between M0.6 and M0.8. With the empty settings file, both steps succeed (reproduced 2026-10-28) |
 | TC-5 | D-144 | `config.setFrom(rootProject.layout.projectDirectory.file("config/detekt/detekt.yml"))` | ARCHITECTURE.md §0: the relative path resolves per module (for example `app/config/…`), which does not exist |
 | TC-6 | D-145 | Each property-test class seeds in `@BeforeEach` with `PropertyTesting.defaultSeed = 0x2048L` and `PropertyTesting.writeFailedSeed = false`, and properties call `checkAll(1_000, genA, genB) { … }`. `PropTestConfig` is not used. The seed 0x2048 and the 1,000 iterations are unchanged | Compile probe: `PropTestConfig(…)` in every form needs `@ExperimentalKotest` in kotest 6.2.6. The replacement compiled and ran 1,000 iterations. `PropertyTesting.defaultSeed` and `writeFailedSeed` carry no opt-in marker (class files, 2026-10-28) |
 | TC-7 | D-064 | The invalid-move nudge (`NUDGE` 0.3/1800, 330 dp/s) settles at 346 ms under Compose's estimator with a 0.1 dp threshold. research/04's 393 ms used an extra velocity criterion. The spring itself is unchanged | MOTION_SPEC.md §1.1 (computed 2026-10-28) |
