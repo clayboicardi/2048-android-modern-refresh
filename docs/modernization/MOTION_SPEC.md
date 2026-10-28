@@ -467,7 +467,7 @@ Each event has a Full timeline, then Reduced and Off. The cross-event matrix is 
 
 ```kotlin
 sealed interface BoardEvent {
-    data object Restored : BoardEvent       // load, recreation, resume, splash release: Static, no animation at all (D-047)
+    data object Restored : BoardEvent       // load, splash release, and every presented board after settled() (§3.14): Static, no animation at all (D-047)
     data class Moved(
         val direction: Direction,
         val mergedExps: ImmutableList<Int>,
@@ -580,7 +580,7 @@ Mechanism (B): the float is created by `awaitOffset(moveId, 80)` in Full, or `aw
 | Scale | 0.8 → 1, `popSpatial(0.002f)` (peak 1.019 at +139 ms after start) | 1 | — |
 | Removal | when the alpha animation ends (start + 650 ms; frame 752 on the test grid) | start + 400 ms | — |
 
-At most **3** floats are alive (D-062). Starting a 4th removes the oldest at once, with no fade. Undo, new game and size switch remove all floats on their F0.
+At most **3** floats are alive (D-062). Starting a 4th removes the oldest at once, with no fade. Undo, new game and size switch remove all floats on their F0, also with no fade. `GameHeader` tells them from a move by `HeaderUi.event` and `HeaderUi.epoch`, which copy the event kind and epoch of the `BoardUi` the header accompanies: the float host is composed inside `key(header.epoch, header.event)`, so a header whose event is not `Moved`, or whose epoch changed, disposes every running float in the composition that reads it (`ARCHITECTURE.md` §4.11, AC-SCORE-5).
 
 ### 3.5 Score odometer and best value
 
@@ -606,7 +606,7 @@ Triggered by `BoardEvent.Moved.newBest` (the first accepted move with `score > b
 - Particle randomness comes from `ParticleRandom(seed = state.seed xor state.moveCount.toLong())` (§3.11), so it is deterministic in tests.
 - **Reduced:** at origin, the label swaps instantly and the container colors crossfade with `defaultEffects`. No star or sparkles.
 - **Off:** label and colors change on F0.
-- Restore with `newBestAnnounced = true` renders the NEW BEST style statically. Undo does not stop a running new-best moment, because undo does not reset `newBestAnnounced`. New game and size switch cancel it.
+- Restore with `newBestAnnounced = true` renders the NEW BEST style statically. Undo does not stop a running new-best moment, because undo does not reset `newBestAnnounced`. New game and size switch cancel it: `GameHeader` cancels the moment when `HeaderUi.epoch` changes, unless `HeaderUi.event` is `Undo` and the epoch advanced by exactly one (`ARCHITECTURE.md` §4.11, AC-SCORE-5).
 
 ### 3.7 Invalid move: direction-aware nudge
 
@@ -733,6 +733,13 @@ On `BoardEvent.Restored`:
 
 This covers cold start after the splash (D-112), `ActivityScenario.recreate()`, resume and the splash's 1000 ms timeout path (D-047). The splash itself uses the platform's default exit with no custom animation (`DESIGN_SYSTEM.md` §8.3).
 
+**Recreation after a move: one-shot presentations** (D-047, `ARCHITECTURE.md` §4.11). The activity-scoped `GameViewModel` outlives the composition, so each animated value is presented once and then settled:
+- `BoardView` reports the board at its origin F1 (`onBoardPresented(moveId)`, right after `MoveTimeline.publish`); `GameHeader` reports the "+N" delta (`onHeaderPresented`) and `OverlayController` an `Animated` card entry (`onOverlayPresented`), each from an effect of the composition that read it, on the same F1 for a move;
+- the ViewModel replaces the value with its static form for the same state: `BoardPresenter.settled(board)` (same `moveId`, `epoch` and ids; every tile `Static`; event `Restored`), `lastDelta = 0`, entry `Restored`;
+- the live composition reads these flows through `collectPresentedAsState`, which treats the replacement as the same presentation. Nothing it is animating changes, no effect relaunches and nothing recomposes (§7.2);
+- a composition created afterwards (recreation, return from a sub-screen, an arrangement switch of §3.16) starts from the static values: the end state above on its first frame. Recreation in the middle of a move, a win or a game-over sequence therefore snaps to the final frame. A haptic still pending in the disposed composition (for example the win's second `Confirm`, or a `SegmentTick` due at 80 ms) is dropped and never fired later; no haptic already fired is repeated;
+- a nudge has no end state: a new composition never plays the nudge that existed before it (no shake, no `Reject`).
+
 ### 3.15 Theme, palette and contrast switch
 
 - **Scope.** In-app changes while the composition is alive: Theme, Palette, High-contrast tiles, Dynamic color, and the API 34+ contrast listener (D-073).
@@ -746,13 +753,15 @@ This covers cold start after the splash (D-112), `ActivityScenario.recreate()`, 
 
 ### 3.16 Layout changes in a live composition
 
-`animateBounds` runs only for layout changes without recreation: the first-launch hint exit, the TalkBack direction pad showing or hiding (D-082), Immersive mode toggles (D-093) and inset changes. Rotation, resize, fold and locale changes recreate the activity and render statically (D-095).
-- **Full:**
+`animateBounds` runs only for layout changes without recreation **within one arrangement**: the first-launch hint exit, the TalkBack direction pad showing or hiding (D-082), Immersive mode toggles (D-093) and inset changes, while the resolved arrangement (`DESIGN_SYSTEM.md` §5.3, D-188) stays the same. Rotation, resize, fold and locale changes recreate the activity and render statically (D-095).
+
+**Arrangement switch: no bounds animation** (D-095). Any of these live changes can also change the resolved arrangement, for example the pad turning a 411×450 window from STACKED into SCROLL. `GameLayout` composes each arrangement in its own subcomposition, so a switch disposes the old arrangement and composes the new one, board and header included; `movableContentOf` is not used. The new board is a new composition under the one-shot presentation contract (§3.14, `ARCHITECTURE.md` §4.11): on its first frame it draws the settled static frame of the committed state at its final bounds, with no bounds animation at any motion level. A move, merge, spawn or "+N" in flight snaps to its end as on recreation (F07-AC27): nothing replays, a haptic still pending in a disposed composition is dropped, and no haptic fires twice. Bounds animate again for the next change that keeps the new arrangement.
+- **Full** (within one arrangement):
   - Board, panel and rails use `Modifier.animateBounds(lookaheadScope, boundsTransform = { _, _ -> GameMotion.overlaySpatial(Rect.VisibilityThreshold) })` (`DESIGN_SYSTEM.md` §5.8). A 300 px change settles in 399 ms.
   - The hint card exits with `shrinkVertically(overlaySpatial) + fadeOut(fastEffects)`.
-  - The direction pad enters and exits with `fadeIn/fadeOut(fastEffects)`.
+  - The direction pad enters and exits with `fadeIn/fadeOut(fastEffects)`. When its appearance switches the arrangement, the new arrangement composes it already visible, with no fade.
   - Tile labels are measured at the lookahead (target) tile size and drawn scaled by `currentTilePx / targetTilePx` while the bounds animate. That means at most one text measurement per (exponent, target size), and no text layout during the animation frames.
-- **Reduced and Off:** bounds snap; hint and pad appear and disappear on F0.
+- **Reduced and Off:** bounds snap; hint and pad appear and disappear on F0. An arrangement switch is static at every level, as above.
 
 ### 3.17 Screen transitions (Navigation 3)
 
@@ -819,6 +828,8 @@ On F0 of board change k+1, in this order:
 | Ring, confetti | (cannot happen: a won board is blocked) | removed on F0 |
 | Overlay card, scrim, desaturation, deflate | (cannot happen: blocked) | card exit (§3.12) |
 
+**How the header tells the columns apart** (D-062, `ARCHITECTURE.md` §4.7, §4.11). The board reads `BoardUi.event`; the header has its own flow, so `HeaderUi` carries `event` (a `BoardEventKind`: `Restored`, `Moved`, `Undo`, `NewGame` or `SizeSwitched`) and `epoch`, copied from the `BoardUi` emitted with it. `GameHeader` removes the running "+N" floats when the presented `event` is not `Moved` or its `epoch` changed, and the new-best moment when the `epoch` changed, unless the `event` is `Undo` and the epoch advanced by exactly one. The epoch catches a reset that the conflated header flow skipped because a move followed it before the next frame: its floats and its moment are removed as well. Proved by AC-SCORE-4 and AC-SCORE-5.
+
 ### 4.3 Invariants (tested in §9.12)
 
 | ID | Invariant |
@@ -853,7 +864,8 @@ On F0 of board change k+1, in this order:
 | Game over | desaturate, ripple, card at T0 + 500, interactive at +1000 | 150 ms fade, tiles at 0.94, interactive at 150 | end state at once |
 | Card exit | fade + scale + scrim | 150 ms fade | instant |
 | Theme switch | `slowEffects` crossfade | instant | instant |
-| Layout bounds | `animateBounds` | snap | snap |
+| Layout bounds within one arrangement | `animateBounds` | snap | snap |
+| Arrangement switch (§3.16) | none: the board is composed anew and draws its settled frame | same | same |
 | Screens | shared-axis slide + fade | fade | none |
 | Predictive back | scale + shift + fade, seeked | fade, seeked | none |
 | Sheets (`gameMotionScheme(level)`, D-184) | M3 Expressive | show snaps, hide springs, scrim fades | all snap |
@@ -917,7 +929,7 @@ Both mappings were verified 2026-10-28 (class files). So the "API 24–29 fallba
 ### 6.2 Implementation rules
 
 - **One wrapper.** `game/feedback/HapticsController.kt` holds the `HapticsController` class (M3 part 1), created in `GameScreen` from `LocalHapticFeedback.current`, the Haptics setting, `MoveTimeline`, `MonotonicClock` and `LocalEffectiveMotion`. Nothing else calls `performHapticFeedback` (D-066, D-185).
-- **Scheduling.** `onBoardChange(board)` schedules `board.event.haptic`, which `GameViewModel` resolved with `HapticsMap` (D-185); `HapticsController` does not compute priority. It schedules with `awaitOffset` (Full) or `awaitRealTime` (Reduced/Off), keyed to `board.moveId` (§2.4). It also schedules the separate events of §6.1 (game over from `OverlayController`, invalid moves from `nudge?.id`).
+- **Scheduling.** `onBoardChange(board)` schedules `board.event.haptic`, which `GameViewModel` resolved with `HapticsMap` (D-185); `HapticsController` does not compute priority. It schedules with `awaitOffset` (Full) or `awaitRealTime` (Reduced/Off), keyed to `board.moveId` (§2.4). It also schedules the separate events of §6.1 (game over from `OverlayController`, invalid moves from `nudge?.id`). Its inputs are the presented values of §3.14: a composition created after a presentation was reported sees a `Restored` board and card entry and schedules nothing for them, it ignores the nudge that existed at its first composition, and haptics pending in a disposed composition are cancelled with it, never fired later (D-047).
 - **Interruption** (D-185). When a newer change publishes its origin before a scheduled haptic fires:
   - priority 1–2 haptics (win, new best) fire immediately on the newer change's F1;
   - priority 3–4 haptics are dropped;
@@ -945,8 +957,8 @@ The confetti frames get the same targets, with the particle system costing ≤ 1
 | Composable | Budget per accepted move (no interruption) | Gate |
 |---|---|---|
 | `TileView` (each key; `onTile(id)`) | ≤ 1: the F0 composition when its `TileUi` changed or the tile is new. **0 on every later frame until the next change** | `TileRecompositionTest` (D-150) |
-| `BoardView` (`onBoard()`) | ≤ 2: F0 (new `BoardUi` + frame-rate High) and idle (frame-rate Default). Ghost hiding is an alpha snap, not a recomposition | `BoardRecompositionBudgetTest` |
-| `GameScreen` root (`onScreen()`) | 0 (it reads no per-move state; D-024 flows are collected below it) | `BoardRecompositionBudgetTest` |
+| `BoardView` (`onBoard()`) | ≤ 2: F0 (new `BoardUi` + frame-rate High) and idle (frame-rate Default). Ghost hiding is an alpha snap, not a recomposition. The settled board that follows the presentation report (§3.14) causes none, because `collectPresentedAsState` keeps the presented instance | `BoardRecompositionBudgetTest` |
+| `GameScreen` root (`onScreen()`) | 0 (it reads no per-move state: it obtains the D-024 flows' `collectPresentedAsState` `State`s, `ARCHITECTURE.md` §4.11, and only its children read their values) | `BoardRecompositionBudgetTest` |
 | `ScoreChip` | 1 when `displayedScore` changes, plus `AnimatedContent`'s own internal compositions | not gated |
 | Theme crossfade | M3 consumers recompose for ≈ 19 frames (§3.15) | exempt |
 
@@ -1076,13 +1088,19 @@ class MotionHarness private constructor(val rule: ComposeContentTestRule, val pr
         val target = originMs + ((tMs + 15) / 16) * 16
         rule.mainClock.advanceTimeBy(target - rule.mainClock.currentTime)
     }
+    /** Disposes the whole content and composes it again over the same vm, container, probe and haptics fake, which is
+     *  what ActivityScenario.recreate() does to the activity-scoped GameViewModel (ARCHITECTURE.md §4.11, §3.14).
+     *  Uses compose-ui-test's StateRestorationTester.emulateSaveAndRestore() (launch sets content through it), so
+     *  rememberSaveable state survives. Returns on R0, the first frame of the new content; the probe then reads the
+     *  new composition. autoAdvance stays false; any frames the restoration needs are advanced one at a time. */
+    fun recreate()
     companion object {
         fun launch(rule: ComposeContentTestRule, fixture: GameFixture, motion: MotionPreference,
                    systemScale: Float = 1f, widthDp: Int? = null): MotionHarness
         // Builds AppContainer on TemporaryFolder files with fakes: MonotonicClock = rule.mainClock.currentTime,
-        // SeedSource fixed, AnimatorScaleSource(systemScale), writes the fixture, sets content with
-        // LocalMotionProbe and LocalHapticFeedback (FakeHapticFeedback) provided, sets mainClock.autoAdvance = false, and
-        // advances frames until probe.boardLoaded.
+        // SeedSource fixed, AnimatorScaleSource(systemScale), writes the fixture, sets content through
+        // StateRestorationTester(rule).setContent with LocalMotionProbe and LocalHapticFeedback (FakeHapticFeedback)
+        // provided, sets mainClock.autoAdvance = false, and advances frames until probe.boardLoaded.
     }
 }
 ```
@@ -1175,7 +1193,7 @@ Paths are under `app/src/test/kotlin/com/clayboicardi/game2048/`. All classes ar
 | `MoveTimelineTest` | Robolectric | §3.1, §3.2; AC-MOVE-* |
 | `MergePopTest` | Robolectric | §3.3 tiers, sheen, glow pulse, flash limiter, cap |
 | `SpawnDelayTest` | Robolectric | §3.1 delay table; I1 on 8×8 |
-| `ScoreMotionTest` | Robolectric | §3.4, §3.5 |
+| `ScoreMotionTest` | Robolectric | §3.4, §3.5; the header part of §4.2 (AC-SCORE-5) |
 | `NewBestTest` | Robolectric | §3.6 |
 | `InvalidNudgeTest` | Robolectric | §3.7 (direction-aware, repeat, Blocked) |
 | `NewGameCascadeTest` | Robolectric | §3.8 |
@@ -1184,7 +1202,7 @@ Paths are under `app/src/test/kotlin/com/clayboicardi/game2048/`. All classes ar
 | `WinSequenceTest` | Robolectric | §3.11 (compact and `widthDp = 900` expanded) |
 | `CardExitTest` | Robolectric | §3.12 |
 | `GameOverSequenceTest` | Robolectric | §3.13 |
-| `RestoreNoMotionTest` | Robolectric | §3.14 (complements D-047's `RecreateNoReplayTest`) |
+| `RestoreNoMotionTest` | Robolectric | §3.14: AC-RESTORE-1, AC-RESTORE-2; board cases in M3 part 1, card cases in part 2 (complements D-047's `RecreateNoReplayTest`, whose `MotionHarness.recreate()` cases are FEATURES.md F07-AC26–AC30) |
 | `ThemeCrossfadeTest` | Robolectric | §3.15 (M4) |
 | `LayoutMotionTest` | Robolectric | §3.16 (M4) |
 | `NavTransitionsTest` | Robolectric | §3.17 |
@@ -1257,6 +1275,11 @@ Unless stated otherwise: Robolectric SDK 36, Pixel7 qualifiers, Classic light, M
   - on its F1 all floats are gone;
   - `displayedScore` equals the undone score at t = 0;
   - the changed digits' `AnimatedContent` targets change on the same frame.
+- **AC-SCORE-5** (`ScoreMotionTest.resetsRemoveScoreFloats`, with F13-AC15; §3.4, §3.6, §4.2) Given `FIX_NEW_BEST_4`, when LEFT commits, then at t = 160 its "+8" float and the new-best moment are running, and, in separate runs from that point:
+  - when Undo commits at t = 160, on the undo's F1 no float exists, while the label key is still `new_best_label` and the star badge is still composed and running;
+  - when New game commits at t = 160, on its F1 no float exists, the star badge is not composed and the label key is `best_label`;
+  - given also a saved 3×3 game with `newBestAnnounced = false`, when 3×3 is selected at t = 160, on the size switch's F1 no float exists, the star badge is not composed and the label key is `best_label`;
+  - when Undo and then RIGHT commit at t = 160 with no frame between them, on RIGHT's F1 LEFT's float is gone, and RIGHT's own "+8" float is created at RIGHT's t = 80.
 
 ### 9.3 New best (`NewBestTest`)
 
@@ -1354,8 +1377,19 @@ Times below are relative to Ft, the exit origin (§3.12; `MotionHarness.tapCardB
   - no float exists and no haptic is recorded;
   - cards are in their end state with interactive buttons;
   - nothing is running.
+- **AC-RESTORE-2** (`RestoreNoMotionTest.reportsDoNotDisturbLivePresentation`, §3.14, D-047) Given `FIX_FILM` (Full), when LEFT commits, then:
+  - at t = 0, `vm.board.value` equals `BoardPresenter.settled` of the move's board (same `moveId` and `epoch`, every tile `Static`, event `Restored`) and `vm.header.value.lastDelta == 0`;
+  - yet the probe still reports the move's kinds (`Moved`, `Ghost`, `Merged`, `Spawned`), AC-MOVE-1, AC-MOVE-2, AC-MOVE-3, AC-MOVE-4 and AC-MOVE-5 hold unchanged, the "+4" float appears at t = 80 and `SegmentTick` is recorded at t = 80;
+  - AC-PERF-1 and AC-PERF-2 hold over the same run.
+
+  Given `FIX_WIN_PRE_4` (Full), when LEFT commits, then `vm.overlay.value` has entry `Restored` at t = 0, and AC-WIN-4 and AC-WIN-5 still hold (the card composes at 688 and becomes interactive at 880). This case needs `OverlayController`, so the method gains it in M3 part 2; the `FIX_FILM` case passes from M3 part 1.
 - **AC-THEME-1** Given the Settings screen (Full), when Palette changes Classic → Neon, then `paletteFraction` is 0 on F1, 0.5402 at t = 64 and 0.9402 at t = 160, and nothing is running at t = 320. (Reduced/Off) Then the fraction is 1 on F0.
 - **AC-LAYOUT-1** Given the first-launch hint (Full), when "Got it" is tapped, then the board bounds change continuously (strictly increasing height on each frame from 16 to 304) and are final at t = 416. (Reduced/Off) Then the board is at its final bounds on F0.
+- **AC-LAYOUT-2** (`LayoutMotionTest.arrangementSwitchRendersSettledBoard`, with F18-AC13; §3.16, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED with the COMPACT header and, with Robolectric's zero insets, a 258 dp board) and LEFT committed, when touch exploration turns on at t = 48 (mid-slide, before the reveal, the spawn, the "+N" and the `SegmentTick` due at 80), so the pad shows and the arrangement becomes SCROLL (a 298 dp board), then:
+  - the board node measures 258 dp on every frame before the switch and 298 dp from the first frame that draws SCROLL; no frame shows another size;
+  - on that frame every probe tile is `Static` at its engine cell with scale 1 and alpha 1, `displayedScore == vm.header.value.score`, and nothing is running; no "+N" float exists on it or on any later frame;
+  - `vm.board.value.moveId` and the move log are unchanged, and through t = 1,000 the recorded haptics are at most the move's one `SegmentTick`.
+  - Given then touch exploration off again with nothing running, the first frame that draws STACKED has the 258 dp board, with no intermediate size.
 - **AC-NAV-1** Given Game (Full), when Settings is pushed, then:
   - at t = 0 the Settings content is offset +30 dp (LTR) with alpha 0;
   - at t = 256 it is at offset 0 with alpha 1 and Game is no longer composed.
@@ -1442,7 +1476,7 @@ All paths are under `app/src/main/kotlin/com/clayboicardi/game2048/` unless stat
 | `game/motion/ParticleRandom.kt` | `SplitMix64` wrapper, `nextFloat()`, `uniform(a, b)` |
 | `game/motion/ConfettiSystem.kt` | SoA engine: `emit(...)`, `step(dtSeconds)`, `aliveCount`, also used for sparkles |
 | `game/motion/ParticleDraw.kt` | `DrawScope.drawParticles(system, colors, density)` |
-| `game/board/BoardUi.kt` (M2) | `TileKind`, `TileUi`, `MoveHaptic`, `BoardEvent`, `BoardUi` (§3.1) |
+| `game/board/BoardUi.kt` (M2) | `TileKind`, `TileUi`, `MoveHaptic`, `BoardEvent`, `BoardEventKind`, `BoardUi` (§3.1, §4.2) |
 | `game/board/BoardPresenter.kt` (M2) | Stable tile IDs, kinds and ordering, epoch ID rule (§3.1, §3.8–§3.10, D-182) |
 | `game/board/Board.kt` | `@Composable fun BoardView(…)`: board container, `OutgoingTilesLayer`, nudge, outline pulse, frame-rate vote, `MoveTimeline.publish`, size-switch `AnimatedContent` |
 | `game/board/BoardAnimator.kt` | `BoardAnimator` with one `TileAnim` per tile ID: entrance and position effects (§3.1, §4.1) |
@@ -1457,7 +1491,7 @@ All paths are under `app/src/main/kotlin/com/clayboicardi/game2048/` unless stat
 | `game/feedback/HapticsController.kt` | §6.2: scheduling, interruption, invalid-move rate limit (D-185) |
 | `ui/components/ScoreCard.kt` | `@Composable fun ScoreChip` and `ScoreValue` (`DESIGN_SYSTEM.md` §7.2) |
 | `game/header/ScoreOdometer.kt` | Per-digit `AnimatedContent` (§3.5) |
-| `game/header/ScoreFloats.kt` | "+N" floats (§3.4) |
+| `game/header/ScoreFloats.kt` | "+N" floats (§3.4), composed inside `key(header.epoch, header.event)` (§4.2) |
 | `game/header/NewBestBadge.kt` | New-best star (§3.6); its sparkles are drawn by `ContentEffectsCanvas` |
 | `ui/components/GameModalSheet.kt` | Sheets; motion from `gameMotionScheme(level)` (§3.18) |
 | `ui/components/Dialogs.kt`, `ui/components/GameSnackbar.kt` | Platform and M3 default fades at every level (§3.18, D-184) |

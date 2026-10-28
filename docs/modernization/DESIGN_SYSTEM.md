@@ -597,9 +597,9 @@ Chrome text uses `MaterialTheme.typography`, the M3 baseline `Typography()` with
 | `Space2` / `Space4` / `Space8` / `Space12` / `Space16` / `Space24` / `Space32` / `Space48` | 2 / 4 / 8 / 12 / 16 / 24 / 32 / 48 dp | 4-dp grid (2 dp only for focus-ring gaps) |
 | `MarginCompact` / `MarginMedium` / `MarginExpanded` | 16 / 24 / 32 dp | D-075 margins (§5.2) |
 | `HeaderRow1` / `HeaderRow2` / `HeaderHeight` | 64 / 48 / 112 dp | stacked header (D-091) |
-| `HeaderCompact` | 64 dp | fit-guard header (§5.3) |
+| `HeaderCompact` | 64 dp | COMPACT header of STACKED and SCROLL (§5.3) |
 | `ControlsBarHeight` | 80 dp (minimum) | stacked controls (D-091) |
-| `StackGap` | 24 dp | header↔board and board↔controls (240 = 112 + 24 + 24 + 80) |
+| `StackGap` | 24 dp | header↔board and board↔controls (240 = 112 + 24 + 24 + 80); `Space8` replaces it with the COMPACT header (§5.3) |
 | `ScoreChipMinWidth` / `ScoreChipMinHeight` | 88 / 64 dp | |
 | `ControlHeight` | `ButtonDefaults.MediumContainerHeight` (56 dp) | Undo, New game, More, card buttons |
 | `PadButton` / `PadGap` | 64 / 8 dp | TalkBack direction pad (D-082) |
@@ -648,7 +648,7 @@ fun boardGeometry(n: Int, board: Dp, skin: TileSkin, density: Float): BoardGeome
 
 - Classic: `gapRatio 0.14`, `radiusFraction 0.07`, radius 2–10 dp. Neon: `0.18`, `0.22`, 4–34 dp (D-075).
 - `cellTopLeft(x, y)` takes cell coordinates as `Float` (x = column, y = row), so a sliding tile's fractional position maps straight to pixels. An `Int` overload `cellTopLeft(x: Int, y: Int)` is optional; if present, it delegates to the `Float` form.
-- `boardSizeFor(…)` (M4), in the same file, implements the per-mode board size of §5.3.
+- `resolveGameLayout(window: LayoutWindow, chrome: ChromeMeasure): GameLayoutSpec` (M4), in the same file, implements the per-arrangement board size and the arrangement choice of §5.3.
 - Board radius = tile radius + gap, so the corners are concentric.
 - Required check (D-075): 4×4 Classic at 328 dp and density 1.0 gives gap 10 dp and tile 69.5 dp.
 
@@ -761,8 +761,9 @@ Code computes the dark Classic values as `lightAlpha * 1.15f`, unrounded.
 
 ```kotlin
 // ui/components/WindowMode.kt
-enum class LayoutMode { STACKED, THREE_COLUMN, SIDE_PANEL }
+enum class LayoutMode { STACKED, THREE_COLUMN, SIDE_PANEL, SCROLL }
 
+/** The window-class preference (D-091). Never returns SCROLL; §5.3 resolves the arrangement actually drawn. */
 fun layoutModeFor(widthDp: Int, heightDp: Int): LayoutMode = when {
     heightDp < GameDimens.HeightMediumMin.value -> LayoutMode.THREE_COLUMN   // isHeightAtLeastBreakpoint(480) == false
     widthDp >= GameDimens.WidthExpandedMin.value -> LayoutMode.SIDE_PANEL    // isWidthAtLeastBreakpoint(840)
@@ -770,10 +771,10 @@ fun layoutModeFor(widthDp: Int, heightDp: Int): LayoutMode = when {
 }
 
 @Composable
-fun rememberLayoutMode(): LayoutMode   // from currentWindowAdaptiveInfoV2().windowSizeClass
+fun rememberLayoutMode(): LayoutMode   // the preference, from currentWindowAdaptiveInfoV2().windowSizeClass
 ```
 
-- The window size comes from `currentWindowAdaptiveInfoV2().windowSizeClass` (D-026, D-092), read by `rememberLayoutMode()`. `GameLayout` (§5.3) may still fall back from STACKED to THREE_COLUMN through the fit guard (D-188).
+- The window size comes from `currentWindowAdaptiveInfoV2().windowSizeClass` (D-026, D-092), read by `rememberLayoutMode()`. That is only the **preferred** mode: `GameLayout` draws the arrangement that `resolveGameLayout` (§5.3) picks from the board size each candidate would give, so a window whose rails or panel would leave too small a board gets STACKED or SCROLL instead (D-188). Everything that depends on the arrangement (hint and snackbar placement, traversal order) reads `GameLayoutSpec.mode`, never the preference.
 - **"Expanded"** in this file always means window width ≥ 840 dp. It controls the 64 sp title, the 120 dp hero badge and the 144-particle confetti (D-064).
 - Sub-screens (Settings, Stats, How to play, About, Licenses) use one column of at most `ContentMaxWidth` (640 dp), centered, with the horizontal margin of §5.2. They have no mode switch.
 
@@ -791,37 +792,117 @@ fun rememberLayoutMode(): LayoutMode   // from currentWindowAdaptiveInfoV2().win
 - **Cutouts:** `safeDrawing` includes `displayCutout`, so in landscape the 3-column rails never sit under a cutout.
 - **Immersive mode** (D-093): `WindowInsetsControllerCompat.hide(systemBars())` with `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`.
   - `safeDrawing` then shrinks to the cutout only, so the board may grow.
-  - That change animates with `animateBounds` under Full motion only (D-095).
-- **The gesture surface** is the whole Game content area inside `safeDrawing` (D-051). `systemGestureExclusion` is never used.
+  - While the arrangement stays the same, that change animates with `animateBounds` under Full motion only. If it switches the arrangement (§5.3), the board is composed anew and appears at its new size with no bounds animation (D-095, §5.8).
+- **The gesture surface** is the whole Game content area inside `safeDrawing` (D-051), except in SCROLL, where it is the board alone (§5.3, D-188). `systemGestureExclusion` is never used.
 
-### 5.3 Board size per mode
+### 5.3 Board size per arrangement, and the arrangement chosen
 
-`availW` and `availH` = window − `safeDrawing` − 2 × the margins of §5.2.
+`availW` and `availH` = window − `safeDrawing` − 2 × the margins of §5.2. `W` is the window width.
 
-| Mode | Board | Chrome term |
+| Arrangement | Board | Chrome term |
 |---|---|---|
-| STACKED | `clamp(min(availW, availH − chromeH), 280dp, 720dp)` | `chromeH` = measured header height + measured controls height + 2 × 24 dp (D-188). Nominal 112 + 80 + 48 = **240 dp** at fontScale 1.0 (D-075). With the TalkBack pad: header + 24 + 16 + status line + 8 + pad row (§6.6), nominal **336 dp** |
-| THREE_COLUMN | `min(availH, availW − 2·rail − 24dp)`, `rail = clamp(0.22·W, 160dp, 240dp)`, and `rail = max(rail, 208dp)` while the TalkBack pad is shown | rails are full-height columns |
-| SIDE_PANEL | `min(availH, availW − panel − 32dp, 720dp)`, `panel = clamp(0.32·W, 280dp, 400dp)` | the panel is as tall as the board and top-aligned with it (D-188) |
-| Any, `availW < 280dp` | `max(220dp, availW)`, title hidden | D-075 |
+| STACKED | `min(max(availW, 220dp), availH − stacked(h, width), 720dp)`, with header `h` = FULL while that leaves ≥ 280 dp and `availW ≥ 280dp`, otherwise COMPACT | `stacked(h, w)` below (D-188). Nominal at fontScale 1.0: FULL **240 dp** (112 + 24 + 24 + 80, D-075), **336 dp** with the TalkBack pad; COMPACT **160 dp**, **264 dp** with the pad |
+| THREE_COLUMN | `min(availH, availW − 2·rail − 24dp, 720dp)`, `rail = clamp(0.22·W, 160dp, 240dp)`, and `rail = max(rail, 208dp)` while the TalkBack pad is shown (the pad is 208 dp wide) | rails are full-height columns; their content must fit `availH` |
+| SIDE_PANEL | `min(availH, availW − panel − 32dp, 720dp)`, `panel = clamp(0.32·W, 280dp, 400dp)` | the panel is as tall as the board and top-aligned with it (D-188); its content must fit that height |
+| SCROLL | `clamp(min(availW, availH − top(COMPACT, w0) − statusBlock), 220dp, 720dp)` | a scrolling column: the chrome below the board may start below the fold |
 
-`W` is the window width.
+D-075's narrow-window rule (`availW < 280dp`: board `max(220dp, availW)`, title hidden) is the STACKED row with the COMPACT header; its `max(availW, 220dp)` term lets a 220 dp board spill into the side margins when `availW < 220dp`.
 
-**Measured chrome (STACKED).** Header and controls are measured inside one custom `Layout` (`game/GameLayout.kt`):
-1. Measure the header and controls at width `min(availW, 720dp)`.
-2. Compute the board.
-3. Re-measure the header and controls at width = board. If they grew taller, shrink the board by the difference, once.
+**Measured chrome** (D-188). Terms in dp at content width `w`; `h` is FULL or COMPACT. With the FULL header, header and controls are as wide as the board (§5.5 A). With the COMPACT header (STACKED and SCROLL) they span the content width `w0 = min(max(availW, 220dp), 720dp)`, because the one header row needs about 290 dp at fontScale 1.0 (size chip, two 88 dp chips, two 8 dp gaps) and a COMPACT board can be narrower:
 
-At `fontScale` 1.0 this equals D-075's constant 240 dp. At 2.0, with the TalkBack pad, and in windows 480–640 dp tall it prevents overflow (D-188).
+| Term | Definition | Nominal at fontScale 1.0 |
+|---|---|---|
+| `header(FULL, w)` | title row (the taller of 64 dp and the chips) + size-chip row | 112 |
+| `header(COMPACT, w)` | one row [size chip][Score][Best], no title | 64 |
+| `gap(h)` | header↔board and board↔controls: `StackGap` for FULL, `Space8` for COMPACT | 24; 8 |
+| `top(h, w)` | `header(h, w)` + (hint shown ? 8 + hint card + 8 : `gap(h)`) | FULL 136; COMPACT 72 (no hint) |
+| `bottom(h, w)` | without the pad: `gap(h)` + controls bar. With it: (FULL ? 16 : 8) + status line + 8 + pad row (§6.6) | FULL 104 / 200; COMPACT 88 / 192 |
+| `stacked(h, w)` | `top(h, w) + bottom(h, w)` | FULL 240 / 336; COMPACT 160 / 264 |
+| `statusBlock` | SCROLL only: 8 + status line at `w0` while the pad is shown, else 0 | 48 / 0 |
+| rails | the taller of the stats rail without its title and the actions rail, at the rail width (§5.4) | 192; 312 with the pad |
+| panel | the panel's content at the panel width (§5.4) | 256; 448 with the pad |
 
-**Fit guard (STACKED only; D-188).** Evaluated in order:
-1. If `availH − chromeH < 280dp`, switch the header to **compact**: one 64 dp row of [size chip][Score][Best], with no title. `chromeH` drops by 48 dp.
-2. If it is still short, the board may go below 280 dp, down to `BoardFloor` = 220 dp.
-3. If even 220 dp does not fit, use THREE_COLUMN for this window, whatever its height class.
+The status line enters every term at its reserved two-line height, not with its current text, so an announcement never changes the arrangement; §6.6's absorption of a longer status line then shrinks the board, never below `BoardFloor`.
+
+`GameLayout` (`game/GameLayout.kt`) is a `SubcomposeLayout`, and the resolution runs in its measure block:
+1. It subcomposes a **measurement probe** of the chrome: the header in both styles, the hint, the controls bar, the status line, the pad row, both rails and the panel. The probe is wrapped in `Modifier.clearAndSetSemantics {}` and composed under `LocalChromeProbe provides true`, which turns off every effect in chrome composables (`GameHeader`'s header moments and its `onHeaderPresented` report, ARCHITECTURE.md §4.11). It shows placeholder values (scores 0; the status line is its `Text` with `minLines = 2` and no text), so it does not recompose on moves. It is never placed, so it draws nothing and takes no input, focus or semantics.
+2. A `ChromeMeasure` answers each term with the probe's `maxIntrinsicHeight` at the asked width.
+3. `resolveGameLayout` picks the arrangement. `GameLayout` subcomposes that arrangement, measures each child once and places it. Each arrangement is its own subcomposition slot, keyed by `GameLayoutSpec.mode`, and holds the board, header, controls and the rest of the visible chrome.
+
+**Arrangement switches** (D-095). A live change that keeps `GameLayoutSpec.mode` (the hint leaving, the pad, Immersive mode, insets, or the STACKED header going FULL ↔ COMPACT) reuses the slot, so board, panel and rail bounds animate as §5.8 says. A change of `mode` disposes the old slot and composes the new one; `movableContentOf` is not used. The new `BoardView` and `GameHeader` are new compositions under the one-shot presentation contract (`ARCHITECTURE.md` §4.11): on their first frame they draw the settled static frame of the committed state at the new size, with no bounds animation at any motion level, and a move, "+N" or new-best moment in flight snaps to its end as on recreation (MOTION_SPEC.md §3.16).
+
+At `fontScale` 1.0 `stacked(FULL, w)` equals D-075's constant 240 dp. At 2.0, with the TalkBack pad, and in short windows the measurement prevents overflow (D-188).
+
+**Resolution** (D-091, D-188):
+
+```kotlin
+// game/board/BoardGeometry.kt (M4): pure, JVM-tested by BoardGeometryTest. All values in dp.
+enum class HeaderStyle { FULL, COMPACT }
+
+data class LayoutWindow(
+    val width: Float, val height: Float,
+    val safeLeft: Float, val safeTop: Float, val safeRight: Float, val safeBottom: Float,  // WindowInsets.safeDrawing
+    val gestureLeft: Float, val gestureRight: Float,                                         // WindowInsets.systemGestures (§5.2)
+    val talkBack: Boolean,                                                                    // the direction pad is shown (§6.6)
+    val hint: Boolean,                                                                        // the first-launch hint is shown (§6.2)
+)
+
+interface ChromeMeasure {   // the measured-chrome terms above; each is non-increasing in its width argument
+    fun header(style: HeaderStyle, width: Float): Float
+    fun hint(width: Float): Float
+    fun controls(width: Float): Float
+    fun status(width: Float): Float      // the reserved two-line height
+    fun padRow(width: Float): Float
+    fun rails(rail: Float): Float
+    fun panel(panel: Float): Float
+}
+
+data class GameLayoutSpec(
+    val mode: LayoutMode,        // the arrangement drawn: STACKED, THREE_COLUMN, SIDE_PANEL or SCROLL
+    val header: HeaderStyle,     // STACKED: FULL or COMPACT; SCROLL: COMPACT; FULL otherwise (unused)
+    val board: Float,            // always within [BoardFloor, BoardMax]
+    val rail: Float = 0f,        // THREE_COLUMN only
+    val panel: Float = 0f,       // SIDE_PANEL only
+)
+
+fun resolveGameLayout(window: LayoutWindow, chrome: ChromeMeasure): GameLayoutSpec
+```
+
+```text
+w0 = min(max(availW, 220), 720)                            // STACKED and SCROLL content width
+
+STACKED       h = FULL if availW ≥ 280 and availH − stacked(FULL, w0) ≥ 280, else COMPACT
+              s = min(w0, availH − stacked(h, w0))
+              if h == FULL: s = s − max(0, stacked(FULL, s) − stacked(FULL, w0))   // FULL chrome is as wide as the board: re-measured once
+                                                                                    // COMPACT chrome spans w0, so no re-measure
+              fitsS = s ≥ 220
+THREE_COLUMN  rail = clamp(0.22·W, 160, 240); if talkBack: rail = max(rail, 208)
+              t = min(availH, availW − 2·rail − 24, 720)
+              fitsT = t ≥ 220 and rails(rail) ≤ availH
+SIDE_PANEL    panel = clamp(0.32·W, 280, 400)
+              p = min(availH, availW − panel − 32, 720)
+              fitsP = p ≥ 220 and panel(panel) ≤ p
+
+pref = layoutModeFor(W, H); the first matching rule wins:
+1. pref == THREE_COLUMN and fitsT and (not fitsS or t ≥ s)   → THREE_COLUMN, board t
+2. pref == SIDE_PANEL and fitsP and (not fitsS or p ≥ s)     → SIDE_PANEL, board p
+3. fitsS                                                      → STACKED, header h, board s
+4. fitsT                                                      → THREE_COLUMN, board t (whatever the height class)
+5. otherwise                                                  → SCROLL, header COMPACT,
+                                                                board clamp(min(availW, availH − top(COMPACT, w0) − statusBlock), 220, 720)
+```
+
+Guarantees, asserted by `BoardGeometryTest.boardNeverBelowFloorOrOffWindow` (F18-AC9): the board is never below 220 dp or above 720 dp, so never negative; THREE_COLUMN and SIDE_PANEL are drawn only with a board of at least 220 dp and at least STACKED's whenever STACKED fits; outside SCROLL, the board plus its chrome heights fit `availH` (STACKED: `board + stacked(h, …) ≤ availH`; THREE_COLUMN: `rails(rail) ≤ availH`; SIDE_PANEL: `panel(panel) ≤ board`) and the board plus rails or panel and their gaps fit `availW`. The only horizontal excess is D-075's: a STACKED board of 220 dp when `availW < 220dp`.
+
+**SCROLL** (D-188) is the last resort, for windows where no other arrangement keeps a 220 dp board, such as a 360×450 split-screen pane with the TalkBack pad:
+- One centered column of width `w0` inside `Modifier.verticalScroll(rememberScrollState())`: the COMPACT header, the hint if shown (8 dp gaps), the board, then 8 dp, status line, 8 dp and pad row with the pad, or 8 dp and the controls bar without it (§6.6's STACKED pad row). The board fills the first screen below the header, together with the status line when the pad is shown, so live announcements stay on screen; the rest starts below the fold.
+- `swipeToMove` is attached to the board instead of the whole content area (D-051): a drag that starts on the board is a move and never scrolls; a drag that starts anywhere else scrolls the column. Keys, the pad and the board's accessibility actions are unchanged, and focus moving to a control scrolls it into view.
+- The hint and the snackbar host are placed as in STACKED; the snackbar overlays the board (§5.4). When a win or game-over card composes, the column scrolls until the whole board is visible: `ScrollState.animateScrollTo(target, GameMotion.overlaySpatial(1f))` under Full, `scrollTo(target)` under Reduced and Off.
+- Traversal order and RTL follow STACKED (F17-AC7, §5.7).
 
 **Overlay cards fit the board** (D-200): a win or game-over card's height budget is board − 16 dp, and its width is at most board − 16 dp. §6.3 and §6.4 give the Regular and Compact layouts and the selection rule.
 
-**Worked examples.** Reference insets: portrait 48 dp top + 24 dp bottom; landscape 24 dp top + 0 bottom; gesture insets ≤ margin. `game/board/BoardGeometryTest.boardSizePerMode` and `narrowWindowFloor` (JVM, M4) inject insets and assert the formulas, not these specific insets.
+**Worked examples.** Reference insets: portrait 48 dp top + 24 dp bottom; landscape and split-screen pane 24 dp top + 0 bottom; gesture insets ≤ margin; chrome at its nominal fontScale 1.0 heights. `game/board/BoardGeometryTest.boardSizePerMode` (the first nine rows) and `resolvedLayoutTable` (the rest) (JVM, M4) inject these insets and a nominal `ChromeMeasure` and assert each row's arrangement and board; `narrowWindowFloor` covers D-075's narrow rule. In the Mode column, a value in parentheses is what the rejected candidate would give.
 
 | Window (dp) | Mode | Margins h / v | availW × availH | Board | 4×4 Classic gap / tile | 4×4 Neon gap / tile |
 |---|---|---|---|---|---|---|
@@ -834,6 +915,13 @@ At `fontScale` 1.0 this equals D-075's constant 240 dp. At 2.0, with the TalkBac
 | 800×1280 | STACKED | 24 / 32 | 752 × 1144 | **720** (cap) | 20 / 155.0 | 20 / 155.0 |
 | 1280×800 | SIDE_PANEL, panel 400 | 32 / 24 | 1216 × 728 | **720** | 20 / 155.0 | 20 / 155.0 |
 | 360×640 (store phone) | STACKED | 16 / 24 | 328 × 520 | **280** | 8 / 60.0 | 10 / 57.5 |
+| 360×450 (split-screen pane) | STACKED, COMPACT header (THREE_COLUMN: −16) | 16 / 16 | 328 × 394 | **234** | 7 / 49.8 | 9 / 47.2 |
+| 360×450, TalkBack pad | SCROLL (THREE_COLUMN, rail 208: −112; STACKED: 130) | 16 / 16 | 328 × 394 | **274** | 8 / 58.5 | 10 / 56.0 |
+| 411×450 (split-screen pane, F18) | STACKED, COMPACT header (THREE_COLUMN: 35) | 16 / 16 | 379 × 394 | **234** | 7 / 49.8 | 9 / 47.2 |
+| 411×450, TalkBack pad | SCROLL (THREE_COLUMN, rail 208: −61; STACKED: 130) | 16 / 16 | 379 × 394 | **274** | 8 / 58.5 | 10 / 56.0 |
+| 620×450 | STACKED, COMPACT header (THREE_COLUMN: 228, smaller) | 24 / 16 | 572 × 394 | **234** | 7 / 49.8 | 9 / 47.2 |
+| 700×450 | THREE_COLUMN, rail 160 (STACKED: 234) | 24 / 16 | 652 × 394 | **308** | 9 / 65.8 | 11 / 63.2 |
+| 900×1400 | STACKED (SIDE_PANEL, panel 288: 516) | 32 / 32 | 836 × 1264 | **720** (cap) | 20 / 155.0 | 20 / 155.0 |
 
 ### 5.4 Placement matrix
 
@@ -851,7 +939,9 @@ At `fontScale` 1.0 this equals D-075's constant 240 dp. At 2.0, with the TalkBac
 | Confetti | full game-content overlay | same | same |
 | Win / game-over card | centered on the board; never past its edges (D-200) | same | same |
 
-All three modes put the board on the vertical centre line of the available area. Side-panel and 3-column groups are centered horizontally in `availW`.
+STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line of the available area. Side-panel and 3-column groups are centered horizontally in `availW`.
+
+**SCROLL** (§5.3) places every item as the STACKED column does with the COMPACT header (no title), top-aligned in its scrolling column; the snackbar uses the over-the-board placement.
 
 **SIDE_PANEL alignment** (D-188): the panel's height equals the board's, and its top aligns with the board's top. The title row (title and More) is at the top of the panel, and the snackbar host at its bottom, on the board's bottom edge.
 
@@ -938,7 +1028,28 @@ All three modes put the board on the vertical centre line of the available area.
 │    └───── 136 high ────────┘    └──────────────┘
 ```
 
-**F. Narrow window, `availW < 280dp`.** The board is `max(220, availW)`, and the header becomes the compact 64 dp row (size chip, Score, Best) with no title (D-075).
+**F. Narrow window, `availW < 280dp`.** The board is `max(220, availW)`, and the header becomes the compact 64 dp row (size chip, Score, Best) with no title (D-075). If the window is also too short for that board, the arrangement is SCROLL (§5.3).
+
+**G. SCROLL, 360×450 split-screen pane with the TalkBack pad.** THREE_COLUMN would leave −112 dp and STACKED 130 dp, so the column scrolls. The first screen (394 dp of `availH`) holds the compact header, the 274 dp board and the status line; the pad row starts below the fold.
+
+```
+┌──────────────────────── 360 ────────────────────────┐
+│ status bar (24), then the 16 dp vertical margin     │
+│ 16 ┌──────────────────── 328 ───────────────────┐ 16│
+│    │ ( ▦ 4×4 ▾ )   ┌─ SCORE ─┐ 8 ┌── BEST ──┐   │   │ compact header, 64
+│    └───────────────────────────────────────────┘   │
+│                         8                           │
+│          ┌──────── board 274 ─────────┐             │ swipes start here
+│          │   gap 8, tile 58.5         │             │
+│          └────────────────────────────┘             │
+│                         8                           │
+│    Moved left. Merged 4 and 4. New 2 at …           │ status line, 40
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  fold  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
+│                         8                           │ (scrolled into view)
+│    ┌──── pad 208 ────┐ 16 ┌──── 104 ────┐            │ pad row, 136
+│    └─────────────────┘    └─────────────┘            │
+└─────────────────────────────────────────────────────┘
+```
 
 ### 5.6 Touch targets and the gesture surface
 
@@ -949,7 +1060,7 @@ All three modes put the board on the vertical centre line of the available area.
   - The gesture detector sits on the parent with `PointerEventPass.Initial` and consumes the down/move events once the touch slop is exceeded.
   - The buttons' own `clickable` then sees a cancelled gesture.
   - `SwipeInputTest` asserts that a swipe starting on New game moves the board and does not open the dialog.
-- Scrollable regions (sheets, dialogs, sub-screens) are never inside the Game gesture surface.
+- Scrollable regions (sheets, dialogs, sub-screens) are never inside the Game gesture surface. In SCROLL the gesture surface shrinks to the board, so the scrolling column lies outside it (§5.3; `SwipeInputTest.scrollModeMovesOnlyFromBoard`).
 - Every screen-level screenshot test runs `assertTouchTargets()`, the size-and-overlap rule of `QUALITY.md` §1.12, which gates like ATF (D-205).
 
 ### 5.7 RTL (D-104)
@@ -970,8 +1081,9 @@ All three modes put the board on the vertical centre line of the available area.
 
 ### 5.8 Mode transitions and recreation
 
-- Rotation, resize, fold, immersive toggle and locale or `uiMode` changes recompose from the ViewModel. Tiles are `Static` (D-047, D-095).
-- Under Full motion, board, panel and rail bounds animate with `Modifier.animateBounds(lookaheadScope, boundsTransform = { _, _ -> GameMotion.overlaySpatial() })`. Under Reduced and Off they snap (D-063, D-095).
+- Rotation, resize, fold and locale or `uiMode` changes recreate the activity and recompose from the ViewModel (an Immersive toggle is a live inset change, below). Tiles are `Static` (D-047, D-095): a composition created after a move, win or game over was shown draws its final frame, because the ViewModel settles each animated value once it has been presented (`ARCHITECTURE.md` §4.11).
+- Within one arrangement, under Full motion, board, panel and rail bounds animate with `Modifier.animateBounds(lookaheadScope, boundsTransform = { _, _ -> GameMotion.overlaySpatial() })`. Under Reduced and Off they snap (D-063, D-095).
+- A switch between arrangements is never animated: the new arrangement's board is composed anew and draws its settled static frame at its final bounds (§5.3, D-095).
 - A theme or palette switch crossfades every palette color with `GameMotion.slowEffects()` via `animateColorAsState`, read in draw (D-064). Under Reduced and Off it is instant.
 
 ---
@@ -1018,10 +1130,10 @@ All three modes put the board on the vertical centre line of the available area.
 - **Content:** a `Row` of the text `hint_first_launch` = "Swipe to move all tiles. Equal tiles merge. Reach %1$s." (`bodyMedium`, weight 1, wraps) and a `TextButton` `got_it` = "Got it".
   - `%1$s` is the target as a game numeral: `"2048"`, or `"256"` on 3×3.
   - While touch exploration is on, the text is `hint_first_launch_talkback` = "Use the arrow buttons to move all tiles. Equal tiles merge. Reach %1$s." instead, because TalkBack consumes swipes (D-202).
-- **Placement** follows §5.4 (D-188). In STACKED it sits between header and board, with 8 dp gaps, and is part of the measured chrome.
+- **Placement** follows §5.4 (D-188). In STACKED and SCROLL it sits between header and board, with 8 dp gaps, and is part of the measured chrome (§5.3 `top`).
 - **Dismissal:** it disappears on the first accepted move, or on "Got it", and sets `onboardingDone = true`.
   - Under Full motion it exits with `shrinkVertically(GameMotion.overlaySpatial()) + fadeOut(GameMotion.fastEffects())`; it is instant otherwise.
-  - The board grows back with `animateBounds` under Full motion.
+  - The board grows back with `animateBounds` under Full motion while the arrangement stays the same; if the hint's exit switches the arrangement, the board appears at its new size at once (§5.3).
 - **Semantics:** a polite live region, read once when shown.
 
 ### 6.3 Game: win card (D-008, D-064, D-200)
@@ -1167,7 +1279,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
   - icons are 32 dp;
   - the whole pad sits in a forced-LTR subtree (D-104).
 - While the pad is visible, the controls bar's Undo is **removed** (the pad has Undo), so TalkBack meets no duplicate.
-  - In STACKED the controls become a 104 dp column of New game (text only) and More, beside the pad (§5.5 E).
+  - In STACKED and SCROLL the controls become a 104 dp column of New game (text only) and More, beside the pad (§5.5 E, G).
 - The `move_*` strings are the same resources as the board's custom actions (D-080).
 
 ### 6.7 Board-size picker (D-007; `game/overlay/BoardSizeSheet.kt`)
@@ -1234,7 +1346,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 | `stats_undos_used` | "Undos used" | `formatCount(totalUndos, locale)` |
 
 - **"All sizes"** shows sums for counts, maximums for bests, `max(bestTileExp)`, and `Σ totalScore / Σ gamesPlayed` for the average.
-- **Unfinalized finished games** are folded in for display only: for each size whose saved game is `OVER`, the tab shows `RecordsMath.finalize(record, game)` without persisting it (D-198).
+- **Unfinalized finished games** are folded in for display only: for each size, the tab shows `RecordsMath.displayed(records, game)` without persisting it. That adds the saved game's uncounted recovery entry and the saved game itself when it is `OVER`, and skips any `gameId` that is already finalized (D-198, D-044).
 - **Empty state** applies when every field of the tab's record is 0:
   - a centered `MiniBoardGlyph(n)` at 96 dp (4×4 for "All sizes");
   - `stats_empty_title` = "No games on %1$s yet" (the `"$n×$n"` label), or `stats_empty_title_all` = "No games yet";
@@ -1428,6 +1540,7 @@ fun GameModalSheet(onDismissRequest: () -> Unit, modifier: Modifier = Modifier, 
   - STACKED: in the gap between the board and the controls bar when that gap is at least the snackbar's measured height + 16 dp. Otherwise it overlays the board, bottom-centred, with width board − 16 dp, 8 dp above the board's bottom edge.
   - THREE_COLUMN: at the bottom of the actions rail.
   - SIDE_PANEL: at the bottom of the panel, aligned with the board's bottom edge.
+  - SCROLL: over the board, as STACKED's second case (§5.3, D-188).
   - Any accepted move or undo dismisses it.
 - `SnackbarHost` keeps its M3 enter and exit fades at every in-app motion level (D-184).
 
@@ -1690,7 +1803,7 @@ Format: `<screen>[_<state>[-<N>x<N>]]_<palette>-<mode>[-hc][_<variant>]`. Layout
 
 ### 10.3 Fixtures (`app/src/test/kotlin/com/clayboicardi/game2048/fixtures/GoldenFixtures.kt`)
 
-Cells are exponents, row-major, with 0 = empty.
+Cells are exponents, row-major, with 0 = empty. Every game fixture is a `SavedGame` with `gameId = 1` and no `previousFinalization`; `FIX_RECORDS` has an empty `lastFinalizedGameId` (D-044). A test that needs other identities uses `copy(gameId = …)`.
 
 | Fixture | N | Cells | Score / best / moves / undos / time | Status |
 |---|---|---|---|---|
@@ -1772,7 +1885,7 @@ The matrix is a covering design, not a full cartesian product. Every axis value 
 | Palette × mode | classic-light, classic-dark, neon-light, neon-dark | 1–16 (Classic), 10–11 (Neon), 17–18 |
 | High contrast | on | 12 |
 | Board size | 3, 4, 5, 8 | 5, 1–4, 8–12, 6–7. Sizes 6 and 7 are covered by `game/board/BoardGeometryTest` and `game/board/TileLabelsTest` (JVM) |
-| Layout mode | STACKED, THREE_COLUMN, SIDE_PANEL, compact-medium-expanded widths | 29–35 |
+| Layout mode | STACKED, THREE_COLUMN, SIDE_PANEL, compact-medium-expanded widths | 29–35. The COMPACT STACKED header and SCROLL (§5.3) have no golden: `GameScreenTest.shortWindowsKeepBoardAndChromeOnScreen` (F18-AC10) asserts their bounds at `w360dp-h450dp` and `w411dp-h450dp`, with and without the TalkBack pad |
 | Locale / direction | en, fa (RTL), de (long), en-XA, ar-XB | 23–26 |
 | Font scale | 2.0 | 27–28 |
 | Accessibility mode | TalkBack pad | 36 |

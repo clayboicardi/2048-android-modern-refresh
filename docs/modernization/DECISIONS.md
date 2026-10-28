@@ -87,19 +87,19 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-041 | Data | `schemaVersion` + lenient `Json` + committed v1 fixtures + `DataMigration` for breaking changes |
 | D-042 | Data | Exact document fields; Base64 for cells, the log and binary snapshots |
 | D-043 | Data | Persist after every accepted move, undo, keep-going and new game; conflated, never cancelled mid-write |
-| D-044 | Data | Per-size records. Bests never decrease (except Reset). Games finalize on New game |
+| D-044 | Data | Per-size records. Bests never decrease (except Reset). Games finalize on New game, idempotently by `gameId`, with a recovery entry in the fresh game file |
 | D-045 | Data | A corrupt file falls back to that file's defaults only. Never crash |
 | D-046 | Data | Budgets: 8×8 game with 10k moves ≤ 256 KiB and ≤ 50 ms encode+decode; records ≤ 64 KiB |
-| D-047 | Data | The UI is a pure function of persisted state; no replay on resume or recreate; JVM process-death test |
+| D-047 | Data | The UI is a pure function of persisted state; no replay on resume or recreate; animated presentations are one-shot and settle in the ViewModel once shown; JVM process-death test |
 | D-048 | Data | Auto Backup and D2D include `datastore/`; both rule XMLs present and tested |
 | D-050 | Input | Default: commit during the drag at 24 dp with dominant ratio ≥ 1.4. "On release" setting; fling ≥ 600 dp/s |
-| D-051 | Input | Swipe anywhere on the game content; a swipe that starts on a button never triggers it; board inset from gesture insets |
+| D-051 | Input | Swipe anywhere on the game content (on the board only in SCROLL, D-188); a swipe that starts on a button never triggers it; board inset from gesture insets |
 | D-052 | Input | No input queue: every accepted move applies synchronously; in-flight slides snap |
 | D-053 | Input | Arrows/WASD/HJKL/D-pad move; U, Ctrl+Z, Backspace undo; N/R new game; auto-repeat ≤ 1 per 120 ms |
 | D-054 | Input | Overlays are modal; Back dismisses only sheets, dialogs and sub-screens |
 | D-060 | Motion | `GameMotion` token object with the M3 spring values; independent of `MaterialTheme.motionScheme` |
 | D-061 | Motion | Move timeline: slide t=0, merge pop +80 ms, spawn +90 ms, ghosts removed +200 ms |
-| D-062 | Motion | Interruption: snap slides, drop ghosts, let effects finish; at most 3 "+N" floats alive |
+| D-062 | Motion | Interruption: snap slides, drop ghosts, let effects finish; at most 3 "+N" floats alive; undo, new game and size switch remove the floats (`HeaderUi` event and epoch) |
 | D-063 | Motion | Motion: Full (default) / Reduced / Off. System animator scale 0 forces Off; no infinite animations |
 | D-064 | Motion | Signature moments per research/04 §10, generalized to N×N |
 | D-065 | Haptics | One haptic per move, by priority: win Confirm×2 > new best GestureThresholdActivate > Confirm (≥512) > SegmentTick; Reject for invalid moves and game over |
@@ -121,11 +121,11 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-084 | A11y | Touch targets ≥ 48 dp; chrome survives 200 % font scale; visible focus ≥ 3:1 |
 | D-085 | A11y | ATF checks (Roborazzi, LATEST preset, Error level) on every screen golden |
 | D-090 | Layout | No orientation lock; `appCategory="game"`; no `configChanges`; touchscreen not required |
-| D-091 | Layout | Modes: height < 480 → 3-column; width ≥ 840 → board + side panel; else stacked. Postures deferred |
+| D-091 | Layout | Preferred modes: height < 480 → 3-column; width ≥ 840 → board + side panel; else stacked (D-188 resolves the drawn one). Postures deferred |
 | D-092 | Layout | `currentWindowAdaptiveInfoV2()`; Robolectric qualifier matrix |
 | D-093 | Layout | Always edge-to-edge; "Immersive mode" setting hides the system bars (default Off) |
 | D-094 | Layout | Predictive back: never intercept Back on the Game root; no double-back |
-| D-095 | Layout | Recreation never replays tile animations; mode changes use `animateBounds` under Full motion |
+| D-095 | Layout | Recreation never replays tile animations; layout changes within one arrangement use `animateBounds` under Full motion; an arrangement switch renders statically |
 | D-100 | i18n | en + 20 legacy locales, fully translated before merge; `MissingTranslation` = error |
 | D-101 | i18n | Legacy strings: keep `settings`, drop the back/fullscreen hints, strip the cs BOM, remove every locale `app_name` |
 | D-102 | i18n | `generateLocaleConfig`; a Settings row opens the system per-app language page (API 33+); no AppCompat |
@@ -149,7 +149,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-131 | Signing | Committed, intentionally public CI sideload keystore signs debug and release |
 | D-132 | Signing | debug: `.debug`, not minified. release: R8 + shrinkResources (smoke-verified DSL) |
 | D-133 | Signing | No release workflow, tags or store uploads in this overhaul; CI artifacts only |
-| D-134 | Signing | Reproducibility: `dependenciesInfo` off, no BuildConfig, no named companions on `@Serializable` |
+| D-134 | Signing | Reproducibility: `dependenciesInfo` off, BuildConfig with standard fields only (no `buildConfigField`) as the only version source (no `PackageManager`), no named companions on `@Serializable` |
 | D-140 | Quality | `scripts/verify.sh` is the single gate; CI runs exactly it |
 | D-141 | Quality | Spotless 8.10.4 + ktfmt 0.65 kotlinlang style (fallback 0.64) |
 | D-142 | Quality | Lint `warningsAsErrors`, no baseline, Slack compose-lint-checks 1.6.1 |
@@ -192,7 +192,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-185 | Motion | `HapticsMap` owns priority; scheduling and interruption; no invalid-move haptic below API 30 |
 | D-186 | Scope | Undo snackbar until the first finalized game with undo; never over the controls |
 | D-187 | Motion | Two effect canvases; tile-local sheen; "+N" pill |
-| D-188 | Layout | Per-axis margins, measured chrome, fit guard, hint and side-panel placement |
+| D-188 | Layout | Per-axis margins, measured chrome, width-aware arrangement resolution with a SCROLL fallback (board never below 220 dp), hint and side-panel placement |
 | D-189 | Visual | Neon light surface; `TileSkin.titleColor` |
 | D-190 | Store | M5 listing, image and legal checks; `OpaquePngWriter`; title ≤ 30 |
 | D-191 | Quality | Report-only reproducibility probe |
@@ -541,13 +541,13 @@ Not in the research/05 roadmap but **In v1.0**:
   - undo semantics, including "undo restores the same next tile";
   - the keyboard keys from D-053.
 - **What's new:**
-  - `settings.json` stores `lastSeenVersionCode` (default 0). On start:
+  - `settings.json` stores `lastSeenVersionCode` (default 0). The current versionCode is the compile-time `BuildConfig.VERSION_CODE` (D-134), never a `PackageManager` lookup. On start:
     - if it is 0 (fresh install), store the current versionCode and show nothing;
     - if it is lower than the current versionCode, show a non-blocking `ModalBottomSheet` with the localized entries for versionCodes > `lastSeenVersionCode`, then store the current one.
   - Entries live in `app/src/main/kotlin/com/clayboicardi/game2048/about/Changelog.kt` as `versionCode → List<@StringRes Int>`.
   - v1.0 ships the entry for 30000. A unit test covers the update path with a faked `lastSeenVersionCode`.
 - **About** (`AboutKey`) contains:
-  - version "3.0.0 (30000)";
+  - version "3.0.0 (30000)", from `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE` (D-134);
   - What's new history;
   - source link `https://github.com/clayboicardi/2048-android-modern-refresh` via `ACTION_VIEW`. If no browser exists, show a snackbar; never crash;
   - privacy text (D-123);
@@ -560,6 +560,7 @@ Not in the research/05 roadmap but **In v1.0**:
 - **Rejected:** research/07 G16 "no What's new UI in v1.0" (O11 overrides it); a multi-page onboarding carousel; coach marks (more UI for the same message).
 - **Source:** [ORCH] O11 · [RESEARCH] research/05 §4.12.
 - **Note:** Amended by D-201; clarified by D-188.
+- **Note:** Clarified in plan review (Codex r1): the current versionCode and the About version come from `BuildConfig`, not `PackageManager` (D-134).
 
 ---
 
@@ -1106,16 +1107,19 @@ detekt = { id = "dev.detekt", version.ref = "detekt" }
   - Every document has `schemaVersion: Int = 1`.
   - Decoder: `Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true; coerceInputValues = true }`.
   - **Every** field has a default. Enums are encoded as names; an unknown name coerces to the default.
+  - A missing key decodes to the field's default, and the document is then validated as usual (D-045). A default need not be a valid value: `gameId` has none (its 0 exists only for the "no saved game" document), so a game document without `gameId` is corrupt (D-044). A field added later is optional only if its default is valid for every existing document.
   - A breaking change bumps `schemaVersion` and adds a `DataMigration<T>`.
   - From M2 on, the repository commits fixtures that are never edited afterwards:
     - `app/src/test/resources/fixtures/v1/settings.json`;
     - `records.json`;
     - `game-4.json`;
     - `game-8-long.json` (an 8×8 game with 10,000 moves).
+  - The fixtures are consistent with each other under D-044: loaded together, `records.json` and `game-4.json` trigger neither recovery step (QUALITY.md §1.5).
   - `PersistenceFixturesTest` decodes them in every later build.
 - **Rationale:** research/06 §1.2 case 3; research/07 G10. `coerceInputValues` keeps a downgrade from a newer enum value safe.
 - **Rejected:** strict decoding (one unknown key would wipe a save); untyped Preferences keys.
 - **Source:** [ORCH] O10 · [RESEARCH].
+- **Amended in plan review (Codex r1):** a missing key decodes to its default but is still validated, and `gameId` has no valid default, so its absence makes a game document corrupt; the missing-field compatibility case now removes fields with valid defaults (`keepScreenOn`, `newBestAnnounced`, `elapsedMs`). The fixtures must also be mutually consistent, so the `records.json` fixture's 4×4 watermark is 6, below `game-4.json`'s `gameId` 7. Before, "a missing field decodes to its default" read as covering `gameId`, which F07-AC23 rejects, and the watermark 41 made R2 treat the fixture game as already finalized whenever both fixtures were loaded together.
 
 #### D-042 — Document fields and encodings
 - **Decision.** All Base64 uses `kotlin.io.encoding.Base64.Default`.
@@ -1139,6 +1143,8 @@ detekt = { id = "dev.detekt", version.ref = "detekt" }
 | `elapsedMs` | `Long` | |
 | `bestAtStart` | `Long` | |
 | `newBestAnnounced` | `Boolean` | |
+| `gameId` | `Long` | Finalization identity (D-044): ≥ 1 whenever `size != 0`; unique and strictly increasing per size |
+| `previousFinalization` | object or absent | Recovery entry (D-044): the finalization input of the game this one replaced, present only when that game was counted. Fields `gameId`, `status`, `score`, `moveCount`, `elapsedMs`, `undoCount`, `maxExp` |
 
 Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 
@@ -1158,6 +1164,8 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - `totalScore`, `totalMoves`, `totalTimeMs`, `totalUndos`: `Long`;
 - `tileReach: List<Int>`, where index k = the number of games that reached ≥ 2^k;
 - `currentWinStreak`, `longestWinStreak`: `Int`.
+
+`records.json` also holds `lastFinalizedGameId: Map<String, Long>`, with the same keys as `sizes`: the highest `gameId` finalized on that size (D-044). It lives beside `sizes`, not in `SizeRecord`, so it is not a statistic and Reset statistics keeps it.
 
 `settings.json`:
 
@@ -1183,6 +1191,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - `kotlin.io.encoding.Base64` works in plain JVM tests. `java.util.Base64` needs API 26; `android.util.Base64` is not available on the plain JVM.
 - **Rejected:** a JSON array for cells; protobuf.
 - **Source:** [ORCH] O10 · [RESEARCH] research/05 §7.
+- **Amended in plan review (Codex r1):** added the `gameId` and `previousFinalization` game fields and the `records.json` map `lastFinalizedGameId` for D-044's recoverable finalization. v1 has not shipped, so this changes the v1 schema in place: `schemaVersion` stays 1 and no `DataMigration` is needed.
 
 #### D-043 — Write policy
 - **Decision.** Enqueue a save of the full game document (D-024) after each of:
@@ -1194,10 +1203,12 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - `ON_PAUSE`, which also folds in the elapsed time.
 - Records are updated **live** on accepted moves when `bestScore`, `bestScoreNoUndo` (only if `undoCount == 0`) or `bestTileExp` increases.
 - Writes are conflated and never cancelled. If the process dies, at most the single in-flight change is lost; this is documented in README.
+  - New game is one change that writes two files, `records.json` and `game-N.json`, with no order between them. D-044's finalization protocol makes it all-or-nothing after the next load: any subset of the two writes may land, and the old game is still counted exactly once.
 - `elapsedMs` accumulates `MonotonicClock` time only while the Game destination is `RESUMED` and the status is `PLAYING` or `KEEP_PLAYING` after the first move.
 - **Rationale:** O10 ("commit after every accepted move"); research/07 G9.
 - **Rejected:** writing only in `onStop` (loses moves on a kill); blocking `onStop`.
 - **Source:** [ORCH] O10.
+- **Amended in plan review (Codex r1):** New game's two writes are covered by D-044's recovery. Before, a kill between them could count the old game twice or lose it.
 
 #### D-044 — Records and statistics
 - **Decision.**
@@ -1207,9 +1218,15 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - `gamesWon++` and the streak update if the max exponent ≥ target;
   - adds `totalScore`, `totalMoves`, `totalTimeMs` and `totalUndos`;
   - increments `tileReach[k]` for every k ≤ the max exponent.
+- **Finalization identity and recovery.** New game changes two independent files, so finalization is keyed by a game identity and can be recovered (ARCHITECTURE.md §4.9):
+  - **Identity.** Every saved game has `gameId: Long ≥ 1`, unique and strictly increasing per size. A fresh game gets `max(replaced game's gameId, lastFinalizedGameId[size]) + 1`, with 0 standing in for a missing value. `records.json` keeps `lastFinalizedGameId[size]`, the highest `gameId` finalized on that size, in the same document as the counters it guards, so each records write is atomic.
+  - **Idempotent finalization.** Finalizing a game whose `gameId ≤ lastFinalizedGameId[size]` changes nothing. Otherwise it applies the counters above and sets `lastFinalizedGameId[size] = gameId`. A game is **finalized** iff `gameId ≤ lastFinalizedGameId[size]`. This holds because ids on a size grow in creation order and only the current game is ever finalized: every lower id was counted or was replaced uncounted by a New game that already took place.
+  - **Order at New game** (main thread, no suspension): (1) finalize the old game in the in-memory records and submit `records.json`; (2) create the fresh game, whose `previousFinalization` is the old game's finalization input (`gameId`, `status`, `score`, `moveCount`, `elapsedMs`, `undoCount`, `maxExp`) when the old game was counted, else absent; (3) submit `game-N.json`. The two writes may land in either order, or not at all.
+  - **Recovery on every game load** (the start size, and every size switch): (R1) if the loaded game has a `previousFinalization` that is not finalized yet, finalize it; (R2) if the loaded game is itself finalized, a New game already replaced it but that New game's game write was lost, so finish that New game (steps 2–3, with step 1 a no-op) without counting the old game again. After `ready`, R1 alone also runs over the saved games of the other sizes.
+  - **Outcomes of a kill during New game:** neither write landed → the old game comes back, counted once at the next New game; only records landed → R2; only the game file landed → R1; both landed → nothing to do. Every outcome counts the old game exactly once.
 - **Bests.** `bestScore`, `bestScoreNoUndo` and `bestTileExp` never decrease, except through **Reset statistics**.
   - Reset lives in the Statistics screen's top bar. It takes two sequential confirmation dialogs.
-  - It clears all sizes' records and leaves in-progress games untouched.
+  - It clears all sizes' records (`sizes` becomes empty) and leaves in-progress games untouched. It **keeps** `lastFinalizedGameId`, so a recovery entry still held by a game file, or a stale game file, can never re-count a game after the reset.
 - **New best.**
   - `bestAtStart` = `bestScore` when the game starts.
   - The new-best moment fires once per game, at the first accepted move where `score > bestAtStart`, and only if `bestAtStart > 0`.
@@ -1224,10 +1241,15 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - total moves;
   - time played;
   - undos used.
-- **Rationale:** research/05 §4.5 (schema; histogram stored for later); O7 (per size); O8 (undo count).
-- **Rejected:** finalizing on game over, which double-counts after an undo; a top-10 list (v1.x).
+- **Rationale:** research/05 §4.5 (schema; histogram stored for later); O7 (per size); O8 (undo count). The recovery entry rides inside the game file, which must be written anyway, so neither file ever waits for the other.
+- **Rejected:**
+  - finalizing on game over, which double-counts after an undo; a top-10 list (v1.x);
+  - `seed` (+ size) as the identity: `FixedSeedSource` repeats seeds in every test container, and a later seeded mode (daily, replay) repeats them by design;
+  - ordering the files (holding the game write until the records write lands): `ConflatedWriter` swallows an `IOException` with no retry (ARCHITECTURE.md §9.3), so a failed records write would still lose the stats, and holding the game write back risks losing moves;
+  - one combined file (D-045 rejects it).
 - **Source:** [ORCH] O7, O8 · [RESEARCH].
 - **Note:** Clarified by D-198.
+- **Amended in plan review (Codex r1):** added the finalization identity, the idempotent finalization, the `previousFinalization` recovery entry with the R1/R2 load-time recovery, and Reset keeping `lastFinalizedGameId`. Before, a kill between New game's records and game writes either restored an already counted game, which D-198's fold and the next New game then counted again, or lost the old game's stats.
 
 #### D-045 — Corruption and failure handling
 - **Decision.** Each store's `ReplaceFileCorruptionHandler` returns that document's defaults:
@@ -1255,12 +1277,20 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Decision:**
   - The UI is a pure function of persisted state.
   - On cold start, after recreation or on resume, the board renders the persisted state with `TileUi.kind = Static`: no spawn or "+N" replay, and no reload.
+  - **Presentations are one-shot** (ARCHITECTURE.md §4.11). The activity-scoped `GameViewModel` survives recreation, so its animated values (a `Moved` or other non-`Restored` `BoardUi`, a header with `lastDelta > 0`, an `OverlayEntry.Animated` card) are consumed by the first composition that starts presenting them:
+    - `BoardView` calls `onBoardPresented(moveId)` at the origin, `GameHeader` calls `onHeaderPresented(deltaMoveId)` and `OverlayController` calls `onOverlayPresented(moveId)` from an effect of the composition that read the value;
+    - the ViewModel then replaces the value with its static equivalent for the same committed state: `BoardPresenter.settled(board)` (same `moveId`, `epoch` and tile ids, every tile `Static`, event `Restored`), `lastDelta = 0`, entry `Restored`. No game, history, clock, records or settings change and no save;
+    - the Game screen reads `board`, `header` and `overlay` through `collectPresentedAsState`, which hides that replacement from a composition already presenting the value, so a running animation is never cut short;
+    - any composition created later (recreation, return from a sub-screen, a board composed anew by an arrangement switch, D-095) renders the final static frame at once. Recreation in the middle of an animation snaps to its final frame. Pending haptics and timeline waits die with the old composition and are never fired again;
+    - a nudge has no end state: `BoardView` and `HapticsController` never play the nudge that already existed at their first composition.
   - **Tests:**
     - `ProcessDeathRestoreTest` (JVM): container A applies N moves and undos on every size to temporary files, then its scope is cancelled. Container B, built on the same files, must reproduce board, score, `rngState`, log, snapshots, `undoCount`, `elapsedMs` and status exactly.
-    - `RecreateNoReplayTest` (Robolectric): `ActivityScenario.recreate()` and a pause/resume cycle produce only `Static` tiles and an unchanged history.
+    - `RecreateNoReplayTest` (Robolectric): `ActivityScenario.recreate()` and a pause/resume cycle produce only `Static` tiles and an unchanged history. From M3 part 2 it also recreates the composition after a settled move, in the middle of a move, during and after the win sequence, during and after the game-over sequence, and after an invalid move: the first frame is the final static frame and no haptic fires again (FEATURES.md F07-AC26–AC30).
+    - `GameViewModelTest.presentationReportsSettleWithoutStateChange` and `BoardPresenterTest.settledKeepsIdentityAndIsStatic` (JVM, M2); `RestoreNoMotionTest` AC-RESTORE-2 (a live composition keeps animating after the report; board case M3 part 1, win-card case M3 part 2).
   - Transient UI state (open sheets) uses `rememberSaveable` and the Nav3 back stack.
+- **Amended in plan review (Codex r1):** added one-shot presentations. Before, nothing replaced the activity-scoped `GameViewModel`'s last animated `BoardUi`, "+N" delta or `OverlayEntry.Animated` after the UI had shown them, so recreating the activity after an accepted move gave the new `BoardView` a fresh animator and a first run of `LaunchedEffect(board.moveId)` that replayed the last move, its haptic and any win or game-over entry.
 - **Rationale:** research/01 §4.9 (the legacy reload defects); research/07 G9.
-- **Rejected:** rebuilding from scratch on resume (legacy B7–B9); `SavedStateHandle` as the game store (not durable for long histories).
+- **Rejected:** rebuilding from scratch on resume (legacy B7–B9); `SavedStateHandle` as the game store (not durable for long histories); settling by `presenter.reset(state, Restored)` (new ids and a new `moveId` would snap the live composition's slide); settling without `collectPresentedAsState` (the live composition would drop its ghosts mid-slide and recompose); a UI-only "a new composition never animates its first board" rule (the ViewModel would keep exposing an animated board, header and card entry as current state).
 - **Source:** [ORCH] O10, O11.
 
 #### D-048 — Backup and device transfer
@@ -1299,6 +1329,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 #### D-051 — Gesture surface and system gestures
 - **Decision:**
   - The gesture surface is the whole Game content area. Buttons, the size chip and the menu handle their own taps.
+    - Exception: in D-188's SCROLL arrangement the gesture surface is the board alone, so a drag that starts outside the board scrolls the column.
   - A drag that **starts on a button** is a swipe: the button must not fire (this fixes B11).
   - The board keeps a side margin of at least `max(16 dp, systemGestures left/right inset)`.
   - `Modifier.systemGestureExclusion` is **not** used in v1.0.
@@ -1307,6 +1338,8 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - No layout puts the board against a screen edge (D-091).
 - **Rejected:** board-edge exclusion (research/05 §4.16 rule 6).
 - **Source:** [RESEARCH].
+- **Note:** Amended by D-188.
+- **Amended in plan review (Codex r1):** added the SCROLL exception. A scrolling column needs drags outside the board to scroll, and the board's detector consumes drags that start on it, so moves and scrolling never compete.
 
 #### D-052 — State-first input, no queue
 - **Decision:**
@@ -1417,11 +1450,15 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - in-flight slides `snapTo` their targets and ghosts are removed;
   - spawn, pop, "+N", rings and confetti keep running;
   - at most 3 "+N" floats are alive, and the oldest is removed early.
+- When an undo, new game or size switch commits, every running "+N" float is removed at once, with no fade. An undo keeps a running new-best moment; new game and size switch remove it (MOTION_SPEC.md §4.2).
+  - The header tells these apart without reading the board: `HeaderUi` carries `event` (a `BoardEventKind`: `Restored`, `Moved`, `Undo`, `NewGame` or `SizeSwitched`) and `epoch`, copied from the `BoardUi` emitted with it (ARCHITECTURE.md §4.7, §4.8).
+  - `GameHeader` removes the floats when the presented event is not `Moved` or the epoch changed, and the new-best moment when the epoch changed, unless the event is `Undo` and the epoch advanced by exactly one (ARCHITECTURE.md §4.11). The epoch also catches a reset that the conflated header flow skipped.
 - There is no "fluid" (velocity-preserving) mode.
 - **Rationale:** research/04 §4.4 (snapping keeps the visual order equal to the model order).
 - **Rejected:** a velocity-preserving "fluid" mode (transient tile overlap; research/04 §4.4); queueing (O3).
 - **Source:** [ORCH] O3, O4.
 - **Note:** Extended by D-183.
+- **Amended in plan review (Codex r1):** added the removal rules for undo, new game and size switch, and the `HeaderUi` `event` and `epoch` fields that implement them. Before, MOTION_SPEC.md §4.2 required those removals, but `HeaderUi` gave `GameHeader` no way to tell an undo, a new game or a size switch from a move.
 
 #### D-063 — Motion setting and reduced motion
 - **Decision.** The effective motion is `OFF` if `Settings.Global.ANIMATOR_DURATION_SCALE == 0` (observed live). Otherwise it is the setting: **Full** (default), Reduced or Off.
@@ -1467,12 +1504,13 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - card at T0 + 500 ms, **interactive at T0 + 700 ms**.
 - **Undo:** a `fastEffects` crossfade between the boards. The rewind animation is deferred to v1.x.
 - **New game:** tiles shrink to 0.6 and fade, staggered 15 ms in reading order; then the two start tiles spawn 60 ms apart.
-- **Layout:** re-layout between modes uses `animateBounds` with `overlaySpatial`. A theme switch crossfades colors with `slowEffects`.
+- **Layout:** re-layout within one arrangement uses `animateBounds` with `overlaySpatial`; a switch between arrangements is static (D-095). A theme switch crossfades colors with `slowEffects`.
 - **Generalization:** every spec applies to any N.
 - **Rationale:** research/04 §10; research/07 D9.
 - **Rejected:** the legacy 1200 ms overlay delay; the experimental `MaterialShapes` (D-012).
 - **Source:** [ORCH] O4, O12 · [RESEARCH] research/04 §10.
 - **Note:** Clarified by D-182, D-187, D-200; extended by D-183; technical correction TC-7.
+- **Amended in plan review (Codex r1):** the layout bullet now limits `animateBounds` to changes within one arrangement, following D-095's amendment. Before, it read "re-layout between modes", which an arrangement switch cannot animate.
 
 #### D-065 — Haptic map
 - **Decision.** With Haptics = On, each accepted move fires **at most one** of these, chosen by priority (first match wins). Timing for Full motion is measured from commit; under Reduced or Off, pulses fire at commit.
@@ -1618,6 +1656,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rejected:** a gap of 3 % of the board for every N, which makes 8×8 gaps a third of the tile width.
 - **Source:** [ORCH] O7 · [RESEARCH].
 - **Note:** Amended by D-188.
+- **Amended in plan review (Codex r1):** the per-mode sizes above are candidates, not the drawn board. D-188's `resolveGameLayout` (DESIGN_SYSTEM.md §5.3) draws a mode only when its board is at least 220 dp, so the 3-column formula's negative values for narrow short windows are never used; such windows get STACKED with the COMPACT header, or SCROLL.
 
 #### D-076 — Typography and bundled font
 - **Decision.**
@@ -1797,6 +1836,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   1. **Window height < 480 dp:** 3-column, `[stats rail] [board] [actions rail]`.
   2. **Window width ≥ 840 dp:** board + side panel. The panel holds the score cards, actions, size chip and menu, and the board is vertically centered.
   3. **Otherwise:** stacked. The header (title + score + best + size chip) is 112 dp, then the board, then the controls bar (80 dp).
+- This order gives the **preferred** mode (`layoutModeFor`). D-188's width-aware resolution draws it only when its board is at least 220 dp and at least the stacked board; otherwise the window gets stacked, 3-column or the scrolling fallback (SCROLL).
 - Margins are given in D-075.
 - Foldable posture layouts (tabletop/book) are **deferred to v1.x**.
 - Example window sizes and their mode:
@@ -1817,6 +1857,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rejected:** a portrait-only layout (wastes landscape, split-screen and desktop windows; research/05 §4.22); posture layouts in v1.0 (untestable on the JVM).
 - **Source:** [ORCH] O11 · [RESEARCH].
 - **Note:** Amended by D-188.
+- **Amended in plan review (Codex r1):** the order above is now a preference that D-188's resolution overrides when the rails or panel leave a board below 220 dp or smaller than the stacked one. Before, every window under 480 dp tall was 3-column, so a 360×450 split-screen pane got a −16 dp board.
 
 #### D-092 — Window size API and layout tests
 - **Decision:**
@@ -1856,10 +1897,12 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 #### D-095 — Recreation and mode transitions
 - **Decision:**
   - Activity recreation (rotation, resize, fold, locale, `uiMode`) restores from the ViewModel and DataStore with `Static` tiles (D-047).
-  - Changes between layout modes animate the board and panel bounds with `animateBounds` under Full motion only.
+  - Live layout changes that keep the resolved arrangement (D-188), such as the first-launch hint leaving, the TalkBack pad, Immersive mode or an inset change, animate the board and panel bounds with `animateBounds` under Full motion only.
+  - A live change that switches the arrangement is not animated. `GameLayout` gives each arrangement its own subcomposition and does not use `movableContentOf`, so the new arrangement composes the board anew: it renders its settled static frame at its new size with no bounds animation, and a move animation in flight snaps to its end, per D-047's one-shot presentations.
 - **Rationale:** research/07 G9 (recreation must not replay animations); research/04 §7.3 (`animateBounds` for mode changes).
-- **Rejected:** `configChanges` to avoid recreation (fold, locale and `uiMode` changes still recreate; research/01 §3).
+- **Rejected:** `configChanges` to avoid recreation (fold, locale and `uiMode` changes still recreate; research/01 §3); `movableContentOf` to carry the board across arrangements (more state to move through the `SubcomposeLayout` for a rare transition, when the static frame of D-047 already covers it).
 - **Source:** [RESEARCH] research/04 §7.3.
+- **Amended in plan review (Codex r1):** bounds animate only within one arrangement; an arrangement switch renders the board statically, like a recreation. Before, MOTION_SPEC.md §3.16 and FEATURES.md F18 had the bounds animate when the pad or the hint switched the arrangement (for example STACKED → SCROLL), which `GameLayout`'s per-arrangement subcomposition cannot do: the board in the new arrangement is a new composition and renders the settled frame of D-047.
 
 ---
 
@@ -2129,9 +2172,11 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Decision:**
   - `versionName = "3.0.0"`, `versionCode = 30000`, written as **literals** in `app/build.gradle.kts`.
   - Scheme: `MAJOR·10000 + MINOR·100 + PATCH`.
+  - The app reads them only as the generated `BuildConfig.VERSION_CODE` and `BuildConfig.VERSION_NAME`, never through `PackageManager` (D-134).
 - **Rationale:** research/01 §8.3; research/06 §4.5; research/07 C9. This also fixes the smoke build's `versionCode = 1`.
 - **Rejected:** research/03's `versionCode = 1` snippet; git-count-derived codes (not reproducible from a tarball, research/06 §4.5).
 - **Source:** [ORCH] O14.
+- **Note:** Clarified in plan review (Codex r1): the app reads the version only through `BuildConfig` (D-134).
 
 #### D-131 — CI sideload keystore (intentionally public)
 - **Decision.**
@@ -2186,14 +2231,17 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 #### D-134 — Reproducibility hygiene and R8 rules
 - **Decision.** The build:
   - sets `android { dependenciesInfo { includeInApk = false; includeInBundle = false } }`;
-  - keeps BuildConfig generation off (AGP 9 default), and embeds no timestamps or build paths;
+  - turns BuildConfig on in `:app` only (`android { buildFeatures { buildConfig = true } }`) with AGP's standard fields and **no `buildConfigField`**, so the class holds exactly `DEBUG`, `APPLICATION_ID`, `BUILD_TYPE`, `VERSION_CODE` and `VERSION_NAME`; it embeds no timestamps or build paths;
+  - is the app's only source for its own version: `AppContainer.create` passes `BuildConfig.VERSION_CODE`, and About shows `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE`. No main source calls `PackageManager` (no `getPackageInfo`, no `PackageInfoCompat`, no `AppVersion` helper). `AppContainer.create` runs on the main thread in `Application.onCreate()` (ARCHITECTURE.md §4.2);
   - keeps the `vcsInfo` default;
   - uses one JDK (21);
   - generates no custom baseline profile; library profiles merged by AGP are fine;
   - has **no `@Serializable` class with a named companion object**, so kotlinx-serialization's bundled R8 rules suffice.
-- **Rationale:** research/06 §4.1, §4.3; F-Droid rejects the encrypted dependency block.
-- **Rejected:** custom baseline profiles (a known F-Droid nondeterminism, research/06 §1.7); `-dontobfuscate` or blanket `-keep` rules.
+- **Gate:** `AppContainerTest.createDoesNotTouchPackageManager` (F30-AC10) and `AppContainerTest.versionComesFromBuildConfigStandardFields` (F30-AC11); M6.1 audit A7 (PLAN.md §5.7).
+- **Rationale:** research/06 §4.1, §4.3; F-Droid rejects the encrypted dependency block. Research/06 §4.3 excludes a BuildConfig *build time*. AGP's standard fields are fixed by the build file, so they are deterministic, and they let the version be a compile-time constant. AGENTS.md keeps `PackageManager` work off the main thread.
+- **Rejected:** custom baseline profiles (a known F-Droid nondeterminism, research/06 §1.7); `-dontobfuscate` or blanket `-keep` rules; any `buildConfigField` (timestamps, git data, paths); a runtime `PackageManager.getPackageInfo` lookup of the app's own version (a synchronous binder call on the main thread in `Application.onCreate()`); moving that lookup to a background coroutine (`versionCode` would become asynchronous for `AppViewModel` and the container for no benefit); a hand-copied Kotlin version literal (it can drift from D-130's build-file literals).
 - **Source:** [RESEARCH].
+- **Note:** Amended in plan review (Codex r1): BuildConfig was off and `AppContainer.create` read the versionCode through `PackageManager.getPackageInfo` on the main thread. BuildConfig is now on with its standard fields only, and the version comes only from `BuildConfig.VERSION_CODE`/`VERSION_NAME`.
 
 ---
 
@@ -2782,7 +2830,13 @@ jobs:
   - **`check-test-counts.sh`:**
     - per module, `executed = tests − skipped`, `executed ≥ floor`, `skipped == 0` and `failures + errors == 0`;
     - floors equal the executed counts of the commit's verify run;
-    - an orphan golden (a committed PNG that no test compared) fails.
+    - the full gate's Roborazzi results (`app/build/test-results/roborazzi/**/*.json`) must match the PNGs under `app/src/test/screenshots/` exactly, with no skip path (QUALITY.md §1.15 rules G1–G5):
+      - G1: no result at all fails, whatever the number of goldens;
+      - G2: an orphan golden (a committed PNG that no test compared) fails;
+      - G3: a result whose `golden_file_path` is not one of those PNGs fails;
+      - G4: a golden whose result types are not exactly {`unchanged`} fails (`changed`, `added`, or `recorded` from a record run);
+      - G5: an unreadable result file fails.
+    - Amended in plan review (Codex r1): the orphan check used to run only when at least one result existed and printed "orphan-golden check skipped" otherwise, so removing every `captureGolden` call while keeping the test methods kept the floors and silently disabled screenshot verification. G1, G3, G4 and G5 were added and the skip path removed.
   - **`check-metadata.sh` `[M0]` functions:**
     - `check_mirror_leak`;
     - `check_no_submodule`;
@@ -2794,7 +2848,7 @@ jobs:
     - `check_no_bom`: no tracked text file starts with U+FEFF (L10N_STORE_LEGAL.md §1.2);
     - `check_icon_glyphs`: the adaptive and legacy launcher icons use identical glyph paths (L10N_STORE_LEGAL.md §3.4).
   - **`check-licenses.sh`:** stale or malformed lines in `config/license-groups.txt` fail.
-  - **Seeded-defect proof.** Each new function is proven once during M0 against a seeded defect, in a throwaway clone beside the checkout (QUALITY.md V14–V15). The failing line goes into the M0 commit body. A seeded defect is never committed.
+  - **Seeded-defect proof.** Each new function is proven once during M0 against a seeded defect, in a throwaway clone beside the checkout (QUALITY.md V14–V15). For `check-test-counts.sh` this means seeds S1–S7 of QUALITY.md §1.15, one per rule, including S4: every capture removed while the test methods stay, so the floors hold and G1 must fail. The failing line goes into the M0 commit body. A seeded defect is never committed.
 - **Rationale:** QUALITY.md §1.13–§1.16, V12–V15; L10N_STORE_LEGAL.md §1.2 (Lint misses a leading BOM) and §3.4.
 - **Rejected:** trusting the Gradle exit status alone (JUnit 6 tests can be skipped silently, D-149).
 - **Source:** [ORCH] O16 · [RESEARCH] QUALITY.md §1.13–§1.16.
@@ -2832,6 +2886,8 @@ jobs:
     - Ids present in both boards neither animate nor recompose.
   - **Size switch.** `SizeSwitched` uses MOTION_SPEC.md §3.10's `AnimatedContent(targetState = boardSize)` instead of the outgoing layer, because cell geometry changes with N.
   - **Restore.** `Restored` never animates (D-047).
+  - **Settled boards are not epochs.** `BoardPresenter.settled(board)` (D-047's one-shot presentations, ARCHITECTURE.md §4.11) relabels the current board as `Restored` with the same `moveId`, `epoch` and tile ids: Ghosts dropped, every tile `Static` with `from == to`, `scoreDelta = 0`. It changes no presenter state, so the next move or epoch continues from the same ids. Only `reset(…, Restored)` (load) assigns new ids.
+- **Amended in plan review (Codex r1):** added settled boards. Without them the ViewModel had no static form of an animated board to hand to a recreated composition (D-047).
 - **Rationale:** this reconciles three requirements:
   - D-025: `Static` tiles never animate;
   - D-064: the undo crossfade and the new-game cascade;
@@ -2957,25 +3013,33 @@ jobs:
 - **Rejected:** one canvas; tinted "+N" text.
 - **Source:** [RESEARCH] DESIGN_SYSTEM.md §4.7, §7.2; MOTION_SPEC.md §3.3.
 
-#### D-188 — Board layout amendments (amends D-075, D-091; clarifies D-009)
+#### D-188 — Board layout amendments (amends D-051, D-075, D-091; clarifies D-009)
 - **Decision:**
   - **Margins.** D-075's margins (16 / 24 / 32 dp) apply per axis: horizontal margins by width class, vertical margins by height class.
-  - **STACKED chrome** is measured, not fixed: header + controls + 2 × 24 dp, which is 240 dp at fontScale 1.0.
-  - **Fit guard**, applied in order:
-    1. If `availH − chromeH < 280 dp`, use the compact 64 dp header (size chip, Score, Best; no title).
-    2. Then allow the board down to `BoardFloor` = 220 dp.
-    3. If 220 dp still does not fit, use THREE_COLUMN.
+  - **STACKED chrome** is measured, not fixed: header + controls + 2 × 24 dp, which is 240 dp at fontScale 1.0. The COMPACT header is one 64 dp row (size chip, Score, Best; no title) with 8 dp gaps above and below the board: 160 dp, or 264 dp with the TalkBack pad.
+  - **Width-aware resolution.** D-091's order gives only the *preferred* mode. The pure `resolveGameLayout(window, chrome)` (DESIGN_SYSTEM.md §5.3) computes the board each candidate arrangement would give for the window, with the TalkBack rail width (208 dp) and the measured chrome, and the first rule that holds wins:
+    1. the preferred THREE_COLUMN or SIDE_PANEL, when its board is at least `BoardFloor` = 220 dp, its rail or panel content fits, and its board is at least STACKED's (or STACKED does not fit);
+    2. STACKED, with the full header while the board stays at least 280 dp and the COMPACT header otherwise, when its board is at least 220 dp (full-header chrome is as wide as the board and re-measured at that width; COMPACT chrome spans the content width);
+    3. THREE_COLUMN, whatever the height class, when it fits as in rule 1;
+    4. **SCROLL**, a board-first scrolling column: the COMPACT header, then the board sized to fill the first screen (with the status line while the pad is shown), between 220 and 720 dp, then the rest of the chrome below the fold.
+  - The board is never below 220 dp, never above 720 dp and never negative. Only SCROLL lets chrome leave the screen, and there it scrolls. A 360×450 split-screen pane is STACKED with the COMPACT header (board 234 dp), and SCROLL (274 dp) with the TalkBack pad; its THREE_COLUMN board would be −16 dp (−112 dp with the pad).
+  - The status line enters the resolution at its reserved two-line height, so an announcement never changes the arrangement.
+  - **SCROLL input** (amends D-051 for this arrangement only): `swipeToMove` is attached to the board, so a drag that starts on the board is a move and a drag that starts elsewhere scrolls. When a win or game-over card composes, the column scrolls the whole board into view.
   - **First-launch hint placement:**
-    - STACKED: above the board;
+    - STACKED and SCROLL: above the board;
     - THREE_COLUMN: in the actions rail, replacing Undo and New game while shown;
     - SIDE_PANEL: in the panel.
+  - **Snackbar in SCROLL:** over the board, as D-186's STACKED fallback.
   - **SIDE_PANEL alignment.** The panel's height equals the board's, and its top aligns with the board's top. The title row is at the top of the panel; the snackbar host is at the board's bottom edge.
   - Formulas are in DESIGN_SYSTEM.md §5.2–§5.4.
 - **Rationale:**
   - Width-class margins alone would shrink the 915×412 board from 356 to 324 dp.
   - A fixed 240 dp chrome overflows at fontScale 2.0, with the TalkBack pad, and in windows 480–640 dp tall.
-- **Rejected:** the literal fixed chrome; a scrolling Game screen.
+  - Two 160 dp rails and their gaps take 344 dp, more than a phone split-screen pane has (`availW` 328 dp at 360 dp wide), so a height-only rule cannot pick THREE_COLUMN.
+  - A larger board is the point of every arrangement, so a side arrangement that gives a smaller board than STACKED loses (900×1400: STACKED 720 dp, SIDE_PANEL 516 dp).
+- **Rejected:** the literal fixed chrome; a scrolling Game screen as the normal layout (it is only the SCROLL last resort, where nothing else keeps a 220 dp board); rails narrower than 160 dp (the score chips and buttons no longer fit); a board below 220 dp.
 - **Source:** [RESEARCH] DESIGN_SYSTEM.md §5.2–§5.4.
+- **Amended in plan review (Codex r1):** the arrangement is now resolved from the board each candidate gives, and SCROLL was added. Before, the height rule chose THREE_COLUMN for every window under 480 dp tall, so a 360×450 split-screen pane got a −16 dp board (35 dp at 411×450, −61 dp there with the 208 dp TalkBack rails), and the fit guard fell back to THREE_COLUMN without checking its width.
 
 #### D-189 — Theme token additions (extends D-070, D-071)
 - **Decision:**
@@ -3152,14 +3216,15 @@ jobs:
   - A finalized non-win resets `currentWinStreak` to 0.
   - A win is judged on the final board (max exponent ≥ target at finalization), so an undone winning tile does not count.
   - A `KEEP_PLAYING` game abandoned through New game counts as both won and abandoned.
-  - Reset statistics leaves in-progress games untouched, including their `bestAtStart`.
+  - Reset statistics leaves in-progress games untouched, including their `bestAtStart`, and keeps `lastFinalizedGameId` (D-044).
   - **Display-time fold.**
     - `StatsViewModel` combines `records` with `GameRepository.peek(n)` for n = 3..8.
-    - For each size whose saved game is `OVER`, it displays `RecordsMath.finalize(record, game)` without persisting it.
-    - Persisted finalization still happens only at New game, so nothing is counted twice. Undoing out of `OVER` removes the game from the display.
+    - For each size it displays `RecordsMath.displayed(records, game)` without persisting it. That function first finalizes the saved game's `previousFinalization`, if any, and then the saved game itself if it is `OVER`. Both go through the identity-guarded `RecordsMath.finalize` (D-044), so a game whose `gameId` is already finalized (an interrupted New game not yet completed) is skipped, and a recovery entry not yet applied is shown once.
+    - Persisted finalization still happens only at New game (and in D-044's recovery), so nothing is counted twice. Undoing out of `OVER` removes the game from the display.
 - **Rationale:** FEATURES.md §3.1 and F08-AC3. Without the fold, a player who loses their first game sees an empty Statistics screen.
 - **Rejected:** finalizing at game over (it double-counts after an undo).
 - **Source:** [ORCH] O7, O8 · [RESEARCH] FEATURES.md F08.
+- **Amended in plan review (Codex r1):** the fold now goes through D-044's identity check. Before, a game restored after its records write (a kill between New game's two writes) was folded in again even though the records already counted it. Reset now keeps `lastFinalizedGameId`.
 
 #### D-199 — Controls and keys while a card is shown (clarifies D-007, D-054; amends D-053)
 - **Decision:**

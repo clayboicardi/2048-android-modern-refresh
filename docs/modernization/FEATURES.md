@@ -23,7 +23,7 @@ What it does not restate: build files, module layout and class APIs (`ARCHITECTU
 
 ### 0.1 IDs and traceability
 
-- Features are `F01`–`F30`. Acceptance criteria are `Fnn-ACk`; there are 342, numbered without gaps within each feature.
+- Features are `F01`–`F30`. Acceptance criteria are `Fnn-ACk`; there are 371, numbered without gaps within each feature.
 - Every AC maps to **exactly one** test method, written `Class.method`, or to one gate step (`Gate: …`). Every test method named in §1 implements exactly one AC of this file. The few cross-cutting rules (the ATF rule on every golden except `motion_*`) say so explicitly.
 - A test method may prove several ACs that assert the same fact, for example an F-AC of this file and an AC of MOTION_SPEC.md or L10N_STORE_LEGAL.md; its first KDoc line lists every ID (e.g. `/** F13-AC8, AC-GOLD-1 */`). The Test column names those extra IDs as "(also …)".
 - The first line of each test method's KDoc lists its AC IDs, for example `/** F05-AC4 */`, so `grep -rn "F05-AC4" app/src/test core/engine/src/test` finds the proof.
@@ -71,8 +71,9 @@ Fixtures:
 | T0 | Win: merge reveal = origin + 80 ms. Game over: origin + 300 ms (D-064, D-183) |
 | Game numeral | Tile values, score, best, "+N", share text: `Long.toString()`, Latin digits, no grouping (D-103) |
 | Prose number | Any other number in a sentence: `formatCount(n, locale)`, Latin digits with locale grouping (D-103) |
-| Fresh game | `SavedGame(Game.newGame(size, seedSource.nextSeed()), elapsedMs = 0, bestAtStart = records.best(size), newBestAnnounced = false)` (ARCHITECTURE.md §4.9) |
-| Finalize | The D-044 record update when New game starts on a size, applied only if the old game is `OVER` or has `score > 0` |
+| Fresh game | `SavedGame(Game.newGame(size, seedSource.nextSeed()), elapsedMs = 0, bestAtStart = records.best(size), newBestAnnounced = false, gameId = records.nextGameId(size, replaced), previousFinalization = null)` (ARCHITECTURE.md §4.9) |
+| Finalize | The D-044 record update when New game starts on a size, applied only if the old game is `OVER` or has `score > 0`. It is keyed by the game's `gameId` and is a no-op for a game already finalized |
+| Recovery entry | A fresh game's `previousFinalization`: the finalization input of the game it replaced, so that a lost records write is redone on the next load (D-044, ARCHITECTURE.md §4.9) |
 
 ### 0.4 Feature index
 
@@ -92,12 +93,12 @@ Fixtures:
 | F10 | Share result (text) | M3 | D-008, D-103, D-200 | `share/ShareText.kt` |
 | F11 | Settings screen | M2, M4 | D-006 | `settings/*`, `data/settings/*` |
 | F12 | Themes, palettes, high contrast, dynamic chrome | M3–M4 | D-070–D-074, D-078, D-189, D-205–D-207 | `ui/theme/*` |
-| F13 | Motion setting and reduced motion | M3 | D-060–D-064, D-183, D-184, D-210 | `ui/theme/GameMotion.kt`, `ui/theme/EffectiveMotion.kt`, `motion/MoveTimeline.kt` |
+| F13 | Motion setting and reduced motion | M2–M3 | D-060–D-064, D-183, D-184, D-210 | `ui/theme/GameMotion.kt`, `ui/theme/EffectiveMotion.kt`, `motion/MoveTimeline.kt` |
 | F14 | Haptics | M2–M4 | D-065, D-066, D-185 | `feedback/HapticsMap.kt`, `feedback/HapticsController.kt` |
 | F15 | Swipe input | M2–M4 | D-050–D-052 | `input/SwipeDetector.kt`, `input/SwipeClassifier.kt` |
 | F16 | Keyboard, D-pad and gamepad | M3–M4 | D-053, D-054, D-199, D-203 | `input/KeyboardInput.kt` |
 | F17 | Accessibility | M3–M4 | D-080–D-085, D-202, D-204, D-205 | `board/Board.kt`, `StatusLine.kt`, `input/DirectionPad.kt` |
-| F18 | Adaptive layouts and orientation | M4 | D-090–D-092, D-095, D-188 | `GameLayout.kt`, `ui/components/WindowMode.kt` |
+| F18 | Adaptive layouts and orientation | M4 | D-051, D-090–D-092, D-095, D-188 | `GameLayout.kt`, `ui/components/WindowMode.kt`, `game/board/BoardGeometry.kt` (`resolveGameLayout`) |
 | F19 | Edge-to-edge and Immersive mode | M0, M3–M4 | D-093 | `MainActivity.kt`, `ui/components/ImmersiveMode.kt` |
 | F20 | Keep screen on | M4 | D-006 | `ui/components/KeepScreenOn.kt` |
 | F21 | Navigation and predictive back | M3 | D-023, D-054, D-094 | `NavKeys.kt`, `AppNavHost.kt`, `GameMenu.kt` |
@@ -109,7 +110,7 @@ Fixtures:
 | F27 | Privacy and the offline guarantee | M0, M4–M5 | D-002, D-123, D-148, D-190 | manifest, `PRIVACY.md` |
 | F28 | Localization, per-app language, RTL, digits | M0, M3–M5 | D-100–D-106, D-208 | `values*/strings.xml`, `ui/components/Formatting.kt` |
 | F29 | Backup and device transfer | M0, M2 | D-048 | `xml/*_rules.xml` |
-| F30 | Identity: label, icon, splash, versions, store listing | M0, M3–M5 | D-110–D-116, D-130–D-132, D-190 | manifest, `res/mipmap*`, `fastlane/**` |
+| F30 | Identity: label, icon, splash, versions, store listing | M0, M2–M5 | D-110–D-116, D-130–D-132, D-134, D-190 | manifest, `res/mipmap*`, `fastlane/**`, `di/AppContainer.kt` (version from `BuildConfig`) |
 
 ---
 
@@ -186,7 +187,7 @@ Each feature lists: user story, behavior, edge cases, settings involved, persist
    4. loads that size's saved game **whatever its status** (`PLAYING`, `WON`, `KEEP_PLAYING`, `OVER`), or starts a fresh game when none exists;
    5. clears `busy`. A loaded `WON` or `OVER` game shows its card in the `Restored` form: interactive at once, no entry animation (F03, F04).
 4. Selecting the **current** size dismisses the sheet. Nothing is written.
-5. A size switch never finalizes a game (D-007, D-044). Each size keeps exactly one saved game (`game-N.json`).
+5. A size switch never finalizes a game (D-007, D-044). Each size keeps exactly one saved game (`game-N.json`). Loading the new size may only complete an interrupted New game of that size, whose old game was already counted or is counted from its recovery entry (F06 item 5, D-044); it never counts the game being left or a game being played.
 6. The board changes with the `SizeSwitched` transition of MOTION_SPEC.md §3.10 (`AnimatedContent(targetState = boardSize)`, D-182) under Full and Reduced, and swaps instantly under Off. The new board's tiles are `Static`.
 7. Board geometry follows D-075 for every N. Tile labels follow D-077: digit-count sizing; a compact `K/M/G/T/P/E` label when the full decimal would be below 12 dp and `exp ≥ 10`; values below 1024 always print in full. The cell's accessibility text always carries the full decimal (F17).
 8. The header Best chip shows the current size's best (F08).
@@ -195,7 +196,7 @@ Each feature lists: user story, behavior, edge cases, settings involved, persist
 - On a 360×800 dp phone the stacked 8×8 board is 328 dp, so a tile is ≈ 35.4 dp. Then 1024 renders "1K" (the 4-digit label would be 0.32·t ≈ 11.3 dp < 12 dp), 16384 renders "16K", and 512 renders "512". On 7×7 the tile is ≈ 40 dp, so "1024" prints in full and 16384 renders "16K". DESIGN_SYSTEM.md §4.3 lists the geometry for every size.
 - The full decimal of an exponent ≥ 63 does not fit in a `Long`; the engine's `tileValue` saturates there. `TileLabels.fullDecimal(exp)` and `ShareText` (`:app` only) compute it as `java.math.BigInteger.ONE.shiftLeft(exp).toString()`, so accessibility labels and the share text always carry the exact value. Exponents 63–65 are reachable only on 8×8 and are theoretical, but F02-AC9 pins 65. Example: 2^65 → compact "32E", label "36893488147419103232".
 - A corrupt `game-N.json` for the selected size starts a fresh game of that size; no other file is touched (D-045).
-- The "In progress" pills need every size's state: `GameRepository.peek(size)` for the six sizes reads the pending-write cache first, then disk. A missing file means "not in progress".
+- The "In progress" pills need every size's state: `GameRepository.peek(size)` for the six sizes reads the pending-write cache first, then disk. A missing file means "not in progress". So does a saved game whose `gameId` is already finalized (`records.isFinalized(game)`): that is an interrupted New game, which `restore` replaces with a fresh game when the size is selected (D-044).
 - `lastBoardSize` outside 3..8 (a hand-edited file or a backup from a future version) is coerced to 4 on read.
 - A switch during an in-flight slide snaps the slide, then crossfades (D-052).
 - The sheet is modal, so swipes and move keys are ignored while it is open (D-054).
@@ -349,7 +350,7 @@ New game from the card is F06-AC5; Back is F21-AC7; card semantics are F17-AC12.
 10. Snackbars (D-186; DESIGN_SYSTEM.md §5.4, §7.6):
     - `undo_hint_no_undo_best` "Undo used. This game no longer counts for Best without undo." shows when a game's `undoCount` goes from 0 to 1, but only while `RecordsMath.aggregate(records).totalUndos == 0`, that is, until the first finalized game that used undo. There is no new persisted key.
     - `nothing_to_undo` "Nothing to undo" shows when U, Ctrl+Z or Backspace is pressed at `moveCount == 0`, at most once per 2 s. The button is disabled at move 0, so touch cannot trigger it.
-    - Placement: a snackbar never covers the controls bar. STACKED: in the gap between the board and the controls when that gap is at least its measured height + 16 dp, otherwise over the board, bottom-centred, width board − 16 dp, 8 dp above the board's bottom edge. THREE_COLUMN: at the bottom of the actions rail. SIDE_PANEL: at the bottom of the panel, aligned with the board's bottom edge.
+    - Placement: a snackbar never covers the controls bar. STACKED: in the gap between the board and the controls when that gap is at least its measured height + 16 dp, otherwise over the board, bottom-centred, width board − 16 dp, 8 dp above the board's bottom edge. THREE_COLUMN: at the bottom of the actions rail. SIDE_PANEL: at the bottom of the panel, aligned with the board's bottom edge. SCROLL: over the board, as STACKED's second case (D-188).
     - At most one snackbar is visible; each is `SnackbarDuration.Short` with no action; any accepted move or undo dismisses it.
 11. Undo never rewinds the play clock: `elapsedMs` only grows within a game.
 12. Every undo is persisted at once (D-043; fixes B2).
@@ -397,15 +398,20 @@ Undo keys are F16-AC2; the TalkBack Undo action is F17-AC4; records under undo a
 1. Entry points: the controls-bar New game button, the N and R keys (F16), the TalkBack "New game" action (F17), and the New game buttons of both cards (D-007).
 2. If the game is **in progress**, an M3 `AlertDialog` asks "Start a new game?" with "New game" and "Cancel" (DESIGN_SYSTEM.md §6.5). Cancel, Back and a tap outside dismiss it with **no state change** and no write (fixes B5).
 3. Otherwise (`moveCount == 0`, `WON` or `OVER`) the new game starts immediately; on a card, the card is the decision point.
-4. Starting a new game:
-   1. finalizes the old game iff `status == OVER || score > 0` (F08);
-   2. creates a fresh game of the same size with a new seed from `SeedSource`;
+4. Starting a new game (ARCHITECTURE.md §4.9 `replaceWithFresh`; D-044):
+   1. finalizes the old game iff `status == OVER || score > 0` (F08). This is a no-op when the old game's `gameId` is already finalized;
+   2. creates a fresh game of the same size with a new seed from `SeedSource` and `gameId = max(old gameId, lastFinalizedGameId[size]) + 1`;
    3. sets `bestAtStart = records.best(size)`, read **after** finalization;
    4. resets `elapsedMs`, `undoCount` and `newBestAnnounced`;
-   5. closes any card; writes `records.json` (if finalized) and `game-N.json`.
-5. Animation (D-064; MOTION_SPEC.md §3.8): under Full, the old tiles shrink to 0.6 and fade, staggered in reading order (`step = min(15, 240 / n)` ms for n outgoing tiles, so 15 ms on a typical board), then the two start tiles appear 60 ms apart. Reduced crossfades; Off swaps instantly. The new board's tiles are `Static` in `BoardUi` with new ids; the outgoing tiles are drawn from the previous `BoardUi` by `OutgoingTilesLayer`, so the reveal is board-level choreography (D-182).
-6. The dialog survives recreation and process death (`rememberSaveable`).
-7. No haptic (D-065).
+   5. sets the fresh game's `previousFinalization` to the old game's finalization input when the old game is `OVER` or has `score > 0`, whether step 1 counted it now or earlier; otherwise leaves it absent;
+   6. closes any card; submits `records.json` (if finalized) and then `game-N.json`. The two writes may land in either order.
+5. **Interrupted New game.** If the process dies, or one of the two writes fails, the next load of that size recovers (D-044):
+   - when the game file still holds the old game but the records already count it (`gameId ≤ lastFinalizedGameId`), the New game is completed: a fresh game replaces the old one and nothing is counted again;
+   - when the game file holds the fresh game but the records lack its `previousFinalization`, that entry is counted then;
+   - when neither write landed, the old game comes back as it was and is counted at the next New game.
+6. Animation (D-064; MOTION_SPEC.md §3.8): under Full, the old tiles shrink to 0.6 and fade, staggered in reading order (`step = min(15, 240 / n)` ms for n outgoing tiles, so 15 ms on a typical board), then the two start tiles appear 60 ms apart. Reduced crossfades; Off swaps instantly. The new board's tiles are `Static` in `BoardUi` with new ids; the outgoing tiles are drawn from the previous `BoardUi` by `OutgoingTilesLayer`, so the reveal is board-level choreography (D-182). A New game completed by recovery at load (item 5) shows the fresh board `Restored`, with no animation (D-047).
+7. The dialog survives recreation and process death (`rememberSaveable`).
+8. No haptic (D-065).
 
 **Edge cases.**
 - New game on a fresh board (`moveCount == 0`) starts immediately with a new seed; nothing is finalized because the score is 0.
@@ -414,10 +420,11 @@ Undo keys are F16-AC2; the TalkBack Undo action is F17-AC4; records under undo a
 - N or R while the dialog is open does nothing (the dialog holds focus; D-054).
 - N or R while a card is shown starts the new game at once, like the card's New game (D-199, F16-AC11).
 - New game does not dismiss the first-launch hint; only an accepted move or "Got it" does (D-009).
+- New game from a game with score 0 that is not `OVER` counts nothing, and the fresh game's `previousFinalization` is absent; its `gameId` still increases.
 
 **Settings involved.** `motion` (animation).
 
-**Persistence touched.** `records.json` (finalization), `game-N.json` (fresh game).
+**Persistence touched.** `records.json` (finalization, including `lastFinalizedGameId`), `game-N.json` (fresh game with `gameId` and `previousFinalization`).
 
 | AC | Given | When | Then | Test |
 |---|---|---|---|---|
@@ -433,6 +440,13 @@ Undo keys are F16-AC2; the TalkBack Undo action is F17-AC4; records under undo a
 | F06-AC10 | The dialog is open | `ActivityScenario.recreate()` | The dialog is still open | `GameScreenTest.newGameDialogSurvivesRecreation` |
 | F06-AC11 | A `BoardPresenter` | `reset` for a new game | Every `TileUi.kind == Static`; the event is `BoardEvent.NewGame` | `BoardPresenterTest.newGameEpochHasOnlyStaticTiles` |
 | F06-AC12 | `FIX_MID_4` | Golden 43 (new-game dialog) | It matches | `GameScreenshotTest.newGameDialogGolden` |
+| F06-AC13 | Empty records and a saved `FIX_OVER_4` with `gameId 7`; separately, a saved `PLAYING` 4×4 game with moves, score 0 and `gameId 7` | `onNewGame` | First case: `lastFinalizedGameId["4"] == 7`. The fresh game has `gameId 8` and `previousFinalization == old.toFinalization()`. Calling `RecordsRepository.finalize(old)` again leaves `records.state` equal and submits no records write. Second case: records unchanged; the fresh game has `gameId 8` and no `previousFinalization` (D-044) | `GameViewModelTest.newGameAssignsIdentityAndRecoveryEntry` |
+| F06-AC14 | Container A: empty records, `game-4.json` = `FIX_OVER_4` with `gameId 7`, the 4×4 game store wrapped in `FaultyDataStore` with `failWrites = true` | `onNewGame`; `awaitIdle()` on every writer; A's scope cancelled (the records write landed, the game write failed, the process died) | Container B on the same files has `records.sizes["4"]` with `gamesPlayed 1`, `totalScore 3012`, `totalMoves 302`, `totalTimeMs 401000`, and `lastFinalizedGameId["4"] == 7`. B's game is a fresh 4×4 game with `gameId 8` and `previousFinalization.gameId == 7`, and `game-4.json` holds it after `awaitIdle()`. After `onNewGame` in B (score 0) and a container C: still `gamesPlayed 1` (D-044 R2) | `FinalizationRecoveryTest.overGameCountedOnceWhenGameWriteIsLost` |
+| F06-AC15 | As F06-AC14, with `FIX_MID_4` (`PLAYING`, score 10220) and `gameId 7` | Same | `gamesPlayed 1`, `gamesAbandoned 1`, `totalScore 10220`, `totalMoves 412`, `totalUndos 2`. B's game is the fresh game, not `FIX_MID_4`. Container C: still `gamesPlayed 1` | `FinalizationRecoveryTest.abandonedGameCountedOnceWhenGameWriteIsLost` |
+| F06-AC16 | As F06-AC14, but the **records** store is wrapped in `FaultyDataStore` (`failWrites = true`) instead | Same (the game write landed, the records write failed) | `records.json` is still empty before B loads. After B's load: `gamesPlayed 1`, `totalScore 3012`, `lastFinalizedGameId["4"] == 7`, counted from the recovery entry. B's game is A's fresh game (`gameId 8`), unchanged. Container C: still `gamesPlayed 1` (D-044 R1) | `FinalizationRecoveryTest.overGameCountedOnceWhenRecordsWriteIsLost` |
+| F06-AC17 | As F06-AC16, with `FIX_MID_4` and `gameId 7` | Same | After B's load: `gamesPlayed 1`, `gamesAbandoned 1`, `totalScore 10220`. Container C: still `gamesPlayed 1` | `FinalizationRecoveryTest.abandonedGameCountedOnceWhenRecordsWriteIsLost` |
+| F06-AC18 | Container A: empty records and `game-4.json` = `FIX_OVER_4`, and separately `FIX_MID_4`, each with `gameId 7`. The bytes of `records.json` and `game-4.json` are saved before `onNewGame` and after `onNewGame` + `awaitIdle()` | Each of the 4 combinations (records before/after × game before/after) is copied into a fresh folder. Container B loads, runs `onNewGame` and `awaitIdle()`; container C loads | In all 8 cases, C's `records.sizes["4"]` has `gamesPlayed 1` with the old game's score, moves, time and undos exactly once, and `lastFinalizedGameId["4"] ≥ 7` | `FinalizationRecoveryTest.everyDiskOutcomeCountsExactlyOnce` |
+| F06-AC19 | Container A: the records store wrapped in `FaultyDataStore` (`failWrites = true`), `lastBoardSize 5`, no game files. The fresh 5×5 game (`gameId 1`) plays accepted moves until `score > 0` | `onNewGame`; `onSizeSelected(4)`; `awaitIdle()`; A's scope cancelled | Container B starts on 4×4. After `ready` and `advanceUntilIdle()`, without selecting 5×5: `records.sizes["5"]` has `gamesPlayed 1` and `gamesAbandoned 1`, and `lastFinalizedGameId["5"] == 1`. `game-5.json` is byte-identical (other sizes get R1 only) | `FinalizationRecoveryTest.otherSizesRecoveredAfterLoad` |
 
 The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
 
@@ -442,13 +456,13 @@ The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
 
 **Behavior.**
 1. Persistence uses typed JSON DataStore files under `files/datastore/` (D-040): `settings.json`, `records.json` and `game-3.json` … `game-8.json`. Exactly one DataStore instance per file exists, owned by `AppContainer` (D-022).
-2. A full game document is enqueued after every accepted move, undo, keep-going, new game and size switch, and on `ON_PAUSE`, which also folds the elapsed time (D-043). Records are written live when a best increases (F08). Writes are conflated (the latest value wins) and a write in progress is never cancelled (D-024). A process kill loses at most the one change whose write is in flight; README says so (D-043).
+2. A full game document is enqueued after every accepted move, undo, keep-going, new game and size switch, and on `ON_PAUSE`, which also folds the elapsed time (D-043). Records are written live when a best increases (F08). Writes are conflated (the latest value wins) and a write in progress is never cancelled (D-024). A process kill loses at most the one change whose write is in flight; README says so (D-043). New game writes two files. It is recovered as a unit on the next load, so its old game is counted exactly once (F06, D-044).
 3. Cold start: `installSplashScreen()` keeps the splash up until settings, records and the start size's game have loaded, or for at most **1,000 ms** (D-112). The first composed board equals the persisted board; every tile is `Static`; no "+N" floats; a persisted `WON` or `OVER` shows its card in the `Restored` form.
 4. If the 1,000 ms cap releases the splash first, the Game screen shows the board frame with empty cells (board description `a11y_board_loading`), "–" in the score chips, and disabled Undo and New game (DESIGN_SYSTEM.md §6.1 "Loading"). The tiles then appear `Static` when the data arrives.
-5. Recreation (rotation, resize, fold, locale or `uiMode` change) and pause/resume never reload the game and never replay animations (D-047, D-095).
+5. Recreation (rotation, resize, fold, locale or `uiMode` change) and pause/resume never reload the game and never replay animations (D-047, D-095). An animated board change, "+N" or card entry is shown once: the composition that starts presenting it reports it, and the ViewModel replaces it with its static form for the same state (ARCHITECTURE.md §4.11). A later composition (recreation, the return from a sub-screen, an arrangement switch of F18) therefore draws the final frame at once, and a recreation in the middle of an animation snaps to its end without firing any haptic again.
 6. Transient UI survives recreation and process death: open sheets, dialogs and the menu use `rememberSaveable`; sub-screens are on the Nav3 back stack (ARCHITECTURE.md §4.11). The What's new sheet is the exception: it is stored as seen when it is shown (F24).
 7. A corrupt file falls back to that file's defaults only, and the app never crashes. A game document that decodes but violates an engine invariant counts as corrupt. Nothing is logged or shown (D-045).
-8. Compatibility (D-041): every document has `schemaVersion = 1`; the decoder ignores unknown keys and coerces unknown enum names to the field default; the committed v1 fixtures are never edited.
+8. Compatibility (D-041): every document has `schemaVersion = 1`; the decoder ignores unknown keys and coerces unknown enum names to the field default; a missing key decodes to the field default; the committed v1 fixtures are never edited. A default is not always a valid value: `gameId` has none, so a game document without it decodes to `gameId = 0` and counts as corrupt (D-044, F07-AC23).
 9. Budgets (D-046): an 8×8 game with 10,000 moves encodes to ≤ 256 KiB with encode + decode ≤ 50 ms; `records.json` ≤ 64 KiB; `settings.json` ≤ 4 KiB.
 10. `elapsedMs` accumulates `MonotonicClock` time only while the Game destination is resumed **and** the status is `PLAYING` or `KEEP_PLAYING` **and** `moveCount ≥ 1` (D-043, ARCHITECTURE.md §4.9 `PlayClock`).
 
@@ -465,13 +479,13 @@ The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
 
 | AC | Given | When | Then | Test |
 |---|---|---|---|---|
-| F07-AC1 | Container A plays 40 moves and 3 undos on each size 3..8 (`FixedSeedSource`), awaits idle on every writer, then its scope is cancelled | Container B is built on the same files | For every size: board, score, `rngState`, move log, snapshots, `undoCount`, `elapsedMs` and status equal A's | `ProcessDeathRestoreTest.everySizeRestoresExactly` |
+| F07-AC1 | Container A plays 40 moves and 3 undos on each size 3..8 (`FixedSeedSource`), awaits idle on every writer, then its scope is cancelled | Container B is built on the same files | For every size: board, score, `rngState`, move log, snapshots, `undoCount`, `elapsedMs`, status, `gameId` and `previousFinalization` equal A's | `ProcessDeathRestoreTest.everySizeRestoresExactly` |
 | F07-AC2 | A `GameViewModel` with a counting `GameRepository` | An accepted move, an undo, a keep-going, a new game, a switch to a size with no saved game, and `onPaused`, in turn | Exactly one game save per action, except the size switch: one for the old size and one for the fresh game of the new size | `GameViewModelTest.everyStateChangeSubmitsOneSave` |
 | F07-AC3 | A resumed game in progress, `FakeClock` advanced 30,000 ms | `onPaused` | The saved document has `elapsedMs == 30000` | `GameViewModelTest.pauseFoldsElapsedAndSaves` |
 | F07-AC4 | A `PlayClock` | The clock advances before the first move, while paused, in `WON`, in `OVER`, and in `PLAYING`/`KEEP_PLAYING` after the first move while resumed | Only the last case accumulates time | `PlayClockTest.countsOnlyWhileResumedAndPlaying` |
 | F07-AC5 | A `ConflatedWriter` whose write suspends on a gate | Submit v1 (it starts), then v2…v100, then open the gate | v1 completes (not cancelled), then exactly one more write with v100; 2 writes in total | `ConflatedWriterTest.conflatesWithoutCancellingInFlightWrite` |
 | F07-AC6 | A write lambda that throws `IOException` once | Submit v1, then v2 | No exception escapes; `failures == 1`; v2 is written | `ConflatedWriterTest.ioFailureIsSwallowedAndNextWriteSucceeds` |
-| F07-AC7 | A game after one accepted move | `ActivityScenario.recreate()` | Every `TileUi.kind == Static`; `header.lastDelta == 0`; the move log is unchanged | `RecreateNoReplayTest.recreateRendersStaticBoard` |
+| F07-AC7 | A game after one accepted move whose board and header were reported as presented (`onBoardPresented` and `onHeaderPresented` with its `moveId`: the test makes the calls in M2, when `App.kt` has no `BoardView` yet; from M3 the composed `BoardView` and `GameHeader` make them) | `ActivityScenario.recreate()` | The same `GameViewModel` instance (no reload); every `TileUi.kind == Static`, event `Restored`, `moveId` and `epoch` unchanged; `header.lastDelta == 0`; the move log is unchanged | `RecreateNoReplayTest.recreateRendersStaticBoard` |
 | F07-AC8 | A game in progress | The activity goes to `CREATED`, then `RESUMED` | No reload: the board is unchanged, all tiles `Static`, no "+N" node | `RecreateNoReplayTest.pauseResumeDoesNotReplay` |
 | F07-AC9 | The board-size sheet is open | `ActivityScenario.recreate()` | The sheet is still open | `RecreateNoReplayTest.openSheetSurvivesRecreation` |
 | F07-AC10 | `game-4.json` = `FIX_MID_4` (score 10220) | A `GameViewModel` loads | The first `header` emission after `ready` has `lastDelta == 0` (fixes B7) | `GameViewModelTest.loadEmitsNoScoreDelta` |
@@ -479,14 +493,22 @@ The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
 | F07-AC12 | `SplashGate(timeoutMs = 1000)` with a fake uptime | `keep(ready = false)` at 999 and 1,000 ms; `keep(ready = true)` at 10 ms | `true`, `false`, `false` | `SplashGateTest.gateReleasesAtCapOrWhenReady` |
 | F07-AC13 | A game store whose first read is delayed 1,500 ms | The app launches | Until 1,500 ms: empty-cell frame, "–" chips, Undo and New game disabled; afterwards the fixture board with only `Static` tiles | `SplashGateTest.lateLoadRendersStaticTiles` |
 | F07-AC14 | The committed `fixtures/v1/` files | Decoded with the current serializers | They decode, and their key fields equal the literals written in the test (`game-8-long.json` matches ARCHITECTURE.md §9.4) | `PersistenceFixturesTest.v1FixturesDecode` |
-| F07-AC15 | Documents with an unknown key `"futureField"`, `palette = "SEPIA"` and `motion = "SUPER"` | Decoded | They decode; the unknown key is ignored; `palette == CLASSIC`, `motion == FULL` | `PersistenceFixturesTest.newerDocumentsDecodeWithDefaults` |
-| F07-AC16 | Garbage bytes in `records.json`, then separately in `settings.json` | The app starts | `Records()` (respectively `Settings()`); every other file is byte-identical | `PersistenceCorruptionTest.recordsAndSettingsFallBackIndependently` |
+| F07-AC15 | Documents with an unknown key `"futureField"`, `palette = "SEPIA"` and `motion = "SUPER"`; the `settings.json` fixture without `keepScreenOn`; the `game-4.json` fixture without `newBestAnnounced` and `elapsedMs` (fields whose defaults are valid values, QUALITY.md §1.5) | Decoded | They decode, none as corruption; the unknown key is ignored; `palette == CLASSIC`, `motion == FULL`; `keepScreenOn == false` with every other settings value as in the fixture; `newBestAnnounced == false` and `elapsedMs == 0` with `gameId == 7`, the cells, history and `previousFinalization` as in the fixture | `PersistenceFixturesTest.newerDocumentsDecodeWithDefaults` |
+| F07-AC16 | Garbage bytes in `records.json`, then separately in `settings.json` | The app starts | The store's first value is `Records()` (respectively `Settings()`), before any D-044 recovery: a surviving game file's recovery entry is counted afterwards by design; every other file is byte-identical | `PersistenceCorruptionTest.recordsAndSettingsFallBackIndependently` |
 | F07-AC17 | Valid JSON game documents with: bad Base64; wrong snapshot count; `keepGoingAtMove > moveCount`; snapshot status ordinal 9 | Loaded | Each counts as corrupt: a fresh game of that size; `records.json` untouched | `PersistenceCorruptionTest.invariantViolationIsCorruption` |
 | F07-AC18 | The 10,000-move 8×8 game | Encode + decode, median of 5 runs after 3 warm-ups | ≤ 256 KiB and ≤ 50 ms | `PersistenceBudgetTest.longGameWithinSizeAndTimeBudget` |
 | F07-AC19 | `records.json` with all six sizes populated; default `settings.json` | Encoded | ≤ 64 KiB and ≤ 4 KiB | `PersistenceBudgetTest.recordsAndSettingsWithinBudget` |
 | F07-AC20 | Random logs and snapshots | Encoded to bytes and decoded | `MoveLog` and `Snapshot` round-trip exactly | `EnginePropertiesTest.p12HistoryBytesRoundTrip` |
 | F07-AC21 | Byte arrays with a wrong length, a status ordinal of 9, an exponent of 128, and non-zero unused high bits | `Snapshot.fromBytes` / `MoveLog.fromPackedBytes` | Each throws `IllegalArgumentException` | `HistoryCodecTest.rejectsMalformedHistoryBytes` |
 | F07-AC22 | `LongGameGenerator` | Generates the long game | Win at move 1,678, score 208236, `rngState = 0x26E3A2DE9847F93C`, max exponent 12, `KEEP_PLAYING`, 313 snapshots, 2,500-byte log | `LongGameGeneratorTest.matchesExpectedValues` |
+| F07-AC23 | Valid game documents built from the `game-4.json` fixture with: `gameId = 0`; no `gameId` key (it decodes to 0: `gameId` has no valid default); `previousFinalization.gameId` equal to `gameId`; `previousFinalization.score = -1`; `previousFinalization.maxExp = 128` | Loaded | Each counts as corrupt: a fresh game of that size; `records.json` untouched (D-044, D-045) | `PersistenceCorruptionTest.invalidFinalizationIdentityIsCorruption` |
+| F07-AC24 | A `GameViewModel` one merge from 2048 (as F03-AC8) after its winning move, with a merge and a score delta; `b = board.value`, `m = b.moveId` | `onBoardPresented(m)`, `onHeaderPresented(m)`, `onOverlayPresented(m)`; then each again; then `onBoardPresented(m - 1)` | `board.value == BoardPresenter.settled(b)` (same `moveId`, `epoch`, cells and non-`Ghost` tile ids; every tile `Static`; event `Restored`); `header.lastDelta == 0` and every other header field unchanged; `overlay == Win(…, Restored)` with the same summary; game state, move log, `elapsedMs` and records unchanged; the counting `GameRepository` saw no save; the repeated and stale calls change nothing (D-047) | `GameViewModelTest.presentationReportsSettleWithoutStateChange` |
+| F07-AC25 | Seeded random replays of moves, undos, new games and size switches through `BoardPresenter` (D-145) | `settled(b)` for every emitted `b` | Same `moveId`, `epoch`, `size` and `cells`; its tiles are `b`'s non-`Ghost` tiles with the same ids and cells, in row-major order, all `Static` with `from == to`; `scoreDelta == 0`; event `Restored`; `settled(settled(b)) == settled(b)`; the presenter's next emission is the same as without the call (D-047, D-182) | `BoardPresenterTest.settledKeepsIdentityAndIsStatic` |
+| F07-AC26 | `FIX_FILM` under `MotionHarness` (Full); LEFT committed and settled (t = 448) | `harness.recreate()` | On the new composition's first frame: every probe tile `Static` at its engine cell with scale 1 and alpha 1; no "+N" float; `displayedScore == vm.header.value.score`; nothing running; `vm.board.value.moveId` and the move log unchanged. Through the next 1,000 ms no haptic is recorded beyond the move's one `SegmentTick` | `RecreateNoReplayTest.recreateAfterMoveRendersFinalFrame` |
+| F07-AC27 | `FIX_FILM` under `MotionHarness` (Full); LEFT committed | `harness.recreate()` at t = 48: mid-slide, before the reveal, the spawn, the "+N" and the `SegmentTick` due at 80 | The first frame after recreation equals the static render of the moved state (the `presenter.reemitStatic()` bitmap of AC-CONS-3): every tile at its engine cell, merged tile and spawn fully visible; no float on any later frame; `displayedScore` is the new score; nothing running. No haptic is recorded through t = 1,000: the pending `SegmentTick` is dropped, not replayed | `RecreateNoReplayTest.recreateMidMoveSnapsToFinalFrame` |
+| F07-AC28 | `FIX_WIN_PRE_4` under `MotionHarness` (Full); LEFT committed | `harness.recreate()` at t = 200 (after `Confirm` #1 at 128, before #2 at 272 and the card at 680); in a second run at t = 1,200 | On the first frame after recreation: `overlay.kind == WIN`, `interactive == true`, card alpha 1 and scale 1, scrim 0.60, badge morph 1, `ring == null`, `confettiAlive == 0`, every tile `Static`; `vm.overlay.value` has entry `Restored`. Through the next 3,000 ms the recorded haptics stay exactly those recorded before recreation: one `Confirm` in the first run, two in the second | `RecreateNoReplayTest.recreateDuringAndAfterWinShowsRestoredCard` |
+| F07-AC29 | `FIX_OVER_PRE_4` under `MotionHarness` (Full); LEFT committed | `harness.recreate()` at t = 500 (mid-ripple, before the card at 800); in a second run at t = 1,200 | On the first frame after recreation: every tile at scale 0.94, `boardSaturation == 0.2`, scrim 0.78, `overlay.kind == OVER`, `interactive == true`; nothing running. Through the next 3,000 ms the recorded haptics stay exactly the one `Reject` at t = 304 | `RecreateNoReplayTest.recreateDuringAndAfterGameOverShowsRestoredCard` |
+| F07-AC30 | `FIX_INVALID_4` under `MotionHarness` (Full); LEFT is invalid and its nudge has settled (t = 400) | `harness.recreate()` | `boardNudgeDp == (0, 0)` on every frame through 400 ms after recreation; the recorded haptics stay exactly the one `Reject` | `RecreateNoReplayTest.recreateAfterInvalidMoveDoesNotNudge` |
 
 ### F08 — Statistics and records
 
@@ -501,7 +523,8 @@ The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
 
    A write is submitted only when one of them increases (D-043).
 3. **Finalization** happens when New game starts on that size, and only if the old game is `OVER` or has `score > 0` (D-044; rules in §3.1, readings in D-198).
-   - **Display-time fold** (D-198): `StatsViewModel` combines `records` with `GameRepository.peek(n)` for n = 3..8 and, for each size whose saved game is `OVER`, displays `RecordsMath.finalize(record, game)` without persisting it. Persisted finalization still happens only at New game, so nothing is counted twice; undoing out of `OVER` removes the game from the display.
+   - **Identity** (D-044): finalization is keyed by the game's `gameId`. `records.json` keeps `lastFinalizedGameId[size]`, and finalizing a game whose `gameId` is at or below it changes nothing. A fresh game carries the replaced game's finalization input as `previousFinalization`, which is counted at the next load if the records write was lost (F06 item 5).
+   - **Display-time fold** (D-198): `StatsViewModel` combines `records` with `GameRepository.peek(n)` for n = 3..8 and, for each size, displays `RecordsMath.displayed(records, game)` without persisting it. That counts the saved game's `previousFinalization` if not yet counted, then the saved game if it is `OVER` and not yet finalized. Persisted finalization still happens only at New game and in its recovery, so nothing is counted twice; undoing out of `OVER` removes the game from the display.
 4. Bests never decrease, except through Reset statistics (D-044).
 5. **Statistics screen** (`StatsKey`; DESIGN_SYSTEM.md §6.9):
    - top bar: "Statistics", back navigation, and the Reset action;
@@ -510,18 +533,19 @@ The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
    - rows: Games played, Wins "count (rate)", Best score without undo, Average score, Total moves, Time played, Undos used;
    - an empty state when every field of the tab's record is 0.
 6. "All sizes" aggregates sums and maxima (§3.2).
-7. **Reset statistics** takes two sequential dialogs ("Reset statistics?", then "Reset everything?"). Confirming both writes `Records()`, leaves every game file untouched (including the current game's `bestAtStart`), and shows the snackbar "Statistics reset". Cancel or Back at either step changes nothing (D-044).
+7. **Reset statistics** takes two sequential dialogs ("Reset statistics?", then "Reset everything?"). Confirming both writes `RecordsMath.reset(records)`: `sizes` empty, with `lastFinalizedGameId` kept so that no recovery entry or stale game file can re-count a game after the reset. It leaves every game file untouched (including the current game's `bestAtStart` and `previousFinalization`) and shows the snackbar "Statistics reset". Cancel or Back at either step changes nothing (D-044).
 8. The header Best chip shows `max(records[size].bestScore, current score)` and updates on the same move (D-043).
 9. Stored but not displayed in v1.0: `gamesAbandoned`, `tileReach`, `currentWinStreak`, `longestWinStreak` (roadmap §6.2).
 
 **Edge cases.**
 - A game that ended `OVER`: persisted finalization happens at New game; Statistics already displays an `OVER` game through the display-time fold, and undo out of `OVER` removes it (D-198). Its bests are live from the moves themselves (D-044 rejects finalizing at game over because an undo would double-count).
-- A size switch never finalizes.
+- A size switch never finalizes the games it switches between; its load only completes an interrupted New game (F06 item 5).
 - An abandoned game with score 0 is not counted.
 - A `KEEP_PLAYING` game abandoned through New game counts as both won and abandoned (D-198).
 - A win counts by the **final** board: if the winning tile was undone before New game, the game is not a win (D-198).
 - After a reset, the current game's `bestAtStart` keeps its pre-reset value, so its new-best moment can still fire against the old best; only that one game is affected (D-198). The header Best then shows the current score.
-- A corrupt `records.json` yields empty records; game files are untouched (F07).
+- A corrupt `records.json` yields empty records; game files are untouched (F07). The recovery entries of the surviving game files are counted again at their next load, which restores those games' contributions.
+- A kill between New game's records and game writes counts the old game exactly once, whichever write landed (F06 item 5, D-044).
 
 **Settings involved.** `lastBoardSize` (initial tab).
 
@@ -542,11 +566,15 @@ The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
 | F08-AC11 | `FIX_RECORDS`, tab 5×5 | Derived | The tab is in its empty state | `StatsViewModelTest.emptyRecordIsEmptyState` |
 | F08-AC12 | `lastBoardSize = 6` | Statistics opens | Tabs read "All sizes", "3×3" … "8×8"; "6×6" is selected | `StatsScreenTest.tabsStartAtCurrentSize` |
 | F08-AC13 | `FIX_RECORDS` | The 5×5 tab is selected | "No games on 5×5 yet" and "Finished and abandoned games appear here." show; no stat rows | `StatsScreenTest.emptyStatePerTab` |
-| F08-AC14 | `FIX_RECORDS` and a 4×4 game in progress | Reset → confirm → confirm | `records.json` decodes to `Records()`; `game-4.json` is byte-identical; the snackbar "Statistics reset" shows | `StatsScreenTest.resetRequiresTwoConfirmations` |
+| F08-AC14 | `FIX_RECORDS` and a 4×4 game in progress | Reset → confirm → confirm | `records.json` decodes to `Records(lastFinalizedGameId = <the pre-reset map>)`: `sizes` empty, which is `Records()` for `FIX_RECORDS`; `game-4.json` is byte-identical; the snackbar "Statistics reset" shows | `StatsScreenTest.resetRequiresTwoConfirmations` |
 | F08-AC15 | `FIX_RECORDS` | Reset → Cancel; then Reset → confirm → Cancel; then Back at each step | `records.json` is unchanged every time | `StatsScreenTest.resetCancelAtEitherStepChangesNothing` |
 | F08-AC16 | A 4×4 game in progress with `bestAtStart 24680` | Statistics are reset | The `GameViewModel`'s current game keeps `bestAtStart 24680`, `newBestAnnounced` and its board | `GameViewModelTest.resetStatisticsLeavesCurrentGameUntouched` |
 | F08-AC17 | `FIX_RECORDS` | Golden 19 | It matches | `ScreensScreenshotTest.statisticsGolden` |
 | F08-AC18 | Empty 4×4 records; saved 4×4 game `OVER` with score 1,000 | `StatsViewModel` derives; then Undo | Games played shows 1 and the records file is unchanged; after Undo it shows 0 (D-198) | `StatsViewModelTest.overGameCountedBeforeNextNewGame` |
+| F08-AC19 | Empty records; a 4×4 `Finalization` of an `OVER` game with `gameId 7` and score 3012 | `finalize` twice; then `finalize` of an `OVER` `Finalization` with `gameId 5` | The first call counts it (`gamesPlayed 1`, `totalScore 3012`) and sets `lastFinalizedGameId["4"] = 7`. The second and third return the same `Records` instance (`===`) (D-044) | `RecordsMathTest.finalizeIsIdempotentPerGameId` |
+| F08-AC20 | `FIX_RECORDS` plus `lastFinalizedGameId = {"4": 6, "3": 5}` (the `records.json` fixture's map, QUALITY.md §1.5) | `reset`; then `nextGameId(…, 4×4, null)`, `isFinalized(…, 4×4, 6)` and `isFinalized(…, 4×4, 7)` | `sizes` empty and `lastFinalizedGameId` unchanged; `7`; `true`; `false` (D-044) | `RecordsMathTest.resetKeepsOnlyFinalizationIdentity` |
+| F08-AC21 | Case 1: empty 4×4 records with `lastFinalizedGameId["4"] = 7` and a saved `OVER` game with `gameId 7`. Case 2: empty records and a saved fresh 4×4 game (`gameId 8`) whose `previousFinalization` is an `OVER` game with `gameId 7` and score 3012 | `StatsViewModel` derives | Case 1: Games played 0 (the already finalized game is skipped). Case 2: Games played 1 and Average "3,012". `records.json` is unchanged in both cases (D-198) | `StatsViewModelTest.foldCountsEachGameIdOnce` |
+| F08-AC22 | Container A: a 4×4 `FIX_OVER_4` with `gameId 7`, then `onNewGame` (the fresh `game-4.json` carries the recovery entry) | `records.resetAll()`; `awaitIdle()`; A's scope cancelled; container B loads | B's `records.sizes` is empty and `lastFinalizedGameId["4"] == 7`: the recovery entry is not counted again after the reset (D-044) | `FinalizationRecoveryTest.resetIsNotUndoneByRecovery` |
 
 ### F09 — New-best moment
 
@@ -737,7 +765,7 @@ Expected English text for `FIX_OVER_4` (score 3012, 302 moves, 6:41, no undo, ma
 3. **Reduced** (research/04 §6.2): instant slides; alpha-only spawn; a 120 ms color crossfade instead of the pop; "+N" fades in place over 400 ms; the nudge becomes a board-outline pulse (0 → 0.6 → 0 over 300 ms); new best is a label swap plus crossfade; win and game over are 150 ms fades with a static badge; the undo crossfade stays (`fastEffects` alpha) but the undo icon does not spin (D-183); no confetti, rings, morph or rotation; the score changes instantly.
 4. **Off**: everything is instant, including overlay entries; no "+N" and no nudge.
 5. MoveTimeline offsets scale with the animator scale (D-183): a state flip at an offset waits on `MoveTimeline.awaitOffset(moveId, ms)` (or `awaitRealTime(moveId, ms)` for real-time waits), a delay before an animation is part of its spec (`tween(…, delayMillis)`, `snap(delayMillis)` or `delayedSpec(spec, delayMs)` from `game/motion/DelayedSpec.kt`), and no raw `delay()` drives anything visible. `Animatable` animations honor `MotionDurationScale` themselves (ARCHITECTURE.md §5.4, §5.8).
-6. Interruption (D-062): a new commit snaps in-flight slides and removes ghosts; spawn, pop, "+N", rings and confetti keep running; at most 3 "+N" floats are alive and the oldest is removed early. Input never waits for animation (F15).
+6. Interruption (D-062): a new commit snaps in-flight slides and removes ghosts; spawn, pop, "+N", rings and confetti keep running; at most 3 "+N" floats are alive and the oldest is removed early. An undo, new game or size switch removes every running "+N" float at once; an undo keeps a running new-best moment, while new game and size switch remove it. The header tells these apart by `HeaderUi.event` and `HeaderUi.epoch`, copied from the `BoardUi` emitted with it (ARCHITECTURE.md §4.7, §4.11; MOTION_SPEC.md §4.2). Input never waits for animation (F15).
 7. There are no infinite animations. A flash limiter allows at most 3 sheen or glow pulses per rolling 1,000 ms of real time (D-183). The win badge rotation stops after 5 s (D-063).
 8. Budget: zero tile recompositions during a slide (D-150). `BoardView` votes `Modifier.preferredFrameRate(FrameRateCategory.High)` while any board animation runs and `Default` when idle (D-183).
 9. `GameTheme` passes `gameMotionScheme(level)` to `MaterialExpressiveTheme`: `MotionScheme.expressive()` under Full; `snap()` spatial specs with expressive effects specs under Reduced; `snap()` for every spec under Off. Dialog windows and snackbars keep their platform and Material 3 opacity fades at every level; the platform disables them when the system animator scale is 0 (D-184).
@@ -767,6 +795,8 @@ Expected English text for `FIX_OVER_4` (score 3012, 302 moves, 6:41, no undo, ma
 | F13-AC11 | Full; a winning move committed with `mainClock.autoAdvance = false` | Set `autoAdvance = true` and call `composeRule.waitForIdle()` | It returns (an infinite animation or `withFrameNanos` loop would keep Compose busy and fail with `ComposeNotIdleException`), and `mainClock.currentTime` advanced by ≤ 6,000 ms | `EffectiveMotionTest.noAnimationRunsSixSecondsAfterWin` |
 | F13-AC12 | Full; one accepted move on `FIX_MID_4` | Frames sampled every 16 ms up to 400 ms | Pre-existing `TileView`s recompose 0 times after F0 | `TileRecompositionTest.noTileRecompositionDuringSlide` (also AC-PERF-1) |
 | F13-AC13 | An invalid swipe under Full, Reduced and Off | t = 48 and 160 ms | Full: board offset ≠ 0 at 48 ms and 0 by 400 ms. Reduced: outline alpha > 0 at 160 ms, no offset. Off: neither | `GameScreenTest.invalidMoveFeedbackPerMotionMode` |
+| F13-AC14 | A `GameViewModel` on a 4×4 game with a merge available, and a saved 3×3 game | Load; an accepted merging move; `onBoardPresented` and `onHeaderPresented` with its `moveId`; an undo; a new game; a switch to 3×3, in turn | After each step `header.value.deltaMoveId == board.value.moveId` and `header.value.epoch == board.value.epoch`; `header.value.event` is `Restored`, `Moved`, still `Moved` after the reports (while the board's event becomes `Restored`), then `Undo`, `NewGame` and `SizeSwitched`; the epoch is unchanged by the move and the reports and grows by 1 at each reset (D-062) | `GameViewModelTest.headerCarriesBoardEventAndEpoch` |
+| F13-AC15 | `FIX_NEW_BEST_4`, Full; LEFT committed, its "+8" float and the new-best moment running at t = 160 | In separate runs at t = 160: Undo; New game; a switch to a saved 3×3 game; Undo and RIGHT with no frame between them | On that change's F1 no float of LEFT exists. The new-best moment keeps running after Undo and is gone after New game and the size switch. RIGHT's own "+8" float is created at its t = 80 (D-062) | `ScoreMotionTest.resetsRemoveScoreFloats` (also AC-SCORE-5) |
 
 ### F14 — Haptics
 
@@ -866,7 +896,7 @@ The absence of `VIBRATE` is F27-AC1.
 | F15-AC9 | `FIX_MID_4` | A tap on the board, and a tap on an empty area of the header | No move | `SwipeInputTest.tapDoesNothing` |
 | F15-AC10 | Locale `fa` (RTL chrome) | A physical 60 dp leftward swipe | `onMove(LEFT)` | `SwipeInputTest.leftSwipeIsLeftInRtl` |
 | F15-AC11 | In turn: new-game dialog, size sheet, win card, game menu, What's new sheet | A 60 dp swipe on the board area | No move | `SwipeInputTest.ignoredWhileModalOpen` |
-| F15-AC12 | A 60 dp swipe that starts on the header (outside the board) | Released | The move applies | `SwipeInputTest.swipeAnywhereOnGameContent` |
+| F15-AC12 | A 60 dp swipe that starts on the header (outside the board), in any arrangement but SCROLL (there it scrolls, F18-AC11) | Released | The move applies | `SwipeInputTest.swipeAnywhereOnGameContent` |
 | F15-AC13 | Three swipes LEFT, UP, RIGHT within 50 ms under Full | Committed | Three outcomes apply in order, each to the state produced by the previous one; none dropped or duplicated | `InputBurstOrderingTest.threeSwipesApplyInOrder` |
 | F15-AC14 | Gesture insets 0, 24 and 40 dp on each side | `BoardGeometry` computes the side margin | 16, 24 and 40 dp | `BoardGeometryTest.sideMarginRespectsGestureInsets` |
 
@@ -975,7 +1005,7 @@ The absence of `VIBRATE` is F27-AC1.
 | F17-AC4 | `FIX_FRESH_4`, then after one move | Read the actions | "Undo" is absent at move 0 and present after the move; performing it undoes | `BoardSemanticsTest.undoActionOnlyWhenAvailable` |
 | F17-AC5 | `FIX_MID_4` | Perform "New game" | The confirmation dialog appears | `BoardSemanticsTest.newGameActionFollowsConfirmation` |
 | F17-AC6 | A move in flight under Full | Read the tree at t = 48 ms | Exactly N² cell-labelled nodes; no node comes from a `TileView` | `BoardSemanticsTest.tilesCarryNoSemantics` |
-| F17-AC7 | STACKED, THREE_COLUMN and SIDE_PANEL windows | Traversal order is read | Score group, then board, then controls | `BoardSemanticsTest.traversalOrderInAllLayoutModes` |
+| F17-AC7 | STACKED, THREE_COLUMN and SIDE_PANEL windows, and SCROLL (`w360dp-h450dp`, touch exploration on) | Traversal order is read | Score group, then board, then controls (with the pad: status line, pad, New game, More) | `BoardSemanticsTest.traversalOrderInAllLayoutModes` |
 | F17-AC8 | Touch exploration off, then turned on via `ShadowAccessibilityManager` | The next frame | Status line and direction pad are absent, then present | `TalkBackModeTest.padAndStatusLineFollowTouchExploration` |
 | F17-AC9 | Touch exploration on; a LEFT move merging 32+32 and 8+8 to score 1240 | Committed | The status line reads "Moved left. Merged 64 and 16. New 2 at row R, column C. Score 1,240.", with R and C (and the value, should the computed spawn be a 4) from the fixture's computed spawn | `TalkBackModeTest.statusLineDescribesMove` |
 | F17-AC10 | A move with merges creating 64, 32, 16, 8, 4 | Committed | "… Merged 64, 32, 16 and 2 more. …" | `TalkBackModeTest.statusLineSummarizesManyMerges` |
@@ -997,21 +1027,29 @@ The absence of `VIBRATE` is F27-AC1.
 
 **Behavior.**
 1. The manifest has no `screenOrientation`, no `configChanges`, no resizeability or aspect-ratio attributes, and `android:appCategory="game"` (D-090). Every orientation is supported.
-2. Modes, from `currentWindowAdaptiveInfoV2().windowSizeClass` (D-092), evaluated in this order (D-091):
+2. **Preferred** mode, from `currentWindowAdaptiveInfoV2().windowSizeClass` (D-092), evaluated in this order (D-091):
    1. window height < 480 dp → **THREE_COLUMN**: `[stats rail] [board] [actions rail]`;
    2. window width ≥ 840 dp → **SIDE_PANEL**: the board plus a side panel holding the title row, score cards, actions, size chip and menu, with the board vertically centered. The panel's height equals the board's and its top aligns with the board's top (D-188);
    3. otherwise → **STACKED**: header (112 dp), board, controls bar (80 dp). The chrome is measured, not fixed: header + controls + 2 × 24 dp, which is 240 dp at `fontScale` 1.0 (D-188).
-3. Board size per mode and margins follow D-075, D-188 and DESIGN_SYSTEM.md §5.2–§5.4: horizontal margins by width class and vertical margins by height class; then the fit guard, in order: if `availH − chromeH < 280 dp`, the compact 64 dp header (size chip, Score, Best; no title); then the board may shrink to `BoardFloor` = 220 dp; if 220 dp still does not fit, THREE_COLUMN. When the available width is below 280 dp, the board is `max(220 dp, availW)` and the title row is hidden.
-4. A mode change animates board and panel bounds with `animateBounds(overlaySpatial)` under Full only; otherwise it is instant (D-095).
+3. The arrangement drawn is resolved by `resolveGameLayout` (D-188, DESIGN_SYSTEM.md §5.2–§5.4) from the board each candidate would give, with D-075's margins applied per axis (horizontal by width class, vertical by height class), the 208 dp rails while the TalkBack pad is shown, and the measured chrome. The first rule that holds wins:
+   1. the preferred THREE_COLUMN or SIDE_PANEL, when its board is at least `BoardFloor` = 220 dp, its rail or panel content fits, and its board is at least STACKED's (or STACKED does not fit);
+   2. STACKED, with the full header while its board stays at least 280 dp and otherwise the COMPACT 64 dp header (size chip, Score, Best; no title; 8 dp gaps), when its board is at least 220 dp;
+   3. THREE_COLUMN, whatever the height class, when it fits;
+   4. **SCROLL**: one scrolling column with the COMPACT header, the board sized to fill the first screen (together with the status line while the pad is shown), and the rest of the chrome below the fold.
+
+   The board is never below 220 dp or above 720 dp. When the available width is below 280 dp, STACKED uses the COMPACT header and a board of `max(220 dp, availW)` while the height allows it.
+4. A live layout change that keeps the arrangement (the hint leaving, the pad showing or hiding, an Immersive toggle or an inset change) animates board and panel bounds with `animateBounds(overlaySpatial)` under Full only; otherwise it is instant. A live change that switches the arrangement is never animated: `GameLayout` composes the new arrangement anew, so the board renders its settled static frame at its new size, and a move animation in flight snaps to its end as on recreation (F07; D-095, MOTION_SPEC.md §3.16).
 5. Rotation, resize and fold recreate the activity, and the game restores `Static` (F07).
 6. Foldable posture layouts (tabletop, book) are deferred (§6.2).
-7. The first-launch hint sits above the board in STACKED, in the actions rail in THREE_COLUMN (replacing Undo and New game while shown) and in the panel in SIDE_PANEL; the snackbar host follows D-186 (D-188).
+7. The first-launch hint sits above the board in STACKED and SCROLL, in the actions rail in THREE_COLUMN (replacing Undo and New game while shown) and in the panel in SIDE_PANEL; the snackbar host follows D-186, and overlays the board in SCROLL (D-188).
+8. In SCROLL, a drag that starts on the board is a move and a drag that starts anywhere else scrolls the column (D-051, D-188). Keys, the pad and the board's accessibility actions are unchanged. When a win or game-over card composes, the column scrolls until the whole board is visible (animated under Full, instant otherwise).
 
 **Edge cases.**
-- 1000×400 dp (wide and short) is THREE_COLUMN, because the height rule is checked first.
-- A phone split-screen pane of 411×450 dp is THREE_COLUMN.
-- Height exactly 480 dp is not THREE_COLUMN; width exactly 840 dp is SIDE_PANEL.
-- A freeform desktop window resized live switches modes and keeps the game.
+- 1000×400 dp (wide and short) is THREE_COLUMN: the height rule prefers it and its rails still leave a 344 dp board (24 dp status bar), while STACKED would leave 184 dp, below the floor.
+- A phone split-screen pane of 411×450 dp prefers THREE_COLUMN, but its rails would leave a 35 dp board (−61 dp with the 208 dp TalkBack rails). It is STACKED with the COMPACT header (234 dp board), or SCROLL (274 dp) with the pad. At 360×450 the rails would leave −16 dp (−112 dp); the result is the same.
+- A window at least 840 dp wide whose STACKED board is larger is STACKED: 900×1400 gives 720 dp stacked against 516 dp with the panel.
+- Height exactly 480 dp does not prefer THREE_COLUMN; width exactly 840 dp prefers SIDE_PANEL.
+- A freeform desktop window resized live switches modes and keeps the game. The pad appearing or disappearing, or the hint leaving, can switch the arrangement without recreation (for example STACKED ↔ SCROLL at 411×450); the board then appears at its new size at once, static, with no bounds animation (item 4, F18-AC13).
 
 **Settings involved.** `motion` (bounds animation).
 
@@ -1019,13 +1057,19 @@ The absence of `VIBRATE` is F27-AC1.
 
 | AC | Given | When | Then | Test |
 |---|---|---|---|---|
-| F18-AC1 | Window sizes 360×800, 915×412, 673×841, 841×673, 800×1280, 1280×800, 1000×400, 600×479, 600×480, 839×600, 840×600 dp | `layoutModeFor(width, height)` | STACKED, THREE_COLUMN, STACKED, SIDE_PANEL, STACKED, SIDE_PANEL, THREE_COLUMN, THREE_COLUMN, STACKED, STACKED, SIDE_PANEL | `LayoutModeTest.modeTableAndBoundaries` |
-| F18-AC2 | The D-091 example windows with zero insets | Board size computed | Equals DESIGN_SYSTEM.md §5.3; 360×800 gives 328 dp; no board exceeds 720 dp | `BoardGeometryTest.boardSizePerMode` |
-| F18-AC3 | Available width 250 dp, then 200 dp | Board size computed | 250 dp with the title row hidden; then 220 dp | `BoardGeometryTest.narrowWindowFloor` |
+| F18-AC1 | Window sizes 360×800, 915×412, 673×841, 841×673, 800×1280, 1280×800, 1000×400, 600×479, 600×480, 839×600, 840×600 dp | `layoutModeFor(width, height)` (the preference) | STACKED, THREE_COLUMN, STACKED, SIDE_PANEL, STACKED, SIDE_PANEL, THREE_COLUMN, THREE_COLUMN, STACKED, STACKED, SIDE_PANEL; never SCROLL | `LayoutModeTest.modeTableAndBoundaries` |
+| F18-AC2 | The first nine windows of DESIGN_SYSTEM.md §5.3's worked examples (the D-091 windows plus 411×914, 412×915 and 360×640), with its reference insets and a nominal `ChromeMeasure` | `resolveGameLayout` | Arrangement and board equal the first nine rows of DESIGN_SYSTEM.md §5.3's worked examples; 360×800 gives STACKED, 328 dp; no board exceeds 720 dp | `BoardGeometryTest.boardSizePerMode` |
+| F18-AC3 | A window 800 dp tall with available width 250 dp, then 200 dp, zero insets, nominal chrome | `resolveGameLayout` | STACKED with the COMPACT header (no title) and a 250 dp board; then STACKED, COMPACT, 220 dp | `BoardGeometryTest.narrowWindowFloor` |
 | F18-AC4 | `FIX_MID_4` | The 7 layout goldens 29–35 (D-092 qualifiers) | They match | `LayoutScreenshotTest.qualifierMatrixGoldens` |
 | F18-AC5 | `FIX_MID_4` in `w411dp-h914dp` | Qualifiers change to `w914dp-h411dp-land` and the activity recreates | The same game state; layout mode THREE_COLUMN; every tile `Static` | `RecreateNoReplayTest.rotationKeepsStateStatic` |
 | F18-AC6 | The merged manifest | Robolectric reads `ActivityInfo` of `MainActivity` | `screenOrientation == SCREEN_ORIENTATION_UNSPECIFIED` and `configChanges == 0` | `ManifestPolicyTest.noOrientationLockOrConfigChanges` |
 | F18-AC7 | The merged manifest | Robolectric reads `ApplicationInfo` | `category == ApplicationInfo.CATEGORY_GAME` | `ManifestPolicyTest.appCategoryIsGame` |
+| F18-AC8 | Split-screen reference insets (24 dp top, 0 bottom), nominal chrome, the pad off unless stated | `resolveGameLayout` for 360×450, 360×450 with the pad, 411×450, 411×450 with the pad, 620×450, 700×450, and 900×1400 (portrait insets) | STACKED COMPACT 234 dp; SCROLL 274 dp; STACKED COMPACT 234 dp; SCROLL 274 dp; STACKED COMPACT 234 dp (THREE_COLUMN's 228 dp is smaller); THREE_COLUMN 308 dp, rail 160; STACKED 720 dp (SIDE_PANEL's 516 dp is smaller). None of the 450 dp tall windows is THREE_COLUMN except 700×450 | `BoardGeometryTest.resolvedLayoutTable` |
+| F18-AC9 | Every window from 220×220 to 1600×1600 dp in 20 dp steps, zero insets, the pad off and on, the hint off and on, nominal chrome scaled by 1.0 and 1.5 | `resolveGameLayout` | 220 ≤ board ≤ 720 dp; THREE_COLUMN or SIDE_PANEL only with a board at least STACKED's whenever STACKED fits; outside SCROLL the board plus its chrome terms fit `availH`, and the board plus rails or panel and gaps fit `availW` (a STACKED board exceeds `availW` only when `availW` < 220 dp, and then equals 220 dp); SCROLL only when STACKED, THREE_COLUMN and the preferred SIDE_PANEL all fail | `BoardGeometryTest.boardNeverBelowFloorOrOffWindow` |
+| F18-AC10 | `FIX_MID_4` at `w360dp-h450dp` and `w411dp-h450dp`, touch exploration off and on | Rendered | The board node is square, at least 220 dp, and equals `resolveGameLayout`'s board for the window and the root's insets (258 dp off, 298 dp on with zero insets). Off: no "2048" heading (COMPACT header), no scroll action, and every chrome node lies inside the root and does not intersect the board. On: the content has a vertical scroll action; the board and the status line are fully on screen; `performScrollTo()` on "Move up" and on "New game" makes each fully visible | `GameScreenTest.shortWindowsKeepBoardAndChromeOnScreen` |
+| F18-AC11 | `FIX_MID_4` at `w360dp-h360dp` (SCROLL without the pad, board 256 dp with zero insets), each case from a fresh `FIX_MID_4` at scroll 0 | A 60 dp left swipe starting on the board; a 60 dp upward drag starting on the header; a 60 dp upward swipe starting on the board | `LEFT` applies and the scroll value is unchanged; no move applies and the scroll value grows; `UP` applies and the scroll value is unchanged | `SwipeInputTest.scrollModeMovesOnlyFromBoard` |
+| F18-AC12 | `w360dp-h360dp`, Motion Off, a 4×4 game with row 1 = `10,10,1,0` (`FIX_WON_4` with that row and status `PLAYING`), the column scrolled until More is visible | The Left key is pressed and the win card composes | The scroll value places the whole board inside the viewport | `GameScreenTest.scrollModeCardBringsBoardIntoView` |
+| F18-AC13 | `FIX_FILM` at `w411dp-h450dp`, Motion Full (STACKED, 258 dp board with zero insets); LEFT committed | Touch exploration turns on at t = 48, mid-slide, so the arrangement becomes SCROLL (298 dp board); later it turns off again | The board is 258 dp until the switch and 298 dp from the first SCROLL frame, with no intermediate size, and back to 258 dp on the first STACKED frame; on the first SCROLL frame every tile is `Static` at its engine cell with scale 1 and alpha 1, no "+N" float appears then or later, and nothing is running; the move log is unchanged and no haptic fires twice (D-095) | `LayoutMotionTest.arrangementSwitchRendersSettledBoard` (also AC-LAYOUT-2) |
 
 ### F19 — Edge-to-edge and Immersive mode
 
@@ -1131,7 +1175,7 @@ The absence of `VIBRATE` is F27-AC1.
 3. Placement (D-188): above the board in STACKED; in the actions rail in THREE_COLUMN, replacing Undo and New game while shown; in the panel in SIDE_PANEL.
 4. The first accepted move (on any size) or "Got it" dismisses it and sets `onboardingDone = true`. It never shows again.
 5. It is not modal: swipes work while it is visible, and invalid moves do not dismiss it.
-6. It is a polite live region, read once. Under Full it exits with shrink + fade and the board grows back with `animateBounds`; otherwise it disappears instantly.
+6. It is a polite live region, read once. Under Full it exits with shrink + fade and, while the arrangement stays the same, the board grows back with `animateBounds`; otherwise it disappears instantly. If its exit switches the arrangement, the board appears at its new size at once, static (F18 item 4).
 7. It replaces the legacy "Long click to toggle fullscreen" toast, which appeared on every `onCreate` (S5). The app shows no toast at all.
 
 **Edge cases.**
@@ -1196,7 +1240,7 @@ The absence of `VIBRATE` is F27-AC1.
 **User story.** As a returning player who just updated, I want a short, dismissible list of what changed, and never a changelog popup on a fresh install.
 
 **Behavior.**
-1. `settings.lastSeenVersionCode` (default 0) and the installed versionCode (read from `PackageManager`, ARCHITECTURE.md §4.2) feed `decideWhatsNew` (ARCHITECTURE.md §4.13), evaluated once after settings load:
+1. `settings.lastSeenVersionCode` (default 0) and the current versionCode (`AppContainer.versionCode`, the compile-time `BuildConfig.VERSION_CODE`; no `PackageManager` lookup, ARCHITECTURE.md §4.2, D-134) feed `decideWhatsNew` (ARCHITECTURE.md §4.13), evaluated once after settings load:
    - `lastSeen == 0` (fresh install): store the current code; show nothing;
    - `lastSeen < current`: show the entries for every versionCode in `(lastSeen, current]`, oldest first, and store the current code **immediately**, before the sheet is visible;
    - `lastSeen ≥ current`: show nothing and write nothing, so a downgrade keeps the higher value.
@@ -1231,7 +1275,7 @@ The absence of `VIBRATE` is F27-AC1.
 **User story.** As a curious player, I want to see the version, what changed, where the source lives, who built the game before me, and how my data is handled.
 
 **Behavior** (DESIGN_SYSTEM.md §6.11).
-1. Header: the app icon composed from its layers at 72 dp, "2048", and "Version 3.0.0 (30000)" from `PackageManager` (BuildConfig stays off, D-134).
+1. Header: the app icon composed from its layers at 72 dp, "2048", and "Version 3.0.0 (30000)", formatted from the compile-time `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE` (no `PackageManager`, no I/O in composition; D-134).
 2. What's new: every `CHANGELOG` entry, newest version first.
 3. Source code row: the supporting text "github.com/clayboicardi/2048-android-modern-refresh" opens `ACTION_VIEW` on `https://github.com/clayboicardi/2048-android-modern-refresh`. On `ActivityNotFoundException` the snackbar "No app can open this link" shows (D-009).
 4. Privacy: the D-123 text (F27).
@@ -1405,7 +1449,7 @@ The absence of `VIBRATE` is F27-AC1.
 
 **Behavior.**
 1. `applicationId` = `namespace` = `com.clayboicardi.game2048`; launcher label "2048", non-translatable. Debug uses the `.debug` suffix and the label "2048 Debug", so both install side by side (D-110).
-2. `versionName = "3.0.0"`, `versionCode = 30000`, both literals (D-130).
+2. `versionName = "3.0.0"`, `versionCode = 30000`, both literals (D-130). The app reads them only as the generated `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE`, a class that holds AGP's standard fields and nothing else (no `buildConfigField`). No main source calls `PackageManager` for the version, so the startup path (`Application.onCreate` → `AppContainer.create`) makes no binder call for it (D-134, ARCHITECTURE.md §4.2).
 3. Adaptive icon (D-111): background `#E6A11A`; foreground = the 4 legacy glyph paths in `#3A2900` (6.33:1), scaled 1.411 and translated 16.667 in a 108-unit viewport; `<monochrome>` = the same paths; a vector fallback for API 24–25.
 4. Splash (D-112): `core-splashscreen` 1.2.0, theme `Theme.Game2048.Starting`: background `#FAF8EF` (`#1B1916` in `values-night`), animated icon `@drawable/ic_launcher_foreground`, icon background `#E6A11A`, post-splash theme `Theme.Game2048`. It is held until state loads, at most 1,000 ms (F07).
 5. Both build types are signed with the committed, intentionally public CI sideload key, so every CI APK updates the previous one in place. The key is never used for stores (D-131).
@@ -1432,6 +1476,8 @@ The absence of `VIBRATE` is F27-AC1.
 | F30-AC7 | `Theme.Game2048.Starting` under `notnight` and `night` | Its attributes are resolved | `windowSplashScreenBackground` `#FAF8EF` / `#1B1916`; `windowSplashScreenIconBackgroundColor` `#E6A11A` | `ManifestPolicyTest.splashThemeUsesIdentityColors` |
 | F30-AC8 | `fastlane/metadata/android/` | `scripts/check-metadata.sh` | The D-190 listing assertions pass: exactly D-113's 22 directories; `title.txt` equals `2048` (≤ 30 characters); short ≤ 80, full ≤ 4000, `changelogs/30000.txt` ≤ 500 characters; no BOM or CR and exactly one trailing newline; non-en-US texts differ from en-US; every full description contains `com.clayboicardi.game2048` and the repository URL; native-script letters for ru, uk, sr, el, fa and ko; no non-Latin digits; none of D-114's deny-words (`\bport\b`, `WebView`, `long touch`, case-insensitive); no listing file contains `com.uberspot.a2048` | Gate: check-metadata.sh `check_store_listing` |
 | F30-AC9 | `en-US/images/` | `scripts/check-metadata.sh` | Exactly the D-115 image set at its exact pixel sizes; 8-bit PNGs; color type 2 for every screenshot and the feature graphic, 2 or 6 for `icon.png` (D-190) | Gate: check-metadata.sh `check_store_images` |
+| F30-AC10 | A `ContextWrapper` over the Robolectric application whose `getPackageManager()` throws `AssertionError` and whose `getApplicationContext()` returns the wrapper | `AppContainer.create(wrapper)` | It returns without throwing; `versionCode == 30000` | `AppContainerTest.createDoesNotTouchPackageManager` |
+| F30-AC11 | The debug unit-test classpath | Reflect the non-synthetic fields of `BuildConfig` | Exactly `DEBUG`, `APPLICATION_ID`, `BUILD_TYPE`, `VERSION_CODE`, `VERSION_NAME`; `VERSION_CODE == 30000`; `VERSION_NAME == "3.0.0"` | `AppContainerTest.versionComesFromBuildConfigStandardFields` |
 
 ---
 
@@ -1504,7 +1550,7 @@ Row 11 of D-006, **App language**, is not stored by the app (§2.2).
 
 ## 3. Statistics catalog
 
-Statistics are kept **per board size** in `records.json` (`Records.sizes`, keys `"3"` … `"8"`, D-042). A missing key reads as an all-zero `SizeRecord`. Any other key is preserved on write but ignored by v1.0 (no tab, not aggregated), so a later version can add mode-qualified buckets such as `"daily:4"` without older versions folding them into classic statistics (§6.1 H8, F08-AC7). All arithmetic lives in the pure `RecordsMath` (ARCHITECTURE.md §4.9): `progress` on every accepted move, `finalize` when New game starts on that size (and, without persisting, for the display-time fold of a saved `OVER` game, D-198), `aggregate` for the "All sizes" tab.
+Statistics are kept **per board size** in `records.json` (`Records.sizes`, keys `"3"` … `"8"`, D-042). A missing key reads as an all-zero `SizeRecord`. Any other key is preserved on write but ignored by v1.0 (no tab, not aggregated), so a later version can add mode-qualified buckets such as `"daily:4"` without older versions folding them into classic statistics (§6.1 H8, F08-AC7). All arithmetic lives in the pure `RecordsMath` (ARCHITECTURE.md §4.9): `progress` on every accepted move, `finalize` when New game starts on that size, and in its load-time recovery (idempotent per `gameId`, D-044; and, without persisting, for the display-time fold through `displayed`, D-198), `reset` for Reset statistics, `aggregate` for the "All sizes" tab.
 
 ### 3.1 Stored per-size fields (`SizeRecord`)
 
@@ -1523,6 +1569,8 @@ Statistics are kept **per board size** in `records.json` (`Records.sizes`, keys 
 | `tileReach` | `List<Int>` | Index k = number of finalized games whose final max exponent is ≥ k, for k ≥ 1. Index 0 is unused (always 0). The list grows to the largest exponent seen + 1 | `finalize` | Final board | No (v1.x histogram) | — | Element-wise sum |
 | `currentWinStreak` | `Int` | Consecutive wins among this size's finalized games, ending at the latest one; a finalized non-win resets it to 0 (D-198) | `finalize` | — | No (v1.x) | — | Not aggregated |
 | `longestWinStreak` | `Int` | Maximum `currentWinStreak` ever reached | `finalize` | — | No (v1.x) | — | Not aggregated |
+
+Beside `sizes`, `records.json` holds `lastFinalizedGameId: Map<String, Long>` (same keys), the highest `gameId` finalized on each size (D-044). It is bookkeeping, not a statistic: it is never displayed, never aggregated, never part of the empty-state test, and Reset statistics keeps it.
 
 ### 3.2 Derived statistics
 
@@ -1549,6 +1597,8 @@ Worked values for `FIX_RECORDS` are in F08-AC9 and F08-AC10.
 | `bestAtStart` | `bestScore` when the game began | Not shown; drives F09 |
 | `newBestAnnounced` | Whether the new-best moment fired | NEW BEST chip state |
 | `status`, `keepGoingAtMove` | D-036 | Cards |
+| `gameId` | Finalization identity: ≥ 1, strictly increasing per size (D-044) | Not shown |
+| `previousFinalization` | Recovery entry: the replaced game's `gameId`, `status`, `score`, `moveCount`, `elapsedMs`, `undoCount` and `maxExp`, present only when that game was counted (D-044) | Not shown; counted at load if the records lack it |
 
 A live moves/time HUD is v1.x (§6.2).
 
@@ -1560,10 +1610,11 @@ A live moves/time HUD is v1.x (§6.2).
 | Invalid or blocked move | — | — | — | — |
 | Undo | Write | — | — | — |
 | Keep going | Write | — | — | — |
-| New game | Write (fresh game) | — | `finalize` if the old game is `OVER` or `score > 0` | — |
+| New game | Write (fresh game, with `previousFinalization` when the old game was counted) | — | `finalize` if the old game is `OVER` or `score > 0` (sets `lastFinalizedGameId`; no write when already finalized) | — |
+| Game load (start size, size switch) | Write a fresh game only when R2 completes an interrupted New game | — | R1: `finalize` of a `previousFinalization` not yet counted (D-044) | — |
 | Size switch | Write the old size; write the new size if a fresh game is created | — | — | `lastBoardSize` |
 | `ON_PAUSE` / leaving Game | Write (elapsed folded) | — | — | — |
-| Reset statistics | — | — | `Records()` | — |
+| Reset statistics | — | — | `RecordsMath.reset`: `sizes` empty, `lastFinalizedGameId` kept | — |
 | A settings change | — | — | — | Write |
 | What's new evaluation | — | — | — | `lastSeenVersionCode` (fresh install or update) |
 
@@ -1573,7 +1624,7 @@ A live moves/time HUD is v1.x (§6.2).
 2. `bestScoreNoUndo` counts only what a game reached before its first undo.
 3. Finalization uses the final state: final score, final `moveCount` (undone moves excluded), final board (for wins and `tileReach`), the full `undoCount`, and `elapsedMs` (undo never rewinds time).
 4. The new-best moment fires at most once per game, even if an undo moves the score back below `bestAtStart` (F09).
-5. A game that ended `OVER` is persisted into the records only when New game starts on its size; Statistics displays it earlier through the display-time fold, and an undo before New game simply continues the game and removes it from the display, so nothing is double-counted (D-044 rationale, D-198).
+5. A game that ended `OVER` is persisted into the records only when New game starts on its size; Statistics displays it earlier through the display-time fold, and an undo before New game simply continues the game and removes it from the display, so nothing is double-counted (D-044 rationale, D-198). The fold skips a game whose `gameId` is already finalized, so a game restored after its records write is not shown twice (D-044).
 
 ---
 
@@ -1906,18 +1957,19 @@ Every test class named in §1, plus the motion classes of MOTION_SPEC.md §8.5 a
 | `EngineImportsGuardTest` | Engine | `EngineImportsGuardTest.kt` | M1 | F01-AC19 |
 | `EnginePerformanceTest` | Engine | `EnginePerformanceTest.kt` | M1 | F01-AC20 |
 | `PersistenceFixturesTest` | App JVM | `data/` | M2 | F07-AC14, F07-AC15 |
-| `PersistenceCorruptionTest` | App JVM | `data/` | M2 | F02-AC12, F07-AC16, F07-AC17 |
+| `PersistenceCorruptionTest` | App JVM | `data/` | M2 | F02-AC12, F07-AC16, F07-AC17, F07-AC23 |
 | `PersistenceBudgetTest` | App JVM | `data/` | M2 | F07-AC18, F07-AC19 |
 | `ConflatedWriterTest` | App JVM | `data/` | M2 | F07-AC5, F07-AC6 |
 | `SettingsRepositoryTest` | App JVM | `data/` | M2 | F02-AC11, F11-AC10, F11-AC11 |
-| `RecordsMathTest` | App JVM | `data/` | M2 | F08-AC1…AC7 |
+| `RecordsMathTest` | App JVM | `data/` | M2 | F08-AC1…AC7, F08-AC19, F08-AC20 |
 | `LongGameGeneratorTest` | App JVM | `data/` | M2 | F07-AC22 |
 | `ProcessDeathRestoreTest` | App JVM | root | M2 | F04-AC10, F05-AC15, F05-AC16, F07-AC1 |
-| `GameViewModelTest` | App JVM | `game/` | M2 | F01-AC21, F01-AC22, F02-AC3…AC6, F03-AC8…AC10, F03-AC15, F04-AC1, F04-AC9, F04-AC11, F05-AC8, F06-AC7…AC9, F07-AC2, F07-AC3, F07-AC10, F08-AC8, F08-AC16, F09-AC1…AC4, F22-AC1…AC4, F22-AC10 |
+| `FinalizationRecoveryTest` | App JVM | root | M2 | F06-AC14…AC19, F08-AC22 |
+| `GameViewModelTest` | App JVM | `game/` | M2 | F01-AC21, F01-AC22, F02-AC3…AC6, F03-AC8…AC10, F03-AC15, F04-AC1, F04-AC9, F04-AC11, F05-AC8, F06-AC7…AC9, F06-AC13, F07-AC2, F07-AC3, F07-AC10, F07-AC24, F08-AC8, F08-AC16, F09-AC1…AC4, F13-AC14, F22-AC1…AC4, F22-AC10 |
 | `InputBurstOrderingTest` | App JVM | `game/` | M2 | F15-AC13 |
 | `PlayClockTest` | App JVM | `game/` | M2 | F04-AC12, F05-AC14, F07-AC4 |
-| `BoardPresenterTest` | App JVM | `game/board/` | M2 | F05-AC9, F06-AC11 |
-| `BoardGeometryTest` | App JVM | `game/board/` | M3–M4 | F02-AC8, F15-AC14 (M3); F18-AC2, F18-AC3 (M4) |
+| `BoardPresenterTest` | App JVM | `game/board/` | M2 | F05-AC9, F06-AC11, F07-AC25 |
+| `BoardGeometryTest` | App JVM | `game/board/` | M3–M4 | F02-AC8, F15-AC14 (M3); F18-AC2, F18-AC3, F18-AC8, F18-AC9 (M4) |
 | `TileLabelsTest` | App JVM | `game/board/` | M3 | F02-AC9, F02-AC10 |
 | `SwipeClassifierTest` | App JVM | `game/input/` | M3 | F15-AC1, F15-AC2 |
 | `ShareTextTest` | App JVM | `game/share/` | M3 | F10-AC1…AC5 |
@@ -1927,23 +1979,24 @@ Every test class named in §1, plus the motion classes of MOTION_SPEC.md §8.5 a
 | `WhatsNewTest` | App JVM | `about/` | M4 | F24-AC1…AC6 |
 | `LicensesCoverageTest` | App JVM | `about/` | M4 | F26-AC1 |
 | `PaletteContrastTest` | App JVM | `ui/theme/` | M4 | F12-AC3, F12-AC4 |
-| `StatsViewModelTest` | App JVM | `stats/` | M4 | F08-AC9…AC11, F08-AC18 |
+| `StatsViewModelTest` | App JVM | `stats/` | M4 | F08-AC9…AC11, F08-AC18, F08-AC21 |
 | `LayoutModeTest` | App JVM | `ui/components/` | M4 | F18-AC1 |
 | `LaunchSmokeTest` | Robolectric `@Config(sdk = [24, 37])` | root | M0, M3 | F30-AC5 (M0; its assertion switches to the Game content in M3); F21-AC1, F22-AC7 (M3) |
 | `SplashGateTest` | Robolectric | root | M2–M3 | F07-AC11, F07-AC12 (M2); F07-AC13 (M3) |
-| `RecreateNoReplayTest` | Robolectric | root | M2–M4 | F07-AC7, F07-AC8 (M2); F07-AC9 (M3); F18-AC5 (M4) |
+| `RecreateNoReplayTest` | Robolectric | root | M2–M4 | F07-AC7, F07-AC8 (M2); F07-AC9, F07-AC26…AC30 (M3 part 2); F18-AC5 (M4) |
 | `BackOnRootTest` | Robolectric | root | M3 | F21-AC3 (also AC-BACK-2), F21-AC4…AC9 |
 | `BackupRulesTest` | Robolectric | root | M2 | F29-AC1…AC3 |
+| `AppContainerTest` | Robolectric | `di/` | M2 | F30-AC10, F30-AC11 |
 | `ManifestPolicyTest` | Robolectric | root | M4 | F16-AC9, F18-AC6, F18-AC7, F27-AC6, F28-AC10, F30-AC6, F30-AC7; L-AC12 `legacyLauncherIconOnApi24` |
 | `ImmersiveModeTest` | Robolectric | root | M4 | F19-AC1…AC5 |
 | `KeepScreenOnTest` | Robolectric | root | M4 | F20-AC1…AC5 |
 | `LocalizationTest` | Robolectric | root | M5 | F24-AC8, F28-AC2…AC6 |
 | `TranslationQualityTest` | Robolectric | root | M5 | L-AC4: the 9 methods of L10N_STORE_LEGAL.md §1.9 (class KDoc `/** L-AC4 */`) |
-| `GameScreenTest` | Robolectric | `game/` | M3–M4 | M3: F02-AC7, F03-AC11…AC14, F03-AC16, F03-AC19, F04-AC2…AC7, F05-AC10…AC13, F06-AC1…AC6, F06-AC10, F09-AC5, F09-AC6, F10-AC6…AC8, F13-AC9, F13-AC10, F13-AC13, F21-AC2, F21-AC10. M4: F03-AC18, F04-AC14, F05-AC17, F17-AC15, F17-AC21, F22-AC5, F22-AC6, F22-AC9, F24-AC7 |
+| `GameScreenTest` | Robolectric | `game/` | M3–M4 | M3: F02-AC7, F03-AC11…AC14, F03-AC16, F03-AC19, F04-AC2…AC7, F05-AC10…AC13, F06-AC1…AC6, F06-AC10, F09-AC5, F09-AC6, F10-AC6…AC8, F13-AC9, F13-AC10, F13-AC13, F21-AC2, F21-AC10. M4: F03-AC18, F04-AC14, F05-AC17, F17-AC15, F17-AC21, F18-AC10, F18-AC12, F22-AC5, F22-AC6, F22-AC9, F24-AC7 |
 | `TalkBackModeTest` | Robolectric | `game/` | M4 | F17-AC8…AC14, F17-AC19, F17-AC20 |
 | `TileRecompositionTest` | Robolectric | `game/board/` | M3 | F13-AC12 (also AC-PERF-1) |
 | `BoardSemanticsTest` | Robolectric | `game/board/` | M3–M4 | F17-AC1…AC6 (M3); F17-AC7 (M4) |
-| `SwipeInputTest` | Robolectric | `game/input/` | M3–M4 | F15-AC3…AC12, F19-AC6 (M3; F15-AC11's What's new sheet case is added in M4 with the sheet) |
+| `SwipeInputTest` | Robolectric | `game/input/` | M3–M4 | F15-AC3…AC12, F19-AC6 (M3; F15-AC11's What's new sheet case is added in M4 with the sheet); F18-AC11 (M4) |
 | `KeyboardInputTest` | Robolectric | `game/input/` | M3–M4 | F16-AC1…AC8, F16-AC10, F16-AC11 (M3; F16-AC6's What's new sheet case is added in M4 with the sheet) |
 | `HapticsMapTest` | Robolectric | `game/feedback/` | M2–M3 | F14-AC1 (M2); F14-AC2…AC7, F14-AC9 and MOTION_SPEC.md §9.11 (AC-HAP-*, except AC-HAP-4) (M3) |
 | `SettingsScreenTest` | Robolectric | `settings/` | M4 | F11-AC1…AC9, F14-AC8 (also AC-HAP-4); L-AC6 `appLanguageSummaryDefaultsToSystem`; AC-SCALE-4 |
@@ -1963,13 +2016,13 @@ Every test class named in §1, plus the motion classes of MOTION_SPEC.md §8.5 a
 | `MoveTimelineTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §3.1, §3.2; §9.1 (AC-MOVE-*) |
 | `MergePopTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §3.3 (tiers, sheen, glow pulse, flash limiter, cap); §9.1 (AC-MOVE-*) |
 | `SpawnDelayTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §3.1 delay table, I1 on 8×8; §9.1 (AC-MOVE-*) |
-| `ScoreMotionTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.2 (AC-SCORE-*) |
+| `ScoreMotionTest` | Robolectric | `motion/` | M3 | F13-AC15 (also AC-SCORE-5); MOTION_SPEC.md §9.2 (AC-SCORE-*) |
 | `NewBestTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.3 (AC-BEST-*) |
 | `InvalidNudgeTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.4 (AC-NUDGE-*) |
 | `NewGameCascadeTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.5 (AC-NEW-*) |
 | `UndoCrossfadeTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.5 (AC-UNDO-*) |
 | `SizeSwitchTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.5 (AC-SIZE-*) |
-| `RestoreNoMotionTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.9 AC-RESTORE-1 |
+| `RestoreNoMotionTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.9 AC-RESTORE-1, AC-RESTORE-2: board cases in M3 part 1; the card cases (AC-RESTORE-1's card end state, AC-RESTORE-2's `FIX_WIN_PRE_4` case) are added in part 2 with `OverlayController` |
 | `InterruptionTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.12 AC-CONS-2 |
 | `ConsistencyPropertyTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.12 AC-CONS-1 |
 | `FinalFrameEqualsStaticTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.12 AC-CONS-3 |
@@ -1984,7 +2037,7 @@ Every test class named in §1, plus the motion classes of MOTION_SPEC.md §8.5 a
 | `MotionOffTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.10 (AC-OFF-*): board methods in M3 part 1, overlay methods in part 2 |
 | `AnimatorScaleTest` | Robolectric | `motion/` | M3 | MOTION_SPEC.md §9.10 (AC-SCALE-0, AC-SCALE-2, AC-SCALE-3): board methods in M3 part 1, overlay methods in part 2 |
 | `ThemeCrossfadeTest` | Robolectric | `motion/` | M4 | MOTION_SPEC.md §9.9 AC-THEME-1 |
-| `LayoutMotionTest` | Robolectric | `motion/` | M4 | MOTION_SPEC.md §9.9 AC-LAYOUT-1 |
+| `LayoutMotionTest` | Robolectric | `motion/` | M4 | F18-AC13 (also AC-LAYOUT-2); MOTION_SPEC.md §9.9 AC-LAYOUT-1 |
 
 Tests with no AC of their own (infrastructure):
 - `DirectionTest` (engine, M0 skeleton);
@@ -2008,6 +2061,7 @@ The remaining Robolectric observability risk and its fallback are OI-F13 (manife
 
 Seams this file relies on (all pure or test-only, none changes production behavior):
 - `layoutModeFor(widthDp: Int, heightDp: Int): LayoutMode` beside `rememberLayoutMode()` in `ui/components/WindowMode.kt` (F18-AC1);
+- the pure `resolveGameLayout(window: LayoutWindow, chrome: ChromeMeasure): GameLayoutSpec` in `game/board/BoardGeometry.kt`, driven by a private nominal `ChromeMeasure` inside `BoardGeometryTest` (F18-AC2, AC3, AC8, AC9);
 - `ShareStrings`, the pre-resolved templates passed to `ShareText.build` (F10);
 - `TileLabels.fullDecimal(exp)`, exact through `BigInteger` above exponent 62 (F02, F17);
 - the internal `slide` of `engine/Slide.kt`, visible to engine tests in the same module (F01-AC1);

@@ -447,7 +447,7 @@ Rules:
 | Tile labels, scores, "+N", "2048"/"256" arguments | Game | Game numerals, `Long.toString()` (D-103) |
 | "–" | Loading chips; average score with 0 games | Typographic placeholder (`DESIGN_SYSTEM.md` §6.1, §6.9) |
 | "m:ss", "h:mm:ss" | Game-over card, Statistics, share text | `formatElapsed`, `Locale.ROOT` (§1.10) |
-| "3.0.0", "2.2 (25)" | About | `versionName` from `PackageManager`; legacy data |
+| "3.0.0", "2.2 (25)" | About | `BuildConfig.VERSION_NAME` (compile-time, D-134); legacy data |
 | Credits and legacy history rows | About | English static data in `res/raw/legacy_history.json` (D-124, §4.5) |
 | License entry names, copyright lines and texts | Licenses | `res/raw/` data (D-122, §4.4) |
 | Share-text emoji | Share | Code table (`FEATURES.md` F10) |
@@ -1092,7 +1092,7 @@ No F-Droid submission is part of this overhaul (D-004 item 10; D-133 forbids tag
 | No encrypted dependency-info block | `dependenciesInfo { includeInApk = false; includeInBundle = false }` | D-134 |
 | Metadata in-repo | `fastlane/metadata/android/<locale>/`, with `title.txt`, `changelogs/<versionCode>.txt` and `images/` | §2.1, research/01 §6 |
 | Parseable versions | `versionCode = 30000` and `versionName = "3.0.0"` as literals | D-130 |
-| Reproducible-build hygiene | One JDK (21); no timestamps or BuildConfig; `vcsInfo` default; R8 from AGP 9.4.1. Watch `assets/dexopt/baseline.prof` and resource-shrinker order (research/06 §4.3) | D-134 |
+| Reproducible-build hygiene | One JDK (21); no timestamps; BuildConfig with AGP's standard fields only (no `buildConfigField`); `vcsInfo` default; R8 from AGP 9.4.1. Watch `assets/dexopt/baseline.prof` and resource-shrinker order (research/06 §4.3) | D-134 |
 
 Items for a later submission (not done now):
 1. A `v3.0.0` tag on the release commit, created when the owner decides on releases (D-133).
