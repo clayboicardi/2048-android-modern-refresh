@@ -1,0 +1,142 @@
+# The only workflow of this repository (D-151, as refined by D-177). Design and rationale:
+# docs/modernization/QUALITY.md §5; merge protocol: QUALITY.md §6.
+#
+# Bootstrap behaviour. Until execution milestone M0 lands, the tree holds the legacy Groovy build
+# (not buildable) plus the plan documents. The "Detect" step then sets present=false and every
+# later step is skipped, so the job is a green no-op. From M0 on, settings.gradle.kts exists and
+# the job runs scripts/verify.sh, the same gate the executor runs locally (D-140, D-163). Once the
+# legacy build.gradle is deleted (M0), a missing settings.gradle.kts fails the job instead.
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.console=plain
+  ANDROID_BUILD_TOOLS: '37.0.0'
+  # Artifacts are named after the PR head commit, not the synthetic merge commit.
+  HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest moves to Ubuntu 26.04 (research/06 §0, §3.3)
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect Gradle Kotlin-DSL project
+        id: project
+        run: |
+          if [[ -f settings.gradle.kts ]]; then
+            if [[ ! -x scripts/verify.sh ]]; then
+              echo "::error file=scripts/verify.sh::settings.gradle.kts exists but scripts/verify.sh is missing or not executable (D-140, D-151)"
+              exit 1
+            fi
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "Gradle Kotlin-DSL project found: running scripts/verify.sh." >> "$GITHUB_STEP_SUMMARY"
+          elif [[ -f build.gradle && ! -e gradle/libs.versions.toml && ! -e app/build.gradle.kts && ! -e core/engine/build.gradle.kts ]]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            msg="No settings.gradle.kts: plan-only tree with the legacy Groovy build. Build and verify steps are skipped until milestone M0 lands."
+            echo "::notice::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error file=settings.gradle.kts::settings.gradle.kts is missing although the Kotlin-DSL build exists or the legacy build.gradle is gone. The gate is never skipped after M0."
+            exit 1
+          fi
+
+      - name: Set up JDK 21
+        if: steps.project.outputs.present == 'true'
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle (validates every wrapper JAR checksum)
+        if: steps.project.outputs.present == 'true'
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic # MIT-licensed provider (D-151)
+          cache-read-only: false # PR runs also save, so later pushes to the same PR start warm
+          validate-wrappers: true
+
+      - name: Cache Robolectric android-all jars
+        if: steps.project.outputs.present == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'app/src/test/resources/robolectric.properties') }}
+          restore-keys: robolectric-${{ runner.os }}-
+
+      - name: Android SDK packages (idempotent)
+        if: steps.project.outputs.present == 'true'
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" --install "platforms;android-37.0" "build-tools;36.0.0" "build-tools;37.0.0" > /dev/null
+
+      - name: Verify (scripts/verify.sh, identical to local)
+        if: steps.project.outputs.present == 'true'
+        run: ./scripts/verify.sh
+
+      - name: Upload APKs
+        if: ${{ !cancelled() && steps.project.outputs.present == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: game2048-apks-${{ env.HEAD_SHA }}
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: warn
+          retention-days: 30
+          overwrite: true
+
+      - name: Upload reports
+        if: ${{ !cancelled() && steps.project.outputs.present == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: game2048-reports-${{ env.HEAD_SHA }}
+          path: |
+            **/build/reports/
+            **/build/test-results/
+            app/build/outputs/roborazzi/
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
+      - name: Upload screenshot diffs (failed runs only)
+        if: ${{ failure() && steps.project.outputs.present == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: game2048-screenshot-diffs-${{ env.HEAD_SHA }}
+          path: |
+            app/build/outputs/roborazzi/
+            app/build/test-results/roborazzi/
+            app/build/reports/roborazzi/
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
+      - name: Reproducibility probe (report-only; manual runs)
+        if: ${{ github.event_name == 'workflow_dispatch' && steps.project.outputs.present == 'true' && hashFiles('scripts/repro-probe.sh') != '' }}
+        continue-on-error: true
+        run: ./scripts/repro-probe.sh
