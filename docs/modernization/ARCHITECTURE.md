@@ -1553,6 +1553,7 @@ class ConflatedWriter<T : Any>(
     private val versions = AtomicLong(0)
     @Volatile private var lastFailed: Pending<T>? = null   // the latest attempt when it threw; null after a write returns normally
     val failures = AtomicInteger(0)              // test hook; never shown in UI, never logged
+    val submissions: Long get() = versions.get() // test hook (D-221): every submit, conflated values and retries included
 
     init {
         scope.launch {
@@ -1582,6 +1583,7 @@ class ConflatedWriter<T : Any>(
 
 - `collect` (not `collectLatest`) means a write in progress always finishes; while it runs, newer submissions replace each other and only the latest is written next (D-024).
 - An `IOException` (disk full, I/O error) is swallowed: the in-memory state stays authoritative, and the next submission rewrites the whole document (§9.3). There is no retry timer; `retryFailed()` is the one explicit retry, called by `RecordsRepository` at the points named in §4.9.
+- **Counting saves** (D-221). `submissions` counts every `submit`, including the values a newer one replaced before the collector ran. Under a test dispatcher, two saves in one synchronous action reach the file as one `updateData`, so tests that assert a number of saves read `submissions` (through the repositories, §4.6), never a count of file writes.
 - **Durable success** (D-044). A write is durable when `write` returned normally: DataStore's `updateData` returns only after it has written the temp file and renamed it over the old one, so the file then holds that value. The writer reports exactly those values through `onWritten`, in write order; a throwing write reports nothing. Because writes are whole documents applied in submission order, the latest reported value is what the file holds.
 
 `data/DocumentHolder.kt` gives settings and records an in-memory source of truth:
@@ -1628,6 +1630,7 @@ class DocumentHolder<T : Any>(
 
     suspend fun awaitLoaded(): T { loaded.first { it }; return state.value }
     suspend fun awaitIdle() = writer.awaitIdle()
+    val submissions: Long get() = writer.submissions   // test hook (D-221)
 }
 ```
 
@@ -1637,9 +1640,9 @@ Every state change submits, so the value a failed write tried to store is `state
 
 | Repository | File(s) | API | Notes |
 |---|---|---|---|
-| `SettingsRepository` | `settings.json` | `state: StateFlow<Settings>`, `loaded`, `awaitLoaded()`, `update((Settings) -> Settings)`, `awaitIdle()` | Wraps a `DocumentHolder`. `lastBoardSize` outside 3..8 is coerced to 4 on read |
-| `RecordsRepository` | `records.json` | `state: StateFlow<Records>`, `awaitLoaded()`, `onProgress(game: SavedGame)`, `finalize(game: SavedGame)`, `recover(game: SavedGame)`, `isFinalized(game: SavedGame): Boolean`, `isDurable(f: Finalization): Boolean`, `retryFailedWrite()`, `nextGameId(size, replaced: SavedGame?): Long`, `resetAll()`, `best(size): Long`, `awaitIdle()` | Wraps a `DocumentHolder`. All arithmetic is in the pure `RecordsMath` (§4.9). `onProgress` writes only when a best increases (D-043). `finalize(game)` = `update { RecordsMath.finalize(it, game.toFinalization()) }`; `recover(game)` = one `update { r -> game.pendingFinalizations.fold(r, RecordsMath::finalize) }`, in list order (ascending `gameId`); `isDurable(f)` = `RecordsMath.isFinalized(holder.durable.value, f.size, f.gameId)`: the records file is known to hold `f` (§4.5); `retryFailedWrite()` = `holder.retryFailed()`; `resetAll()` = `update(RecordsMath::reset)`. Because `DocumentHolder.update` submits only a changed value, a finalization that is already recorded submits no write (D-044) |
-| `GameRepository` | `game-N.json` | `suspend load(size): SavedGame?`, `save(game: SavedGame)`, `suspend peek(size): SavedGame?`, `suspend awaitIdle()` | One `ConflatedWriter` per size, created lazily. Keeps `latest[size]`, the last submitted value, so `load`/`peek` of a size with a pending write return what was submitted, not the older file. `load` returns `null` for the `size == 0` sentinel |
+| `SettingsRepository` | `settings.json` | `state: StateFlow<Settings>`, `loaded`, `awaitLoaded()`, `update((Settings) -> Settings)`, `awaitIdle()`, `submissions` (test hook, D-221) | Wraps a `DocumentHolder`. `lastBoardSize` outside 3..8 is coerced to 4 on read |
+| `RecordsRepository` | `records.json` | `state: StateFlow<Records>`, `awaitLoaded()`, `onProgress(game: SavedGame)`, `finalize(game: SavedGame)`, `recover(game: SavedGame)`, `isFinalized(game: SavedGame): Boolean`, `isDurable(f: Finalization): Boolean`, `retryFailedWrite()`, `nextGameId(size, replaced: SavedGame?): Long`, `resetAll()`, `best(size): Long`, `awaitIdle()`, `submissions` (test hook, D-221) | Wraps a `DocumentHolder`. All arithmetic is in the pure `RecordsMath` (§4.9). `onProgress` writes only when a best increases (D-043). `finalize(game)` = `update { RecordsMath.finalize(it, game.toFinalization()) }`; `recover(game)` = one `update { r -> game.pendingFinalizations.fold(r, RecordsMath::finalize) }`, in list order (ascending `gameId`); `isDurable(f)` = `RecordsMath.isFinalized(holder.durable.value, f.size, f.gameId)`: the records file is known to hold `f` (§4.5); `retryFailedWrite()` = `holder.retryFailed()`; `resetAll()` = `update(RecordsMath::reset)`. Because `DocumentHolder.update` submits only a changed value, a finalization that is already recorded submits no write (D-044) |
+| `GameRepository` | `game-N.json` | `suspend load(size): SavedGame?`, `save(game: SavedGame)`, `suspend peek(size): SavedGame?`, `suspend awaitIdle()`, `submissions(size): Long` (test hook, D-221: the `save`s of that size so far, 0 before the first) | One `ConflatedWriter` per size, created lazily. Keeps `latest[size]`, the last submitted value, so `load`/`peek` of a size with a pending write return what was submitted, not the older file. `load` returns `null` for the `size == 0` sentinel |
 
 ### 4.7 ViewModels and UI state
 
@@ -1855,7 +1858,7 @@ private suspend fun recoverOtherSizes(start: BoardSize) {
 `RecordsMath` (pure, `data/records/RecordsMath.kt`) holds all record arithmetic so `RecordsMathTest` can property-test it. `key(size) = "${size.n}"`:
 - `progress(records, game)`: `bestScore = max`, `bestScoreNoUndo = max` only when `undoCount == 0`, `bestTileExp = max`. Nothing else changes.
 - `isFinalized(records, size, gameId) = gameId <= (records.lastFinalizedGameId[key(size)] ?: 0)`.
-- `finalize(records, f: Finalization)`: if `isFinalized(records, f.size, f.gameId)`, it returns `records` itself, unchanged (D-044 idempotence). Otherwise it applies the D-044 finalization followed by the `progress` arithmetic on `f.score`, `f.undoCount` and `f.maxExp`, and sets `lastFinalizedGameId[key(f.size)] = f.gameId`. It counts `gamesPlayed`; `gamesAbandoned` if `f.status != OVER`; `gamesWon` and the streaks when `f.maxExp ≥ f.size.targetExp` (judged on the final board, so an undone winning tile does not count); totals; and `tileReach[k]++` for every `1 ≤ k ≤ maxExp`, growing the list as needed. A finalized non-win resets `currentWinStreak` to 0, and a `KEEP_PLAYING` game abandoned through New game counts as both won and abandoned (D-198).
+- `finalize(records, f: Finalization)`: if `isFinalized(records, f.size, f.gameId)`, it returns `records` itself, unchanged (D-044 idempotence). Otherwise it applies the D-044 finalization followed by the `progress` arithmetic on `f.score`, `f.undoCount` and `f.maxExp`, and sets `lastFinalizedGameId[key(f.size)] = f.gameId`. It counts `gamesPlayed`; `gamesAbandoned` if `f.status != OVER`; `gamesWon` and the streaks when `f.maxExp ≥ f.size.targetExp` (judged on the final board, so an undone winning tile does not count); totals; and `tileReach[k]++` for every `0 ≤ k ≤ maxExp`, growing the list as needed (D-218). A finalized non-win resets `currentWinStreak` to 0, and a `KEEP_PLAYING` game abandoned through New game counts as both won and abandoned (D-198).
 - `displayed(records, game: SavedGame?)`: the D-198 fold for one size. It applies every entry of `game.pendingFinalizations` through `finalize`, in list order, then `finalize(…, game.toFinalization())` if `game.state.status == OVER`. Since ids grow, the entries (lower ids, ascending) go first.
 - `reset(records) = Records(lastFinalizedGameId = records.lastFinalizedGameId)`: Reset statistics empties `sizes` and keeps the identity map (D-044).
 - `nextGameId(records, size, replaced: SavedGame?) = max(replaced?.gameId ?: 0, records.lastFinalizedGameId[key(size)] ?: 0) + 1`.
@@ -1982,7 +1985,7 @@ class SplashGate(private val timeoutMs: Long, private val uptimeMs: () -> Long) 
 ```
 
 - `gameViewModel.ready` becomes true after settings, records and the current game are loaded (§4.9).
-- The condition is polled before every frame, so the timeout needs no coroutine. After 1,000 ms the splash is released even if loading is slow; `GameScreen` then shows the empty board frame (board and empty cells, no tiles) until `ready`, and the tiles appear as `Static`.
+- The condition is polled before every frame, so the timeout needs no coroutine. The cap is the named argument `timeoutMs = 1_000` of this call and has no other name (D-217). After 1,000 ms the splash is released even if loading is slow; `GameScreen` then shows the empty board frame (board and empty cells, no tiles) until `ready`, and the tiles appear as `Static`.
 - `SplashGateTest` asserts that the first `BoardUi` composed after `ready` equals the persisted fixture's board and contains no `Spawned` tiles (D-112).
 
 ### 4.13 What's new (D-009)
@@ -3138,9 +3141,9 @@ Root package:
 | `testing/Accessibility.kt` | ATF options, `atfRule`, `assertTouchTargets()` (QUALITY.md §1.12); the only `@file:OptIn(ExperimentalRoborazziApi::class)` (D-174) | M0 |
 | `testing/MainDispatcherRule.kt`, `testing/TestAppContainer.kt`, `testing/FakeClock.kt`, `testing/FixedSeedSource.kt` | JVM and container helpers | M2 |
 | `testing/LongGameGenerator.kt` | §9.4 | M2 |
-| `testing/FaultyDataStore.kt` | `FaultyDataStore<T>(delegate: DataStore<T>)`: delegates `data`. `updateData` throws `IOException` while `failWrites` is true and delegates otherwise. It wraps one store of a container so that file's writes fail (QUALITY.md §1.11) | M2 |
+| `testing/FaultyDataStore.kt` | `FaultyDataStore<T>(delegate: DataStore<T>)`: delegates `data`. `updateData` throws `IOException` while `failWrites` is true and delegates otherwise. It wraps one store of a container so that file's writes fail (QUALITY.md §1.11). `writeAttempts` counts its `updateData` calls: file writes, not saves (saves are counted by `submissions`, D-221) | M2 |
 | `testing/FakeHapticFeedback.kt` | Records `(type, mainClock.currentTime − origin)` | M3 p1 |
-| `fixtures/GoldenFixtures.kt` | DESIGN_SYSTEM.md §10.3 (`FIX_FILM`, `FIX_MID_4`, `FIX_MID_3`, …) | M3 p1 |
+| `fixtures/GoldenFixtures.kt` | DESIGN_SYSTEM.md §10.3 (`FIX_FILM`, `FIX_MID_4`, `FIX_MID_3`, …) and the `fixtureGame` builder (D-216). M2: `FIX_MID_4`, `FIX_MID_3`, `FIX_OVER_4`, `FIX_RECORDS`; M3 p1: the rest | M2 |
 | `fixtures/MotionFixtures.kt` | MOTION_SPEC.md §8.6 | M3 p1 |
 
 The D-146 named suites all appear above.

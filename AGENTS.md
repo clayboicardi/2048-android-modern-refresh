@@ -39,7 +39,7 @@
 ## Conventions
 
 - Kotlin is formatted by ktfmt through Spotless and compiled with `allWarningsAsErrors`; Lint warnings are errors; detekt runs on both modules. No Lint or detekt baselines; every `@Suppress` or `tools:ignore` carries a same-line reason.
-- `@OptIn` appears only in `app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt` (`ExperimentalRoborazziApi`) and `app/src/main/kotlin/com/clayboicardi/game2048/ui/components/GameModalSheet.kt` (`ExperimentalMaterial3Api`). Material 3 1.5-only APIs are called only from `ui/theme/` and `ui/components/`.
+- `@OptIn` appears only in `app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt` (`ExperimentalRoborazziApi`), `app/src/test/kotlin/com/clayboicardi/game2048/testing/MainDispatcherRule.kt` (`ExperimentalCoroutinesApi`, D-215) and `app/src/main/kotlin/com/clayboicardi/game2048/ui/components/GameModalSheet.kt` (`ExperimentalMaterial3Api`). Material 3 1.5-only APIs are called only from `ui/theme/` and `ui/components/`.
 - `:core:engine` is pure Kotlin (stdlib only) and deterministic: all randomness comes from its `SplitMix64` with a stored seed. Its rules are in `core/engine/AGENTS.md`.
 - Compose: screens collect state with `collectAsStateWithLifecycle`; ViewModels own state; tiles are keyed by stable tile ids; animated values are read in draw or layout lambdas (`graphicsLayer`, `drawBehind`, `offset {}`), never in a composition body; no state writes during composition; anything visible is timed through `MoveTimeline` or animation specs, not a raw `delay()`.
 - Every hex color, dp, sp and millisecond value lives in `ui/theme/`. Every user-visible string is a resource; counts use plurals; sentences are never concatenated.
@@ -82,7 +82,7 @@ Review against `docs/modernization/DECISIONS.md`. Severity: **P0** breaks saved 
 - Flag hard-coded user-visible text, a key missing from any of the 21 locales, a translated `app_name`, broken placeholders or plurals, concatenated sentences, and non-Latin digits in game numerals (D-100–D-104).
 
 ### Verification integrity
-- Flag weakened gates: ignored or skipped tests, baselines, lowered floors or thresholds, removed check-script assertions, unexplained golden changes, R8 off, blanket `-keep`, `dependenciesInfo` on, and new `@OptIn` outside the two files named in Conventions.
+- Flag weakened gates: ignored or skipped tests, baselines, lowered floors or thresholds, removed check-script assertions, unexplained golden changes, R8 off, blanket `-keep`, `dependenciesInfo` on, and new `@OptIn` outside the three files named in Conventions.
 
 ### Intentional, do not flag
 - The committed `signing/ci-sideload.p12` and its public password (D-131). It is a non-secret sideload key, never used for stores.

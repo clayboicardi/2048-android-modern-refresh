@@ -57,15 +57,16 @@ check_license_file() {
     err "LICENSE copyright lines differ from D-120"
 }
 
-# [M0] D-143, D-174, D-181: opt-ins appear only in the two allowed files.
+# [M0] D-143, D-174, D-181 (+ D-215 in M2): opt-ins appear only in the three allowed files.
 check_optin_allowlist() {
   local allowed='app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt
-app/src/main/kotlin/com/clayboicardi/game2048/ui/components/GameModalSheet.kt'
+app/src/main/kotlin/com/clayboicardi/game2048/ui/components/GameModalSheet.kt
+app/src/test/kotlin/com/clayboicardi/game2048/testing/MainDispatcherRule.kt'
   local hits extra
   hits="$(git grep -l -E '@(file:)?OptIn\(|^[[:space:]]*@Experimental[A-Za-z0-9]*Api\b|optIn\.add|-opt-in' \
     -- '*.kt' '*.kts' ':(exclude)docs' || true)"
   extra="$(comm -23 <(sort -u <<< "$hits" | sed '/^$/d') <(sort -u <<< "$allowed"))"
-  [[ -z "$extra" ]] || err "opt-in outside the D-174/D-181 allowlist (a new one needs a D-173 entry): $extra"
+  [[ -z "$extra" ]] || err "opt-in outside the D-174/D-181/D-215 allowlist (a new one needs a D-173 entry): $extra"
 }
 
 # [M0] D-179 (L10N_STORE_LEGAL.md §1.2): no tracked file starts with a UTF-8 BOM. Lint's

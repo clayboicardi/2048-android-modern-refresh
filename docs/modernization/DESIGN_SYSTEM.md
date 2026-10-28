@@ -1854,7 +1854,7 @@ Format: `<screen>[_<state>[-<N>x<N>]]_<palette>-<mode>[-hc][_<variant>]`. Layout
 
 ### 10.3 Fixtures (`app/src/test/kotlin/com/clayboicardi/game2048/fixtures/GoldenFixtures.kt`)
 
-Cells are exponents, row-major, with 0 = empty. Every game fixture is a `SavedGame` with `gameId = 1` and empty `pendingFinalizations`; `FIX_RECORDS` has an empty `lastFinalizedGameId` (D-044). A test that needs other identities uses `copy(gameId = …)`.
+Cells are exponents, row-major, with 0 = empty. Every game fixture is a `SavedGame` with `gameId = 1` and empty `pendingFinalizations`; `FIX_RECORDS` has an empty `lastFinalizedGameId` (D-044). A test that needs other identities uses `copy(gameId = …)`. Game fixtures are built by `fixtureGame(…)` with a synthetic history that passes `GameInvariants` but does not replay, and "best" is their `bestAtStart` (D-216). `FIX_MID_4`, `FIX_MID_3`, `FIX_OVER_4` and `FIX_RECORDS` exist from M2; the rest arrive in M3 part 1.
 
 | Fixture | N | Cells | Score / best / moves / undos / time | Status |
 |---|---|---|---|---|

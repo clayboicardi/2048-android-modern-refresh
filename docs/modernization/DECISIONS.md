@@ -219,6 +219,13 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-212 | Toolchain | Wrapper properties stay the 8-line D-010 file; the two default-valued lines Gradle 9.7.1 adds are dropped (supersedes TC-4's byte-identical claim) |
 | D-213 | Legal | Legacy credits come from the full history: 32 contributors including `pierre`, who translated French (`74990c4`) |
 | D-214 | Engine | `GameInvariants` also checks the later snapshots (I10–I12); `GameViewModel` treats an engine `IllegalStateException` on a restored game as a corrupt game file |
+| D-215 | Quality | `MainDispatcherRule.kt` is the third opt-in file (`ExperimentalCoroutinesApi` for `setMain`/`resetMain`); tests use only the stable `testScheduler` members |
+| D-216 | Quality | `GoldenFixtures.kt` from M2 with `FIX_MID_4`, `FIX_MID_3`, `FIX_OVER_4`, `FIX_RECORDS`; fixture games carry synthetic histories that pass `GameInvariants`; F01-AC21 runs on `FIX_MID_3` |
+| D-217 | Quality | The D-112 splash cap is the named argument `timeoutMs = 1_000` at the one `SplashGate` call in `MainActivity`; the `ui/theme/` millisecond rule covers durations of something drawn or felt |
+| D-218 | Data | `tileReach[k]` counts the finalized games whose final max exponent is ≥ k for every k ≥ 0, so index 0 equals `gamesPlayed` (D-044 as written; FEATURES.md §3.1, F08-AC1 and ARCHITECTURE.md §4.9 corrected) |
+| D-219 | Quality | F29-AC1 reads `dataExtractionRules` from the compiled merged manifest, because Robolectric's legacy `PackageParser` leaves `ApplicationInfo.dataExtractionRulesRes` at 0 |
+| D-220 | Quality | JVM tests settle the background-scoped `TestAppContainer` with `testScheduler.runCurrent()`; `kill()` runs it after the cancel |
+| D-221 | Quality | Tests count submitted saves through the `submissions` test hook of `ConflatedWriter` and the repositories, never file writes, which conflate within one action |
 
 ---
 
@@ -880,6 +887,7 @@ detekt = { id = "dev.detekt", version.ref = "detekt" }
   - `collectLatest` would starve writes during long bursts.
 - **Rejected:** an input queue (O3); `collectLatest`; writing from composition.
 - **Source:** [ORCH] O2, O3, O10.
+- **Note:** Extended by D-221.
 
 #### D-025 — Tile UI model and rendering
 - **Decision.** `BoardPresenter` in `:app` keeps a `cellIndex → tileId` map and converts each `MoveOutcome.Moved` into `BoardUi(moveId, tiles, scoreDelta, event)` with `TileUi(id: Long, exp: Int, row, col, fromRow, fromCol, kind)`.
@@ -1259,7 +1267,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - a single recovery entry overwritten by the next New game (the Codex r1 design): a records write that failed, followed by a New game from a score-0 game before the next load, dropped the counted game;
   - an unbounded entry list: the cap of 16 with in-memory counting and retries keeps the file bounded (D-046) and loses an entry only when `records.json` cannot be written at all.
 - **Source:** [ORCH] O7, O8 · [RESEARCH].
-- **Note:** Clarified by D-198.
+- **Note:** Clarified by D-198, D-218.
 - **Amended in plan review (Codex r1):** added the finalization identity, the idempotent finalization, the `previousFinalization` recovery entry with the R1/R2 load-time recovery, and Reset keeping `lastFinalizedGameId`. Before, a kill between New game's records and game writes either restored an already counted game, which D-198's fold and the next New game then counted again, or lost the old game's stats.
 - **Amended in plan review (Codex r2):** the single `previousFinalization` became `pendingFinalizations`, a list carried by every replacement until the records file is known to hold each entry (durable success reported by the writer), capped at 16 with the overflow rule above; R1 and D-198's fold apply every entry in id order; New game and pause retry a failed records write (D-043). Before, if New game's records write failed with the swallowed `IOException` and the player started New game again before a move, the second New game set the entry to absent (the score-0 game was not counted) and overwrote the only durable copy, so after a relaunch neither file held the first game's finalization.
 
@@ -1318,6 +1326,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/06 §4.2; research/07 G15; legacy `allowBackup` with no rules (research/01 D14).
 - **Rejected:** `allowBackup="false"` (loses bests on a device change); backing up everything (the include list keeps caches out).
 - **Source:** [RESEARCH].
+- **Note:** Clarified by D-219.
 
 ---
 
@@ -2057,6 +2066,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/07 G5 (otherwise a default board is composed and then swapped, the B7/B8 defect again).
 - **Rejected:** releasing the splash before the state loads (a default board, then a swap: B7/B8); an unbounded hold (a slow disk would block start).
 - **Source:** [ORCH] O10.
+- **Note:** Clarified by D-217.
 
 #### D-113 — Store metadata layout and locales
 - **Decision.** `git mv metadata fastlane/metadata/android` in M0. The final tree has exactly **22** locale directories:
@@ -2339,7 +2349,7 @@ lint {
 - **Rationale:** it forces the v2 test APIs and `currentWindowAdaptiveInfoV2` (research/06 §2.2; research/07 C4).
 - **Rejected:** per-file `@Suppress` of deprecations (it hides required migrations such as the V2 APIs).
 - **Source:** [ORCH] O1, O16.
-- **Note:** Amended by D-174, D-181.
+- **Note:** Amended by D-174, D-181, D-215.
 
 #### D-144 — detekt
 - **Decision:**
@@ -2783,6 +2793,7 @@ jobs:
 - **Rationale:** every Roborazzi 1.77.0 ATF API is `@ExperimentalRoborazziApi`. Without the opt-in, `allWarningsAsErrors` fails with 7 "needs opt-in" errors (QUALITY.md §0 V5). D-085 requires ATF. With the opt-in, ATF runs under Robolectric 4.17 at SDK 36 (V5).
 - **Rejected:** dropping ATF and keeping semantics tests only; a project-wide `optIn.add(…)`.
 - **Source:** [ORCH] O16 · [RESEARCH] QUALITY.md §0 V5.
+- **Note:** Extended by D-215.
 
 #### D-175 — Spotless excludes `docs/**` (extends D-141)
 - **Decision:** both Spotless targets use `targetExclude("**/build/**", "docs/**")`: `kotlin` on `**/*.kt` and `kotlinGradle` on `**/*.gradle.kts`. ARCHITECTURE.md §2.5 is the build file.
@@ -3479,6 +3490,90 @@ jobs:
   - Bounding every exponent by the reachable maximum N² + 1. Moves do not keep it: two adjacent N² + 1 tiles merge into N² + 2, so a state that passes can move into one that fails, the next-load reset above. It would also reject D-145's property boards, which hold exponents up to 17 on every size (the 3×3 bound is 10).
   - `Game.undo` returning `null` or a partial state on an inconsistent log: `null` already means `moveCount == 0`, and a partial state would be saved as a valid game.
 - **Source:** [ORCH] O17 (D-173 change control, M1 review).
+
+#### D-215 — `MainDispatcherRule` opt-in isolated to one test file (amends D-143; extends D-174)
+- **Decision:**
+  - `@file:OptIn(ExperimentalCoroutinesApi::class)` is allowed in `app/src/test/kotlin/com/clayboicardi/game2048/testing/MainDispatcherRule.kt`, the third file on the opt-in allowlist. The rule wraps `Dispatchers.setMain` and `Dispatchers.resetMain`; no other file calls them.
+  - `check_optin_allowlist` (`scripts/check-metadata.sh`, QUALITY.md §1.16, §2.3) lists the file. No production code is affected.
+  - Tests drive the virtual clock only through the stable members `testScheduler.advanceUntilIdle()` and `testScheduler.runCurrent()`. They never call the `TestScope.advanceUntilIdle()`, `runCurrent()` or `advanceTimeBy()` extensions, `testScheduler.currentTime`, `UnconfinedTestDispatcher` or `Dispatchers.setMain` themselves: all are `@ExperimentalCoroutinesApi` in kotlinx-coroutines-test 1.11.0. `runTest`, `TestScope`, `backgroundScope`, `testScheduler` and `StandardTestDispatcher` are stable.
+- **Rationale:**
+  - ARCHITECTURE.md §4.10, QUALITY.md §1.6–§1.7 and FEATURES.md §0.2 require `MainDispatcherRule(StandardTestDispatcher())` for the JVM ViewModel and persistence tests: `viewModelScope` runs on `Dispatchers.Main.immediate`, which a plain JVM test cannot provide without `setMain`.
+  - `setMain` and `resetMain` are `@ExperimentalCoroutinesApi`, whose `RequiresOptIn` level is `WARNING`, so under `allWarningsAsErrors` (D-143) the M2 contract compile fails without the opt-in (2026-10-28, `:app:compileDebugUnitTestKotlin`): `e: …/testing/MainDispatcherRule.kt:20:21 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'`, the same at 24:21, then `e: warnings found and -Werror specified`. `javap -v` on `kotlinx-coroutines-test-jvm-1.11.0.jar` shows the annotation on `TestDispatchers.setMain`/`resetMain`, on the `TestScope` extensions `advanceUntilIdle`, `runCurrent` and `advanceTimeBy`, on `currentTime` and on `UnconfinedTestDispatcher`, and none on `TestCoroutineScheduler.advanceUntilIdle()`, `runCurrent()` or `StandardTestDispatcher`.
+- **Rejected:**
+  - Injecting the ViewModel scope through `ViewModel(viewModelScope: CoroutineScope)` (lifecycle 2.11.0 has it) to avoid `setMain`: it changes the production ViewModel shape of ARCHITECTURE.md §4.7 and §4.10 for a test-only need.
+  - A project-wide `optIn.add(…)` or an opt-in at each test call site (D-143, D-174).
+- **Source:** [ORCH] O17 (D-173 change control, M2 contracts).
+- **Note:** Clarified by D-220.
+
+#### D-216 — M2 game fixtures: `GoldenFixtures.kt` from M2, synthetic histories, F01-AC21 on `FIX_MID_3` (clarifies DESIGN_SYSTEM.md §10.3; corrects FEATURES.md F01-AC21)
+- **Decision:**
+  - `app/src/test/kotlin/com/clayboicardi/game2048/fixtures/GoldenFixtures.kt` is created in M2 (integrator-owned, PLAN.md §6.5) with the fixtures that M2 tests name: `FIX_MID_4`, `FIX_MID_3`, `FIX_OVER_4` and `FIX_RECORDS`. M3 part 1 adds the rest of DESIGN_SYSTEM.md §10.3.
+  - Game fixtures are built by `fixtureGame(…)` in the same file. The state is the fixture's board, score, status, `moveCount`, `undoCount` and `keepGoingAtMove`; `snapshots[0]` is the new game of the seed `0x2048` (I7); the move log holds `moveCount` UPs; every later snapshot holds the fixture's board, status `PLAYING` and a score rising linearly to the fixture's score, except that a snapshot at the fixture's own move holds the fixture state itself (I10–I12). `GameInvariants.violations` is empty for every fixture, so the M2 decoder accepts it.
+  - The history does not replay. An undo that reaches back before the fixture throws `IllegalStateException`, which the `GameViewModel` treats as a corrupt game (D-214). When `moveCount` is a multiple of 32, moves played from the fixture undo exactly back to it. A test that undoes into the past builds its state with `Game.replay`.
+  - **F01-AC21** runs on `FIX_MID_3` with `LEFT`, its only no-op direction, instead of `FIX_MID_4`.
+- **Rationale:**
+  - M2 tests name these fixtures: `FIX_OVER_4` with `gameId 7` (F06-AC13, AC14, AC16, AC18, AC20–AC23, F08-AC22), `FIX_MID_4` (F06-AC15, AC17, AC18, F07-AC10), `FIX_MID_3` (F01-AC21, below) and `FIX_RECORDS` (the `records.json` fixture of QUALITY.md §1.5). ARCHITECTURE.md §10.5 dated the file M3 part 1; without it, each M2 test would carry its own copy of the tables.
+  - DESIGN_SYSTEM.md §10.3 gives a fixture's board and counters but no history, and a `game-N.json` the decoder can read needs `moveCount` logged moves and `moveCount / 32 + 1` snapshots that pass I1–I12 (ARCHITECTURE.md §3.5, §4.4). No history of real moves ends on an arbitrary board with a given move count.
+  - `FIX_MID_4` (`1 2 3 4 / 5 6 7 8 / 9 10 1 2 / 0 0 1 0`) has no no-op direction: LEFT and RIGHT move the last row, UP merges the two 1s of column 2 and DOWN moves column 0. `Game.move` returns `Moved` for all four (M2 contracts, 2026-10-28), so F01-AC21 could not be written as stated. On `FIX_MID_3` (`1 2 3 / 4 5 0 / 6 7 1`) `Game.move(LEFT)` returns `Invalid` and the three other directions return `Moved`.
+- **Rejected:** a fixture history replayed from real moves (no such history exists for most fixtures); a `GameState` that skips `GameInvariants` (the decoder would reject it as corrupt, D-045); a new board for F01-AC21 (`FIX_MID_3` is already a DESIGN_SYSTEM.md §10.3 fixture).
+- **Source:** [ORCH] O17 (D-173 change control, M2 contracts).
+
+#### D-217 — The splash cap is a named argument at its call site (clarifies D-112; amends PLAN.md §6.6 Q5)
+- **Decision:**
+  - The D-112 cap is written once, as the named argument of `SplashGate(timeoutMs = 1_000, uptimeMs = SystemClock::uptimeMillis)` in `MainActivity.onCreate` (ARCHITECTURE.md §4.12). It gets no `ui/theme/` token and no second name; `SplashGateTest` passes its own `timeoutMs` (F07-AC12).
+  - The rule that every millisecond value lives in `ui/theme/` (AGENTS.md Conventions, PLAN.md §6.6 Q5) covers durations that time something drawn or felt: motion and animation specs, the timing of visible state, haptics (`GameMotion`, MOTION_SPEC.md). The splash cap only bounds how long the system splash window is held while the saved state loads; it is a startup bound, like the D-046 budgets, not a design token. Every other millisecond literal in main sources still lives in `ui/theme/`.
+- **Rationale:**
+  - detekt `MagicNumber` accepts the literal (the config keeps `ignoreNamedArgument: true`, ARCHITECTURE.md §2.8); only the convention objects (M2 self-review, PLAN.md §6.6 Q5).
+  - D-112 decides the value (1000 ms), and ARCHITECTURE.md §4.12 and FEATURES.md F07-AC12 state it as this argument. A `ui/theme/` constant would make the theme package own a non-visual startup bound that only `MainActivity` reads.
+- **Rejected:** a `ui/theme/` token such as `SPLASH_TIMEOUT_MS`; a `const val` in `SplashGate`'s companion (a second name for one decided number, and outside `ui/theme/` as well).
+- **Source:** [ORCH] O17 (D-173 change control, M2 integration).
+
+#### D-218 — `tileReach` index 0 counts every finalized game (clarifies D-044; corrects FEATURES.md §3.1, F08-AC1 and ARCHITECTURE.md §4.9)
+- **Decision:**
+  - Finalization increments `tileReach[k]` for every `0 ≤ k ≤` the final max exponent, as D-044 states; the list grows to the largest final max exponent + 1. `tileReach[k]` is the number of finalized games that reached a tile ≥ 2^k, so `tileReach[0]` (like `tileReach[1]`) equals `gamesPlayed` for documents this app writes. `RecordsMath.aggregate` sums the lists element-wise, index 0 included.
+  - FEATURES.md §3.1 (`tileReach` row), F08-AC1 and the `RecordsMath.finalize` bullet of ARCHITECTURE.md §4.9 (`1 ≤ k ≤ maxExp`) are corrected: the 4×4 `OVER` game with max exponent 7 finalized into empty records gives `tileReach == [1,1,1,1,1,1,1,1]`. The `records.json` fixture of QUALITY.md §1.5 is unchanged (`[37,37,37,37,37,36,34,30,24,17,12,9]` with `gamesPlayed` 37 and `[5,5,5,5,5,5,4,3,2]` with `gamesPlayed` 5 already follow this rule).
+- **Rationale:**
+  - The documents disagreed on the irreversible on-disk meaning of index 0 before any code wrote it (M2 integration, 2026-10-28): D-044 ("increments `tileReach[k]` for every k ≤ the max exponent"), the D-042 field list and ARCHITECTURE.md §4.3 ("index k = games that reached ≥ 2^k") and the QUALITY.md §1.5 fixture count every game at index 0; FEATURES.md §3.1 ("for k ≥ 1. Index 0 is unused (always 0)"), F08-AC1 (`[0,1,1,1,1,1,1,1]`) and the `RecordsMath.finalize` bullet of ARCHITECTURE.md §4.9 ("`tileReach[k]++` for every `1 ≤ k ≤ maxExp`") did not. DECISIONS.md decides behavior (PLAN.md §0.2), and following it leaves the write-once fixture consistent with the arithmetic that will write real files.
+  - Index 0 carries no extra information either way; the v1.x histogram reads k = 7…17 (FEATURES.md §6.2), so no later feature depends on the choice.
+- **Rejected:** keeping index 0 at 0 (it would change D-044, the D-042 field list, ARCHITECTURE.md §4.3 and the QUALITY.md §1.5 fixture lists that become write-once in M2); dropping index 0 from the list (an offset index invites off-by-one errors in every reader).
+- **Source:** [ORCH] O17 (D-173 change control, M2 integration).
+
+#### D-219 — F29-AC1 reads the data-extraction reference from the compiled manifest (clarifies D-048; corrects FEATURES.md F29-AC1)
+- **Decision:**
+  - `BackupRulesTest.manifestReferencesBothRuleFiles` (F29-AC1) asserts `FLAG_ALLOW_BACKUP` and `ApplicationInfo.fullBackupContent == R.xml.backup_rules` from the `ApplicationInfo` Robolectric builds, as before.
+  - It reads `android:allowBackup`, `android:fullBackupContent` and `android:dataExtractionRules` from `<application>` of the compiled merged `AndroidManifest.xml` that Robolectric loads (`context.assets.openXmlResourceParser("AndroidManifest.xml")`, after checking that `<manifest package>` is this app), and requires `@R.xml.data_extraction_rules` and `@R.xml.backup_rules`. It does not read `ApplicationInfo.dataExtractionRulesRes`.
+  - D-048 is unchanged: both rule files exist, the merged manifest references both, and F29-AC2 and F29-AC3 check their contents.
+- **Rationale:**
+  - Under Robolectric 4.17 at SDK 36, `ApplicationInfo.dataExtractionRulesRes` stays 0, both from `context.applicationInfo` and from `PackageManager.getApplicationInfo`, while `fullBackupContent` is set (M2-A probe, 2026-10-28: `fullBackupContent=2131492865`, `dataExtractionRulesRes=0`; the merged manifest carries `android:dataExtractionRules=@2131492866`, which is `R.xml.data_extraction_rules`).
+  - Robolectric builds `ApplicationInfo` with the framework's legacy `android.content.pm.PackageParser`. In `android-all-instrumented-16-robolectric-13921718-i7.jar` that class contains the string `fullBackupContent` and not `dataExtractionRules` (`unzip -p … android/content/pm/PackageParser.class | grep -a -c`: 1 and 0); only the newer `ParsingPackageUtils`, which Robolectric does not use for this, parses the attribute. The `ApplicationInfo` form of F29-AC1 can therefore never pass, although the APK is correct.
+  - The compiled manifest is the file the platform parses on a device, so reading the reference from it proves what D-048 requires.
+- **Rejected:** dropping the `dataExtractionRules` check (D-048 requires both references); setting the field through a shadow (it would test the shadow, not the manifest); a device test (D-143 keeps tests on the JVM).
+- **Source:** [ORCH] O17 (D-173 change control, M2 integration).
+
+#### D-220 — Background-scoped test containers settle with `runCurrent()` (clarifies D-215; corrects QUALITY.md §1.7, §1.11 and FEATURES.md F06-AC19)
+- **Decision:**
+  - `TestAppContainer`'s `applicationScope` is a child of `backgroundScope` (QUALITY.md §1.6), so the stores, writers and ViewModel loads that run in it are background work. Tests that wait for that work, such as a ViewModel's load before `ready` or a repository read after a write, run `testScheduler.runCurrent()`; `testScheduler.advanceUntilIdle()` stays correct only where every pending task is foreground work, such as a store a test opens in its own `TestScope` coroutine. Both are the stable members of D-215.
+  - `kill(container)` cancels the scope, then runs `testScheduler.advanceUntilIdle()` and `testScheduler.runCurrent()`, so the cancellation has completed and the DataStores are closed when it returns, as its KDoc states.
+  - QUALITY.md §1.7 and §1.11 and FEATURES.md F06-AC19 name `runCurrent()` where they named `advanceUntilIdle()` for that wait. No assertion changes.
+- **Rationale:**
+  - `TestCoroutineScheduler.advanceUntilIdle()` returns as soon as no foreground task remains (kotlinx-coroutines-test 1.11.0: `advanceUntilIdle()` calls `advanceUntilIdleOr` with a condition over `TestDispatchEvent.isForeground`, `javap -c`), and every task of a context that inherits `backgroundScope` is background. With `advanceUntilIdle()` alone, every M2 ViewModel stayed not ready (M2-B, 2026-10-28). `runCurrent()` runs every task due at the current virtual time, background ones included, and no M2 container work is delayed, so it runs all of them.
+  - `backgroundScope` is where QUALITY.md §1.6 puts the containers so that `runTest` cancels them at the end of each test; their DataStore scopes run until cancelled.
+- **Rejected:** containers in the test body's own scope (`runTest` would wait for those scopes, which never complete); the experimental `TestScope` extensions or `advanceTimeBy` (D-215).
+- **Source:** [ORCH] O17 (D-173 change control, M2 integration).
+
+#### D-221 — Tests count submitted saves, not file writes (extends D-024; amends ARCHITECTURE.md §4.5, §4.6; clarifies FEATURES.md F07-AC2, F07-AC24)
+- **Decision:**
+  - `ConflatedWriter` exposes `submissions: Long`, the number of `submit` calls so far (its `versions` counter), including the values a newer submission replaced and the `retryFailed()` resubmissions. Like `failures`, it is a test hook: never shown in UI, never logged.
+  - `DocumentHolder.submissions`, `SettingsRepository.submissions` and `RecordsRepository.submissions` read their writer's count. `GameRepository.submissions(size)` reads the count of that size's writer, 0 before its first `save`. No behavior changes.
+  - A JVM test that asserts a number of game, records or settings saves counts these submissions: every such check in `GameViewModelTest` (F03-AC9, F05-AC8, F06-AC7, F07-AC2, F07-AC32 and the others) and the fresh-game check of `PersistenceCorruptionTest`. The "counting `GameRepository`" of F07-AC2 and F07-AC24 is the production `GameRepository` read through `submissions(size)`. `FaultyDataStore.writeAttempts` counts file writes (`updateData` calls) and is used only where a test needs a write attempt, such as a failing one.
+  - `GameViewModelTest.everyStateChangeSubmitsOneSave` ends with a control: two `save` calls in one action count as two.
+- **Rationale:**
+  - `ConflatedWriter.submit` only replaces the value of a `MutableStateFlow`, and its collector runs when the dispatcher next runs it. Under `StandardTestDispatcher`, two saves in one synchronous action therefore become one `updateData`, so a count of file writes reads 1 for one save and for two. The control above, counted with `FaultyDataStore.writeAttempts`, read `{5=1}` where `{5=2}` was expected (M2 review, 2026-10-28). An action that saved twice would have passed every "exactly one save" criterion.
+  - Counting at the writer leaves the D-024 conflation unchanged and covers games, records and settings with one hook, beside the existing `failures` hook. `versions` already counts every submission, so the hook adds no state.
+- **Rejected:**
+  - A test subclass of `GameRepository` that counts `save` (an `open` class, or an interface): it counts game saves only, while records and settings saves conflate in the same writer.
+  - `UnconfinedTestDispatcher` for the writers, so that each submission is written before the next: it is experimental in kotlinx-coroutines-test 1.11.0 (D-215), and a second save during a write in flight would still conflate.
+- **Source:** [ORCH] O17 (D-173 change control, M2 review).
 
 ---
 

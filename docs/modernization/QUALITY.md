@@ -238,7 +238,7 @@ There are no separate binary fixture files. The two engine byte layouts are pinn
 
 Downgrade and forward-compatibility cases are built in code from the v1 fixtures, so the committed files stay minimal:
 - an extra unknown key at the top level and inside a `SizeRecord` → ignored;
-- an unknown enum name (`"palette": "PLASMA"`) → coerced to the default, not treated as corruption;
+- an unknown enum name (`"palette": "SEPIA"`, `"motion": "SUPER"`) → coerced to the default, not treated as corruption;
 - a missing field whose default is a valid value → that default, not treated as corruption. The cases remove `keepScreenOn` from `settings.json` (→ `false`; every other non-default value intact) and `newBestAnnounced` and `elapsedMs` from `game-4.json` (→ `false` and 0; `gameId` 7, the cells, history and `pendingFinalizations` as in the fixture) (F07-AC15).
 
 A default is what a missing key decodes to; it is not always a valid value. `gameId` has **no valid default**: its default 0 exists only so that `GameDocument()` (`size = 0`, "no saved game") decodes, and a game document with `size != 0` and no `gameId` key decodes to `gameId = 0`, fails the D-044 identity check (`gameId ≥ 1`, `ARCHITECTURE.md` §4.4) and is corrupt, so it falls back to a fresh game like any other invalid document (D-045). `PersistenceCorruptionTest` covers that case (F07-AC23, §1.6), and no compatibility case removes `gameId`.
@@ -252,12 +252,12 @@ All use the real `DataStoreFactory.create(…)` of `ARCHITECTURE.md` §4.2 over 
 | `PersistenceFixturesTest` | M2 | §1.5 |
 | `PersistenceCorruptionTest` | M2 | Table below |
 | `PersistenceBudgetTest` | M2 | D-046: the 10,000-move 8×8 document encodes to ≤ 262,144 bytes (expected ≈ 40 KB) both in memory (`GameDocumentSerializer.writeTo` into a `ByteArrayOutputStream`) and on disk after `updateData` (`file.length()`); encode + decode ≤ 50 ms as the median of 5 runs after 3 warm-ups; `records.json` with all six sizes populated (every counter at 10⁹, `tileReach` of 40 entries) ≤ 65,536 bytes; `settings.json` ≤ 4,096 bytes |
-| `ConflatedWriterTest` | M2 | (a) 1,000 submissions while one write is suspended produce exactly 2 writes, the in-flight one and the latest; (b) a write gated by a `CompletableDeferred` completes even after newer submissions (never cancelled, D-024); (c) a write lambda that throws `IOException` increments `failures`, and the next submission writes the full document; (d) `reportsWrittenValuesAndRetriesFailedOne` (F07-AC31): `onWritten` reports exactly the writes that returned normally, `retryFailed()` resubmits the failed value once and is a no-op after a success or when a newer value is queued (D-044) |
+| `ConflatedWriterTest` | M2 | (a) 1,000 submissions while one write is suspended produce exactly 2 writes, the in-flight one and the latest, and `submissions` counts all of them (D-221); (b) a write gated by a `CompletableDeferred` completes even after newer submissions (never cancelled, D-024); (c) a write lambda that throws `IOException` increments `failures`, and the next submission writes the full document; (d) `reportsWrittenValuesAndRetriesFailedOne` (F07-AC31): `onWritten` reports exactly the writes that returned normally, `retryFailed()` resubmits the failed value once and is a no-op after a success or when a newer value is queued (D-044) |
 | `SettingsRepositoryTest` | M2 | Defaults on a missing file; `lastBoardSize` outside 3..8 → 4; updates before load are applied after load in call order |
 | `RecordsMathTest` | M2 | D-044 finalization arithmetic with the D-198 readings. The D-044 identity: `finalize` of a `gameId` at or below `lastFinalizedGameId` returns the same instance; `reset` keeps only `lastFinalizedGameId`; `nextGameId`; `displayed` applies the recovery entries, oldest first, before the `OVER` game (F08-AC19, F08-AC20). The no-best-decreases property over 1,000 seeded sequences of 50 random `progress`/`finalize` calls, each `finalize` with a random `gameId` in 1..60 so that repeats occur; it also asserts that `lastFinalizedGameId` never decreases and that a `finalize` with a `gameId` at or below it changes nothing. The sequences come from `SplitMix64(0x2048 + i)` because `:app` has no kotest dependency: D-016 is exact, and adding `kotest-property` to `:app` would need a D-173 entry and buys little |
 | `DataMigrationSeamTest` | M2 | A test-only `DataMigration<Settings>` (`shouldMigrate = schemaVersion < 2`, `migrate = copy(schemaVersion = 2)`) passed to a store over a copy of `fixtures/v1/settings.json`: first read returns `schemaVersion = 2` with every other v1 value intact; the file is rewritten; a second store instance (after the first scope is cancelled) does not call `migrate` again. v1.0 ships no migrations (`migrations = emptyList()`, `ARCHITECTURE.md` §4.4), so this added test proves now the D-041 path that later versions will use; it changes no decision |
 
-`PersistenceCorruptionTest` cases. For each case: the named file gets the bytes shown; the store's corruption handler yields that document's defaults; the file is rewritten with the defaults; every **other** file under the temp folder is byte-identical before and after (sha256); nothing throws out of the repository API.
+`PersistenceCorruptionTest` cases. For each case: the named file gets the bytes shown; the store's corruption handler yields that document's defaults; the file is rewritten with the defaults; every **other** file under the temp folder is byte-identical before and after (sha256); nothing throws out of the repository API. For a game file, the install's settings select that size, and a `GameViewModel` over the same container then becomes ready on it with a fresh game (`moveCount 0`, `gameId == nextGameId(size, null)`), saved once into that file, with no settings or records save (F02-AC12, F07-AC17, F07-AC23).
 
 | File | Bytes written | Expected |
 |---|---|---|
@@ -276,7 +276,7 @@ All use the real `DataStoreFactory.create(…)` of `ARCHITECTURE.md` §4.2 over 
 
 ### 1.7 ViewModel tests (Turbine)
 
-Conventions (`ARCHITECTURE.md` §4.10): `runTest` with `StandardTestDispatcher`; flows observed with Turbine (`vm.board.test { … }`); assertions on transitions, never on emission counts (`StateFlow` conflates); `advanceUntilIdle()` before reading repositories; `awaitIdle()` on writers before reading files.
+Conventions (`ARCHITECTURE.md` §4.10): `runTest` with `StandardTestDispatcher`; flows observed with Turbine (`vm.board.test { … }`); assertions on transitions, never on emission counts (`StateFlow` conflates); `testScheduler.runCurrent()` before reading repositories, because the `TestAppContainer` scope is a child of `backgroundScope` and `testScheduler.advanceUntilIdle()` does not run background work (D-220; the `TestScope` extensions are experimental, D-215); `awaitIdle()` on writers before reading files. Saves are counted with the repositories' `submissions` (D-221), never with `FaultyDataStore.writeAttempts`: the writer conflates saves made in one action into one file write.
 
 | Class | `[M]` | Key assertions (full AC list: `FEATURES.md` §8) |
 |---|---|---|
@@ -402,7 +402,7 @@ Inspection strips are under `build/reports`, so CI uploads them in the reports a
 
 `FinalizationRecoveryTest` (`[M2]`, JVM, no Robolectric; D-044, `ARCHITECTURE.md` §4.9 finalization protocol). Each method simulates a process killed partway through New game's two writes, then relaunches:
 1. **Failing writer.** Container A is a `TestAppContainer`. The test builds A's `GameViewModel` directly, from a `RecordsRepository(store, …)` and a `GameRepository(storeFor, …)` constructed over A's own stores (`ARCHITECTURE.md` §4.2, §4.6). Either the records store or the 4×4 game store is wrapped in `testing/FaultyDataStore` with `failWrites = true`. The repositories already take their stores, so no production seam is added. The wrapped file's writes throw `IOException`, which `ConflatedWriter` swallows (`ARCHITECTURE.md` §9.3). The other file is written normally. After `onNewGame()`, `awaitIdle()` on every writer, then cancel A's `applicationScope`. Exactly one of the two New game writes has landed.
-2. **Relaunch.** Container B (no faults, `FixedSeedSource(0x2048)` again, so seeds repeat on purpose and only `gameId` can tell games apart) loads over the same folder, then `advanceUntilIdle()`. Assert `records.json`, B's current game and `game-4.json` as F06-AC14–AC17 state. Then `onNewGame()` in B, `awaitIdle()`, and container C: the old game is still counted once.
+2. **Relaunch.** Container B (no faults, `FixedSeedSource(0x2048)` again, so seeds repeat on purpose and only `gameId` can tell games apart) loads over the same folder, then `testScheduler.runCurrent()` (D-220). Assert `records.json`, B's current game and `game-4.json` as F06-AC14–AC17 state. Then `onNewGame()` in B, `awaitIdle()`, and container C: the old game is still counted once.
 3. **All four disk outcomes** (`everyDiskOutcomeCountsExactlyOnce`, F06-AC18). A runs without faults. The bytes of `records.json` and `game-4.json` are captured before `onNewGame()` and after it plus `awaitIdle()`. Each of the four (records, game) combinations is copied into a fresh `TemporaryFolder`, and the B/C steps above run over it. This is done for an `OVER` and for an abandoned old game.
 4. **Other sizes** (`otherSizesRecoveredAfterLoad`, F06-AC19): the interrupted New game is on 5×5 and B starts on 4×4. R1 updates the records after `ready`, and `game-5.json` stays byte-identical.
 5. **Reset** (`resetIsNotUndoneByRecovery`, F08-AC22): `records.resetAll()` after a New game, then relaunch. `sizes` stays empty.
@@ -863,15 +863,16 @@ check_license_file() {
     err "LICENSE copyright lines differ from D-120"
 }
 
-# [M0] D-143, D-174, D-181: opt-ins appear only in the two allowed files.
+# [M0] D-143, D-174, D-181 (+ D-215 in M2): opt-ins appear only in the three allowed files.
 check_optin_allowlist() {
   local allowed='app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt
-app/src/main/kotlin/com/clayboicardi/game2048/ui/components/GameModalSheet.kt'
+app/src/main/kotlin/com/clayboicardi/game2048/ui/components/GameModalSheet.kt
+app/src/test/kotlin/com/clayboicardi/game2048/testing/MainDispatcherRule.kt'
   local hits extra
   hits="$(git grep -l -E '@(file:)?OptIn\(|^[[:space:]]*@Experimental[A-Za-z0-9]*Api\b|optIn\.add|-opt-in' \
     -- '*.kt' '*.kts' ':(exclude)docs' || true)"
   extra="$(comm -23 <(sort -u <<< "$hits" | sed '/^$/d') <(sort -u <<< "$allowed"))"
-  [[ -z "$extra" ]] || err "opt-in outside the D-174/D-181 allowlist (a new one needs a D-173 entry): $extra"
+  [[ -z "$extra" ]] || err "opt-in outside the D-174/D-181/D-215 allowlist (a new one needs a D-173 entry): $extra"
 }
 
 # [M0] D-179 (L10N_STORE_LEGAL.md §1.2): no tracked file starts with a UTF-8 BOM. Lint's
@@ -1243,6 +1244,7 @@ Root `build.gradle.kts`, exactly `ARCHITECTURE.md` §2.5: `kotlin { target("**/*
 |---|---|---|---|
 | `app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt` | `@file:OptIn(ExperimentalRoborazziApi::class)` | Every Roborazzi ATF API is experimental (V5) | D-174 |
 | `app/src/main/kotlin/com/clayboicardi/game2048/ui/components/GameModalSheet.kt` | `@OptIn(ExperimentalMaterial3Api::class)` | `ModalBottomSheet`, `rememberBottomSheetState`, `SheetValue` (`DESIGN_SYSTEM.md` §7.4) | D-181 |
+| `app/src/test/kotlin/com/clayboicardi/game2048/testing/MainDispatcherRule.kt` | `@file:OptIn(ExperimentalCoroutinesApi::class)` | `Dispatchers.setMain` and `resetMain` (§1.7); tests use only the stable `testScheduler.advanceUntilIdle()` and `runCurrent()` | D-215 |
 
 A new opt-in anywhere else needs an execution-time D-173 entry and a matching change to `check_optin_allowlist` in the same commit.
 
