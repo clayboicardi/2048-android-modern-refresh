@@ -905,7 +905,7 @@ Steps:
 | D-081 | Announcements | M4.3 | `TalkBackModeTest.statusLineDescribesMove`, `cardsAnnounceAndTakeFocus`, `statusLineAfterUndo`, `statusLineAfterNewGameAndSizeSwitch` |
 | D-082 | TalkBack pad | M4.3 | `TalkBackModeTest.padAndStatusLineFollowTouchExploration`; golden 36 |
 | D-083 | Contrast and CVD | M4.2 | `PaletteContrastTest.inkContrastAndAdjacentDeltaE` |
-| D-084 | Touch targets, font scale, focus, long-score fit | M3.5, M4.3 | `assertTouchTargets()` on every screen golden; `GameScreenTest.chromeTextNotTruncatedAtFontScale2`, `longScoresFitHeaderWithoutTruncation` (F17-AC23); `ScoreFitTest.fallbackChainTable` (F17-AC22); goldens 27–28; `KeyboardInputTest.boardTakesFocusAndTabReachesControls` |
+| D-084 | Touch targets, font scale, focus, long-score fit | M3.5, M4.3 | `assertTouchTargets()` on every screen golden; `GameScreenTest.chromeTextNotTruncatedAtFontScale2`, `longScoresFitGameOverCard`, `longScoresFitHeaderWithoutTruncation` (F17-AC23); `ScoreFitTest.fallbackChainTable` (F17-AC22); goldens 27–28; `KeyboardInputTest.boardTakesFocusAndTabReachesControls` |
 | D-085 | ATF | M0.13 onward | `atfRule` in every screen-level screenshot class (F17-AC16) |
 | D-090 | Orientation, manifest | M0.9 | `ManifestPolicyTest.noOrientationLockOrConfigChanges`, `appCategoryIsGame`, `touchscreenNotRequired`; `check-apk` item 3 |
 | D-091 | Layout modes (the preference) | M4.3 | `LayoutModeTest.modeTableAndBoundaries`; `BoardGeometryTest.resolvedLayoutTable`; goldens 29–35 |
