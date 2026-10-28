@@ -218,6 +218,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-211 | Process | Milestone refinements: M2 presenter, M3 in two pushes, M4/M5 goldens, per-milestone AC audit |
 | D-212 | Toolchain | Wrapper properties stay the 8-line D-010 file; the two default-valued lines Gradle 9.7.1 adds are dropped (supersedes TC-4's byte-identical claim) |
 | D-213 | Legal | Legacy credits come from the full history: 32 contributors including `pierre`, who translated French (`74990c4`) |
+| D-214 | Engine | `GameInvariants` also checks the later snapshots (I10–I12); `GameViewModel` treats an engine `IllegalStateException` on a restored game as a corrupt game file |
 
 ---
 
@@ -1085,7 +1086,7 @@ detekt = { id = "dev.detekt", version.ref = "detekt" }
   - an undo confirmation (research/02 §9);
   - redo (O8).
 - **Source:** [ORCH] O8.
-- **Note:** Extended by D-186.
+- **Note:** Extended by D-186, D-214.
 
 ---
 
@@ -1272,6 +1273,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/06 §1.2 case 2; research/07 G10.
 - **Rejected:** crashing or showing an error dialog; one combined file (a single corruption would lose everything).
 - **Source:** [RESEARCH].
+- **Note:** Extended by D-214.
 
 #### D-046 — Size and time budgets
 - **Decision.** `PersistenceBudgetTest` (JVM) asserts:
@@ -3459,6 +3461,24 @@ jobs:
   - D-124 already credits "every legacy contributor (git authors of this repository up to `e097460` …)", so the decision stands. Only the values derived from the shallow history were wrong.
 - **Rejected:** keeping the shallow-history values. A translator whose string ships would go uncredited, and the French translation would be credited to uberspot (D-121, D-124).
 - **Source:** [ORCH] O17 (D-173 change control, M0 review).
+
+#### D-214 — Later snapshots are checked; an engine check failure on a restored game is corruption (extends D-039, D-045; amends ARCHITECTURE.md §3.5, §9.1)
+- **Decision:**
+  - `GameInvariants.violations` also checks `snapshots[k]` for every k ≥ 1, the snapshots undo rebuilds from (I7 already pins `snapshots[0]`). None of these checks replays the move log; each costs O(N²) per snapshot:
+    - **I10:** `snapshots[k].board.size == size`.
+    - **I11:** `0 ≤ snapshots[1].score ≤ … ≤ snapshots[last].score ≤ score`. The score falls only through undo, which drops the later snapshots with it (D-033).
+    - **I12:** the status is one an accepted move can store at move 32k. `WON` ⇒ `board.maxExp() ≥ targetExp`; `KEEP_PLAYING` ⇒ `0 ≤ keepGoingAtMove < 32k`; `OVER` ⇒ `moveCount == 32k` and `!canMove(board)`.
+  - Two corruptions pass every check short of a full replay: a snapshot whose board or `rngState` the logged moves do not follow from, and a board on which two `Board.MAX_EXP` tiles meet. On these, `Game.undo` and `Game.move` throw `IllegalStateException` (the `check`s of ARCHITECTURE.md §3.3) and never return a state.
+  - From M2, `GameViewModel` catches that `IllegalStateException` from `Game.move` in `onMove` and from `Game.undo` in `onUndo`, and handles the game like a corrupt `game-N.json` (D-045): `current = replaceWithFresh(null, size)`, so nothing is finalized or carried for the replaced game (ARCHITECTURE.md §9.2), presented as `NewGame` with overlay `None`. Nothing crashes, is shown or is logged. `GameViewModelTest.engineCheckFailureIsCorruption` covers both cases (FEATURES.md F07-AC32).
+- **Rationale:**
+  - ARCHITECTURE.md §4.4 makes `GameInvariants.violations(state).isEmpty()` the decoder's whole validity check, and I1–I8 never read `snapshots[k]` for k ≥ 1 (M1 review, 2026-10-28). From the 40-move 4×4 DLRU game of seed `0x2048`, states with one field of `snapshots[1]` changed all passed I1–I8. `Game.undo` then returned `score = 9223372036854775807` for a snapshot score of −100 (`saturatingAdd` reads the negative sum as an overflow, and under D-044 a best that high never drops). It returned `OVER` on a board with a move for status `OVER`, `KEEP_PLAYING` with `keepGoingAtMove = -1` for `KEEP_PLAYING`, and `WON` without the target for `WON`: I8, I4 and I5 reject those, so the save after the undo would be reset as corrupt at the next load. It threw for a 3×3 snapshot board, a single-tile board, and a locked `OVER` board followed by logged moves. A move-0 board with two adjacent 127 tiles passed I1, and `Game.move(LEFT)` threw "Merging two 127 tiles exceeds 127". I10–I12 reject each of these snapshot states (`HistoryCodecTest.invariantsReportSnapshotViolations`), and every state an engine test produces still has no violation.
+  - I10–I12 hold for every state the engine produces. Only an accepted move stores a snapshot, with that move's board, score and status. Keep going needs `WON`, so it follows the move that stored a `WON` snapshot and precedes every `KEEP_PLAYING` one. `OVER` blocks every move, and undo drops the snapshots after its target.
+  - A replay is the only complete history check. It costs up to `moveCount` engine steps per decode: 10,000 for the D-046 budget document, which must encode and decode within 50 ms, against at most 31 for an undo. Failing fast at use and handling the exception as corruption keeps D-045's "never crash" at no decode cost (`UndoTest.undoOfInconsistentHistoryThrows`, `EngineGoldenTest.mergeAtMaxExp`).
+- **Rejected:**
+  - Replaying the whole log in `GameInvariants` or in the decoder: the cost above. It would also reject the hand-made move-0 states of the engine properties (`Arbs.stateOf`), whose boards are not their snapshot's.
+  - Bounding every exponent by the reachable maximum N² + 1. Moves do not keep it: two adjacent N² + 1 tiles merge into N² + 2, so a state that passes can move into one that fails, the next-load reset above. It would also reject D-145's property boards, which hold exponents up to 17 on every size (the 3×3 bound is 10).
+  - `Game.undo` returning `null` or a partial state on an inconsistent log: `null` already means `moveCount == 0`, and a partial state would be saved as a valid game.
+- **Source:** [ORCH] O17 (D-173 change control, M1 review).
 
 ---
 

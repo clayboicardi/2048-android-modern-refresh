@@ -963,10 +963,11 @@ object Game {
     const val START_TILES = 2
 
     fun newGame(size: BoardSize, seed: Long): GameState
+    /** Throws IllegalStateException on a merge of two Board.MAX_EXP tiles (§3.3, D-214). */
     fun move(state: GameState, direction: Direction): MoveOutcome
     /** Requires status == WON. Returns KEEP_PLAYING, or OVER when no move is possible (D-036). */
     fun keepGoing(state: GameState): GameState
-    /** null when moveCount == 0 (D-039). */
+    /** null when moveCount == 0 (D-039). Throws IllegalStateException when a logged move does not replay (D-214). */
     fun undo(state: GameState): GameState?
     fun canMove(state: GameState): Boolean
     fun canMove(board: Board): Boolean
@@ -974,7 +975,7 @@ object Game {
     fun replay(size: BoardSize, seed: Long, moves: List<Direction>): GameState
 }
 
-/** Full structural check (I1–I8 of §3.5). Used by tests and by the :app decoder (§4.4). */
+/** Full structural check (I1–I8 and I10–I12 of §3.5). Used by tests and by the :app decoder (§4.4). */
 object GameInvariants {
     /** Empty when the state is consistent; otherwise one human-readable message per violation. */
     fun violations(state: GameState): List<String>
@@ -1203,7 +1204,7 @@ fun p1SumConservedPlusSpawn() {
 | P12 | History bytes round-trip: `MoveLog.fromPackedBytes(log.toPackedBytes(), log.size) == log` and `Snapshot.fromBytes(s.toBytes(), size) == s` |
 | P13 | Spawn validity: the spawn lands on a cell that was empty after the slide, with `exp ∈ {1, 2}` |
 
-Structural invariants. `GameState.init` checks the O(1) parts (sizes and counts of I1–I4, I6) on every construction and copy. `GameInvariants.violations(state)` checks all of I1–I8; every engine test that produces a state asserts it is empty, and the `:app` decoder rejects a document whose decoded state has any violation (§4.4). None of these checks replays the move log.
+Structural invariants. `GameState.init` checks the O(1) parts (sizes and counts of I1–I4, I6) on every construction and copy. `GameInvariants.violations(state)` checks all of I1–I8 and I10–I12 (D-214); every engine test that produces a state asserts it is empty, and the `:app` decoder rejects a document whose decoded state has any violation (§4.4). None of these checks replays the move log, so two corruptions pass them: a snapshot whose board or `rngState` the logged moves do not follow from, and a board on which two `Board.MAX_EXP` tiles meet. `Game.undo` and `Game.move` throw `IllegalStateException` on these, and `GameViewModel` handles that like a corrupt game file (§9.1, D-214).
 
 | # | Invariant |
 |---|---|
@@ -1216,6 +1217,9 @@ Structural invariants. `GameState.init` checks the O(1) parts (sizes and counts 
 | I7 | `snapshots[0]` equals the board, score 0, status `PLAYING` and `rngState` of `newGame(size, seed)` (two spawns; cheap) |
 | I8 | `status == OVER` ⇒ `!canMove(board)` |
 | I9 | An accepted move always leaves ≥ 1 empty cell before its spawn, so `Moved.spawn` is never absent |
+| I10 | For every `k ≥ 1` (I7 pins `snapshots[0]`): `snapshots[k].board.size == size` (D-214) |
+| I11 | `0 ≤ snapshots[1].score ≤ … ≤ snapshots[last].score ≤ score` (D-214) |
+| I12 | For every `k ≥ 1`, the status of `snapshots[k]` is one an accepted move stores at move 32k: `WON` ⇒ its `board.maxExp() >= targetExp`; `KEEP_PLAYING` ⇒ `0 ≤ keepGoingAtMove < 32k`; `OVER` ⇒ `moveCount == 32k` and `!canMove` of its board (D-214) |
 
 ### 3.6 Golden vectors
 
@@ -1769,7 +1773,7 @@ sequenceDiagram
 `onMove` in detail (all on the main thread, no suspension):
 
 1. Return if `!ready`, `busy`, or `overlay.value != None` (D-054).
-2. `outcome = Game.move(current.state, direction)`.
+2. `outcome = Game.move(current.state, direction)`. An `IllegalStateException` (a restored board on which two `Board.MAX_EXP` tiles meet) replaces the game like a corrupt file (§9.1, D-214).
 3. `Blocked` → return. `Invalid` → `nudge.value = Nudge(++nudgeId, direction)` and return. No state, file or `BoardUi` changes (D-035).
 4. `Moved`:
    1. `now = clock.nowMs()`; `playClock.onAccepted(now, outcome.state)` (starts on the first accepted move while resumed; stops when the status leaves `PLAYING`/`KEEP_PLAYING`).
@@ -1789,7 +1793,7 @@ sequenceDiagram
 | Action | ViewModel steps | `BoardEvent` | Persisted |
 |---|---|---|---|
 | Load at start | `settings.awaitLoaded()`, `records.awaitLoaded()`, `size = BoardSize.of(lastBoardSize)`, `start = restore(size)` (below: D-044 recovery R1/R2, or a fresh game when no file exists); `hint = !onboardingDone && start.state.moveCount == 0 && start.state.undoCount == 0` (a missing file yields `fresh`, so it counts as 0; D-201); `presenter.reset(start.state, Restored)`; overlay from the loaded status with `Restored` entry; `ready = true`; then `viewModelScope.launch { recoverOtherSizes(size) }` (below) | `Restored` | game when `restore` created or replaced one; records when R1 applied an entry |
-| Undo | `Game.undo(state) ?: return` (at `moveCount == 0`, U, Ctrl+Z and Backspace show `nothing_to_undo` at most once per 2 s); `presenter.reset(state', Undo)` (cells whose exponent is unchanged keep their tile id, D-182); overlay `None`. When `undoCount` goes 0 → 1 while `RecordsMath.aggregate(records).totalUndos == 0`, the screen shows `undo_hint_no_undo_best` (D-186) | `Undo` | game |
+| Undo | `Game.undo(state) ?: return` (at `moveCount == 0`, U, Ctrl+Z and Backspace show `nothing_to_undo` at most once per 2 s; an `IllegalStateException`, a restored log that does not replay, replaces the game like a corrupt file, §9.1, D-214); `presenter.reset(state', Undo)` (cells whose exponent is unchanged keep their tile id, D-182); overlay `None`. When `undoCount` goes 0 → 1 while `RecordsMath.aggregate(records).totalUndos == 0`, the screen shows `undo_hint_no_undo_best` (D-186) | `Undo` | game |
 | New game | `current = replaceWithFresh(current, size)` (below: retry a failed records write; finalize the old game if `countsWhenReplaced`, a no-op when its `gameId` is already finalized; then a fresh game with `bestAtStart = records.best(size)` read **after** finalization, the next `gameId` and the carried `pendingFinalizations`; then save it; D-044, D-198); `presenter.reset(current.state, NewGame)` | `NewGame` | records, game |
 | Keep going | `Game.keepGoing(state)`; overlay `None`, or `GameOver(summary, Animated(moveId))` when the result is `OVER`. Entering `OVER` this way fires the game-over `Reject` on the card-exit origin; the Keep going tap itself is silent (D-185, MOTION_SPEC.md §3.12) | none (board unchanged) | game |
 | Size switch | Fold elapsed, `games.save(current)`, `settings.update { lastBoardSize = n }`, `busy = true`, then `restore(n)` in `viewModelScope`, `presenter.reset(loaded, SizeSwitched)`, `busy = false`. No confirmation and no finalization of the current game (D-007); `restore` only completes an interrupted New game of size n (R2) | `SizeSwitched` | game (both sizes), settings |
@@ -2758,7 +2762,8 @@ The script compares `exported_components "$apk"` with the expected set using `di
 | Failure | Detected by | Behaviour | Never | Test |
 |---|---|---|---|---|
 | `game-N.json` is not valid JSON or has wrong types | `JsonDocumentSerializer` → `CorruptionException` | Handler writes `GameDocument()` (size 0); `GameRepository.load` returns `null`; a fresh game of that size starts with a new seed; `bestAtStart` from records | Touch `records.json`, `settings.json` or other sizes' files | `PersistenceCorruptionTest` |
-| `game-N.json` decodes but violates an engine invariant (bad Base64, wrong lengths, snapshot count, `keepGoingAtMove`, enum ordinal) or a D-044 identity check (`gameId < 1`, including a missing `gameId` key, which decodes to 0; more than 16 `pendingFinalizations`, entry ids not strictly increasing or outside `1 until gameId`, a negative counter or `maxExp` outside `1..Board.MAX_EXP`) | `GameDocumentSerializer` validation → `CorruptionException` | Same as above | Crash; run the game on an inconsistent history; count a corrupt recovery entry | `PersistenceCorruptionTest` (one fixture per invariant family) |
+| `game-N.json` decodes but violates an engine invariant (bad Base64, wrong lengths, snapshot count, `keepGoingAtMove`, enum ordinal, a later snapshot's board size, score or status: I10–I12) or a D-044 identity check (`gameId < 1`, including a missing `gameId` key, which decodes to 0; more than 16 `pendingFinalizations`, entry ids not strictly increasing or outside `1 until gameId`, a negative counter or `maxExp` outside `1..Board.MAX_EXP`) | `GameDocumentSerializer` validation → `CorruptionException` | Same as above | Crash; run the game on an inconsistent history; count a corrupt recovery entry | `PersistenceCorruptionTest` (one fixture per invariant family) |
+| A restored game passes every invariant, but the engine cannot play it: a snapshot the logged moves do not follow from, or two `Board.MAX_EXP` tiles that meet (D-214) | `IllegalStateException` from `Game.undo` in `onUndo` or `Game.move` in `onMove`, caught in `GameViewModel` | As for a corrupt `game-N.json`: `current = replaceWithFresh(null, size)` (nothing finalized or carried for the replaced game, §9.2), presented as `NewGame` with overlay `None` | Crash; show or log anything; finalize or carry the replaced game | `GameViewModelTest.engineCheckFailureIsCorruption` (F07-AC32) |
 | `records.json` corrupt | Serializer → `CorruptionException` | `Records()` | Delete or modify any game file | `PersistenceCorruptionTest` |
 | `settings.json` corrupt | Serializer → `CorruptionException` | `Settings()`: size 4, `lastSeenVersionCode = 0` (treated as a fresh install: no What's new) | Touch other files | `PersistenceCorruptionTest` |
 | Unknown keys / unknown enum names (newer schema, downgrade) | `ignoreUnknownKeys`, `coerceInputValues` | Decode with defaults | Treat as corruption | `PersistenceFixturesTest` |
@@ -2826,7 +2831,7 @@ This is the complete canonical file map; `PLAN.md` §2 indexes the same names, a
 | `Slide.kt` | internal line traversal + merge-once (§3.3) | M1 | D-032, D-033 |
 | `Spawner.kt` | internal `spawnInto` | M1 | D-034 |
 | `Game.kt` | `object Game`: `newGame`, `move`, `step`, `keepGoing`, `undo`, `canMove`, `replay` | M1 | D-034–D-039 |
-| `GameInvariants.kt` | Public I1–I8 checker (tests + `:app` decoder) | M1 | D-041, D-045, D-145 |
+| `GameInvariants.kt` | Public I1–I8 and I10–I12 checker (tests + `:app` decoder) | M1 | D-041, D-045, D-145, D-214 |
 
 ### 10.2 `:core:engine` tests: `core/engine/src/test/kotlin/com/clayboicardi/game2048/engine/`
 
@@ -3062,7 +3067,7 @@ Root package:
 
 | Class | Kind | M |
 |---|---|---|
-| `game/GameViewModelTest` | JVM + Turbine; includes `hintShownWhileStartingGameHasNoMove` and `hintHiddenAfterAMove` (D-201), `presentationReportsSettleWithoutStateChange` (§4.11) and `headerCarriesBoardEventAndEpoch` (§4.8) | M2 (extended M3–M4) |
+| `game/GameViewModelTest` | JVM + Turbine; includes `hintShownWhileStartingGameHasNoMove` and `hintHiddenAfterAMove` (D-201), `presentationReportsSettleWithoutStateChange` (§4.11), `headerCarriesBoardEventAndEpoch` (§4.8) and `engineCheckFailureIsCorruption` (§9.1, D-214) | M2 (extended M3–M4) |
 | `game/InputBurstOrderingTest` | JVM | M2 |
 | `game/PlayClockTest` | JVM | M2 |
 | `game/GameScreenTest` | Robolectric: `undoUsedSnackbarUntilFirstFinalizedUndoGame` (D-186) and the other M3 p1 ACs; `shareOnBothCardsNotInMenu` (D-200), `menuOpensEveryDestination` and the other M3 p2 ACs; F17-AC15, F22-AC5–AC6, F24-AC7, the short-window layout checks `shortWindowsKeepBoardAndChromeOnScreen` (F18-AC10) and `scrollModeCardBringsBoardIntoView` (F18-AC12), and the long-score header check `longScoresFitHeaderWithoutTruncation` (F17-AC23) (M4) | M3 p1 |
