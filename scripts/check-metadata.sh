@@ -100,6 +100,18 @@ check_icon_glyphs() {
   done
 }
 
+# [M4] D-076/D-152: the numeral font subset is at most 32 KiB; the OFL text ships with it.
+check_font() {
+  local font=app/src/main/res/font/google_sans_flex_numerals.ttf
+  local ofl=app/src/main/res/raw/ofl_google_sans_flex.txt
+  if [[ -f "$font" ]]; then
+    (($(stat -c %s "$font") <= 32768)) || err "$font is larger than 32,768 bytes"
+    [[ -f "$ofl" ]] || err "$font exists but $ofl does not (OFL-1.1)"
+  else
+    [[ ! -f "$ofl" ]] || err "$ofl exists without the font (D-076 fallback omits both)"
+  fi
+}
+
 check_mirror_leak
 check_no_submodule
 check_executable_bits
@@ -109,6 +121,7 @@ check_license_file
 check_optin_allowlist
 check_no_bom
 check_icon_glyphs
+check_font              # [M4]
 
 [[ "$fail" -eq 0 ]] && echo "check-metadata: OK"
 exit "$fail"

@@ -30,10 +30,11 @@ import com.clayboicardi.game2048.game.board.BoardUi
 import com.clayboicardi.game2048.game.motion.LocalMotionProbe
 import com.clayboicardi.game2048.game.motion.LocalMoveTimeline
 import com.clayboicardi.game2048.game.motion.ProbeFloat
-import com.clayboicardi.game2048.ui.components.GameNumeralStyle
 import com.clayboicardi.game2048.ui.theme.GameDimens
+import com.clayboicardi.game2048.ui.theme.GameFonts
 import com.clayboicardi.game2048.ui.theme.GameMotion
 import com.clayboicardi.game2048.ui.theme.LocalTilePalette
+import com.clayboicardi.game2048.ui.theme.LocalTileSkin
 import com.clayboicardi.game2048.ui.theme.MotionPlan
 import com.clayboicardi.game2048.ui.theme.PlusNMotion
 import kotlinx.coroutines.Job
@@ -138,6 +139,7 @@ fun ScoreFloats(
 @Composable
 private fun PlusN(float: ScoreFloat, modifier: Modifier = Modifier) {
     val palette = LocalTilePalette.current
+    val skin = LocalTileSkin.current
     val exp = float.pillExp
     val ink = if (exp != null) palette.ink(exp) else MaterialTheme.colorScheme.primary
     val layer = modifier.graphicsLayer {
@@ -160,7 +162,7 @@ private fun PlusN(float: ScoreFloat, modifier: Modifier = Modifier) {
     BasicText(
         text = float.text,
         modifier = shaped,
-        style = GameNumeralStyle.copy(fontSize = GameDimens.PlusNText, color = ink),
+        style = GameFonts.plusN(skin).copy(fontSize = GameDimens.PlusNText, color = ink),
         softWrap = false,
         maxLines = 1,
     )

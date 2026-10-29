@@ -12,8 +12,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.clayboicardi.game2048.data.AppJson
+import com.clayboicardi.game2048.data.DataStoreFiles
+import com.clayboicardi.game2048.data.game.GameDocument
+import com.clayboicardi.game2048.data.game.GameDocumentMapper
 import com.clayboicardi.game2048.data.game.SavedGame
 import com.clayboicardi.game2048.data.settings.MotionPreference
+import com.clayboicardi.game2048.data.settings.Settings
 import com.clayboicardi.game2048.di.gameViewModelFactory
 import com.clayboicardi.game2048.engine.BoardSize
 import com.clayboicardi.game2048.engine.Direction
@@ -27,6 +32,7 @@ import com.clayboicardi.game2048.game.board.BoardEvent
 import com.clayboicardi.game2048.game.board.BoardUi
 import com.clayboicardi.game2048.game.board.TileKind
 import com.clayboicardi.game2048.game.header.SIZE_CHIP_TAG
+import com.clayboicardi.game2048.game.layoutTag
 import com.clayboicardi.game2048.game.motion.MotionSnapshot
 import com.clayboicardi.game2048.game.motion.ProbeOverlayKind
 import com.clayboicardi.game2048.game.overlay.SIZE_SHEET_TAG
@@ -35,16 +41,21 @@ import com.clayboicardi.game2048.motion.FilmRegion
 import com.clayboicardi.game2048.motion.MotionHarness
 import com.clayboicardi.game2048.motion.MotionRule
 import com.clayboicardi.game2048.motion.Tol
+import com.clayboicardi.game2048.testing.TEST_VERSION_CODE
+import com.clayboicardi.game2048.ui.components.LayoutMode
 import com.clayboicardi.game2048.ui.theme.GameMotion
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runner.RunWith
 import org.junit.runners.model.Statement
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowLooper
@@ -56,6 +67,9 @@ import org.robolectric.shadows.ShadowLooper
  */
 @RunWith(AndroidJUnit4::class)
 class RecreateNoReplayTest {
+    /** Outside the compose rule (default order), so its files are written before the launch. */
+    @get:Rule(order = Rule.DEFAULT_ORDER - 1) val seeded = SeededGameRule()
+
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
     private val app: Game2048Application
@@ -307,6 +321,29 @@ class RecreateNoReplayTest {
         }
     }
 
+    /** F18-AC5 */
+    @Test
+    @Config(qualifiers = "w411dp-h914dp")
+    @SeededGame
+    fun rotationKeepsStateStatic() {
+        val vm = readyViewModel()
+        compose.waitForIdle()
+        val state = savedGame().state
+        assertThat(state).isEqualTo(GoldenFixtures.FIX_MID_4.state)
+        compose.onNodeWithTag(layoutTag(LayoutMode.STACKED)).assertExists()
+
+        RuntimeEnvironment.setQualifiers("w914dp-h411dp-land")
+        compose.activityRule.scenario.recreate()
+        compose.waitForIdle()
+
+        val after = activityViewModel()
+        assertThat(after).isSameInstanceAs(vm)
+        assertThat(savedGame().state).isEqualTo(state)
+        assertAllStatic(after.board.value)
+        compose.onNodeWithTag(layoutTag(LayoutMode.THREE_COLUMN)).assertExists()
+        compose.onNodeWithTag(layoutTag(LayoutMode.STACKED)).assertDoesNotExist()
+    }
+
     /**
      * Runs [test] under a `MotionRule` of its own (MOTION_SPEC.md §8.1), nested inside this class's
      * `MainActivity` rule, so the harness composes the game with the probe and the haptics fake in
@@ -430,3 +467,39 @@ private const val WATCH_1S_MS = 1_000L
 /** 1,000 and 3,000 ms of 16 ms test frames. */
 private const val WATCH_1S_FRAMES = 63
 private const val WATCH_3S_FRAMES = 188
+
+/** The test starts on `FIX_MID_4` with onboarding done ([SeededGameRule]). */
+@Retention(AnnotationRetention.RUNTIME)
+@Target(AnnotationTarget.FUNCTION)
+private annotation class SeededGame
+
+/**
+ * For a test marked [SeededGame], writes `FIX_MID_4` and the settled settings (onboarding done, the
+ * current version seen) where the production container reads them (D-040), before the activity rule
+ * launches `MainActivity`.
+ */
+class SeededGameRule : TestRule {
+    override fun apply(base: Statement, description: Description): Statement =
+        object : Statement() {
+            override fun evaluate() {
+                if (description.getAnnotation(SeededGame::class.java) != null) writeFiles()
+                base.evaluate()
+            }
+        }
+
+    private fun writeFiles() {
+        val app = ApplicationProvider.getApplicationContext<Game2048Application>()
+        val dir = File(app.filesDir, "datastore").apply { mkdirs() }
+        val game = GoldenFixtures.FIX_MID_4
+        File(dir, DataStoreFiles.game(game.state.size))
+            .writeText(
+                AppJson.encodeToString(
+                    GameDocument.serializer(),
+                    GameDocumentMapper.toDocument(game),
+                ),
+            )
+        val settings = Settings(onboardingDone = true, lastSeenVersionCode = TEST_VERSION_CODE)
+        File(dir, DataStoreFiles.SETTINGS)
+            .writeText(AppJson.encodeToString(Settings.serializer(), settings))
+    }
+}

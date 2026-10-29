@@ -25,15 +25,22 @@ import com.clayboicardi.game2048.ui.theme.GameDimens
 
 /**
  * The board-size chip (DESIGN_SYSTEM.md §7.3; D-007): an `AssistChip` with M3 defaults, labelled
- * "N×N" (built in code, U+00D7, system font, §3.7), `ic_grid_view` before and `ic_expand_more`
- * after the label at `SizeChipIcon`. It is spoken as `board_size_cd` with the action label
- * `board_size_change`, and [onClick] opens the size sheet.
+ * "N×N" (built in code, U+00D7, system font, §3.7), `ic_grid_view` before (unless [gridIcon] is
+ * false: the COMPACT header's chip, D-249) and `ic_expand_more` after the label at `SizeChipIcon`.
+ * It is spoken as `board_size_cd` with the action label `board_size_change`, and [onClick] opens
+ * the size sheet. [enabled] is false only in the chrome probe, which is never placed.
  *
  * The chip is drawn at its own height inside a `minimumInteractiveComponentSize()` box, so its
  * focus ring (§7.7) follows the chip itself while its touch target stays 48 dp.
  */
 @Composable
-fun SizeChip(n: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun SizeChip(
+    n: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    gridIcon: Boolean = true,
+    enabled: Boolean = true,
+) {
     val label = "$n×$n"
     val description = stringResource(R.string.board_size_cd, label)
     val actionLabel = stringResource(R.string.board_size_change)
@@ -52,7 +59,8 @@ fun SizeChip(n: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
                             true
                         }
                     },
-                leadingIcon = { ChipIcon(R.drawable.ic_grid_view) },
+                enabled = enabled,
+                leadingIcon = if (gridIcon) ({ ChipIcon(R.drawable.ic_grid_view) }) else null,
                 trailingIcon = { ChipIcon(R.drawable.ic_expand_more) },
                 shape = shape,
             )

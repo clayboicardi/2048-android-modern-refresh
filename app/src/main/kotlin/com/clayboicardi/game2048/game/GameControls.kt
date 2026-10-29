@@ -1,11 +1,13 @@
 package com.clayboicardi.game2048.game
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -19,17 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.navigation3.runtime.NavKey
 import com.clayboicardi.game2048.R
 import com.clayboicardi.game2048.game.board.BoardEvent
 import com.clayboicardi.game2048.game.board.BoardUi
 import com.clayboicardi.game2048.game.motion.LocalMotionProbe
-import com.clayboicardi.game2048.game.motion.ProbeChrome
 import com.clayboicardi.game2048.ui.components.GameButton
 import com.clayboicardi.game2048.ui.components.GameButtonIcon
 import com.clayboicardi.game2048.ui.components.GameButtonStyle
-import com.clayboicardi.game2048.ui.components.GameIconButton
-import com.clayboicardi.game2048.ui.components.GameIconButtonStyle
 import com.clayboicardi.game2048.ui.theme.GameDimens
 import com.clayboicardi.game2048.ui.theme.GameMotion
 import com.clayboicardi.game2048.ui.theme.LocalEffectiveMotion
@@ -37,27 +35,37 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 
-/** Test tags of the controls bar (relied on by the input and motion tests). */
+/** Test tags of the controls (relied on by the input and motion tests). */
 const val CONTROLS_TAG = "game:controls"
 const val UNDO_TAG = "game:undo"
 const val NEW_GAME_TAG = "game:newGame"
 
-/** The More button that opens the game menu (M3-D3). */
-const val MORE_TAG = "game:more"
+/** Where the controls sit (DESIGN_SYSTEM.md §5.4, §6.6; D-249). */
+enum class ControlsForm {
+    /** STACKED and SCROLL: the controls bar, Undo and New game at 1 : 1, at least 80 dp tall. */
+    BAR,
+
+    /** Beside the TalkBack pad in STACKED and SCROLL: New game only, text only, 104 dp wide. */
+    PAD_COLUMN,
+
+    /** The THREE_COLUMN actions rail: Undo and New game stacked, each the full rail width. */
+    RAIL,
+
+    /** The SIDE_PANEL: Undo and New game on one row at 1 : 1. */
+    PANEL_ROW,
+}
 
 /**
- * The controls bar (DESIGN_SYSTEM.md §6.1, §7.3; D-039, D-199): Undo (`FilledTonalButton`,
- * `ic_undo`), enabled while the game is ready and can undo, and New game (`OutlinedButton`,
- * `ic_restart`), enabled once ready; weights 1:1, at least `ControlsBarHeight` tall. Both stay
- * enabled while a card is shown. [onNewGame] is the screen's request (it confirms while the game is
- * in progress, D-007).
- *
- * The More button (`FilledTonalIconButton` of `IconButtonDefaults.mediumContainerSize()`,
- * `ic_more_vert`, `more_options`; DESIGN_SYSTEM.md §5.5 A, §6.1, §7.3) follows them and opens the
- * game menu (`GameMoreMenu`), anchored to it: [menuOpen] is the screen's saveable menu state
- * (ARCHITECTURE.md §6.6, §7.2), [onMenuOpenChange] opens and closes it (the menu's dismissal and
- * every item close it), and [onNavigate] pushes the item's destination (`StatsKey`, `SettingsKey`,
- * `HowToPlayKey`, `AboutKey`). More is always enabled, also while a card is shown (D-199).
+ * The game controls (DESIGN_SYSTEM.md §5.4, §6.1, §7.3; D-039, D-199, D-249): Undo
+ * (`FilledTonalButton`, `ic_undo`), enabled while the game is ready and can undo, and New game
+ * (`OutlinedButton`, `ic_restart`), enabled once ready, 8 dp apart, labels on at most two lines.
+ * [form] places them: the [ControlsForm.BAR] at weights 1 : 1, the [ControlsForm.PAD_COLUMN] beside
+ * the pad (New game only, no icon), the rail's stacked buttons or the panel's row. While the
+ * TalkBack pad is shown ([padShown]) Undo is left out: the pad has it, so TalkBack meets no
+ * duplicate (DESIGN_SYSTEM.md §6.6). Both stay enabled while a card is shown. [onNewGame] is the
+ * screen's request (it confirms while the game is in progress, D-007). More is not here: the
+ * arrangements place `GameMoreButton` (D-249). Under `LocalChromeProbe` the buttons are disabled
+ * and observe nothing.
  *
  * The Undo icon turns −360° with `plan.undoIconSpin` (Full only) for every undo of [board], the
  * arrangement's presented board, cumulatively, so a key-repeat undo keeps spinning with no jump;
@@ -70,18 +78,87 @@ fun GameControls(
     ui: State<GameUiState>,
     onUndo: () -> Unit,
     onNewGame: () -> Unit,
-    menuOpen: Boolean,
-    onMenuOpenChange: (Boolean) -> Unit,
-    onNavigate: (NavKey) -> Unit,
     modifier: Modifier = Modifier,
+    form: ControlsForm = ControlsForm.BAR,
+    padShown: Boolean = false,
 ) {
+    val probe = LocalChromeProbe.current
     val state = ui.value
+    val rotation = remember { Animatable(0f) }
+    if (!probe) UndoSpin(board, rotation)
+    val ready = state.ready && !probe
+    val undo: @Composable (Modifier) -> Unit = { buttonModifier ->
+        GameButton(
+            onClick = onUndo,
+            text = stringResource(R.string.undo),
+            style = GameButtonStyle.TONAL,
+            modifier = buttonModifier.testTag(UNDO_TAG),
+            enabled = ready && state.canUndo,
+            icon = {
+                GameButtonIcon(
+                    R.drawable.ic_undo,
+                    Modifier.graphicsLayer { rotationZ = rotation.value },
+                )
+            },
+        )
+    }
+    val newGame: @Composable (Modifier, Boolean) -> Unit = { buttonModifier, icon ->
+        GameButton(
+            onClick = onNewGame,
+            text = stringResource(R.string.new_game),
+            style = GameButtonStyle.OUTLINED,
+            modifier = buttonModifier.testTag(NEW_GAME_TAG),
+            enabled = ready,
+            icon = if (icon) ({ GameButtonIcon(R.drawable.ic_restart) }) else null,
+        )
+    }
+    val showUndo = !padShown && form != ControlsForm.PAD_COLUMN
+    when (form) {
+        ControlsForm.BAR,
+        ControlsForm.PANEL_ROW ->
+            Row(
+                modifier =
+                    modifier
+                        .testTag(CONTROLS_TAG)
+                        .fillMaxWidth()
+                        .then(
+                            if (form == ControlsForm.BAR) {
+                                Modifier.heightIn(min = GameDimens.ControlsBarHeight)
+                            } else {
+                                Modifier
+                            },
+                        ),
+                horizontalArrangement = Arrangement.spacedBy(GameDimens.Space8),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (showUndo) undo(Modifier.weight(1f))
+                newGame(Modifier.weight(1f), true)
+            }
+        ControlsForm.PAD_COLUMN ->
+            Column(
+                modifier = modifier.testTag(CONTROLS_TAG).width(GameDimens.PadControlsWidth),
+                verticalArrangement = Arrangement.spacedBy(GameDimens.Space8),
+            ) {
+                newGame(Modifier.fillMaxWidth(), false)
+            }
+        ControlsForm.RAIL ->
+            Column(
+                modifier = modifier.testTag(CONTROLS_TAG).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(GameDimens.Space8),
+            ) {
+                if (showUndo) undo(Modifier.fillMaxWidth())
+                newGame(Modifier.fillMaxWidth(), true)
+            }
+    }
+}
+
+/** The Undo icon's turn for every undo of [board], and its probe readers (MOTION_SPEC.md §3.9). */
+@Composable
+private fun UndoSpin(board: State<BoardUi>, rotation: Animatable<Float, AnimationVector1D>) {
     val level = LocalEffectiveMotion.current
     val spin = remember(level) { GameMotion.plan(level).undoIconSpin }
     val currentSpin = rememberUpdatedState(spin)
-    val rotation = remember { Animatable(0f) }
     val probe = LocalMotionProbe.current
-
     val scope = rememberCoroutineScope()
     LaunchedEffect(board, rotation) {
         var spinning: Job? = null
@@ -105,56 +182,10 @@ fun GameControls(
     DisposableEffect(probe, rotation) {
         val registrations =
             listOfNotNull(
-                probe?.registerChrome { ProbeChrome(1f, rotation.value) },
+                probe?.registerUndoIcon { rotation.value },
                 probe?.registerRunning { rotation.isRunning },
             )
         onDispose { registrations.forEach { it.unregister() } }
-    }
-
-    Row(
-        modifier =
-            modifier
-                .testTag(CONTROLS_TAG)
-                .fillMaxWidth()
-                .heightIn(min = GameDimens.ControlsBarHeight),
-        horizontalArrangement = Arrangement.spacedBy(GameDimens.Space8),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        GameButton(
-            onClick = onUndo,
-            text = stringResource(R.string.undo),
-            style = GameButtonStyle.TONAL,
-            modifier = Modifier.weight(1f).testTag(UNDO_TAG),
-            enabled = state.ready && state.canUndo,
-            icon = {
-                GameButtonIcon(
-                    R.drawable.ic_undo,
-                    Modifier.graphicsLayer { rotationZ = rotation.value },
-                )
-            },
-        )
-        GameButton(
-            onClick = onNewGame,
-            text = stringResource(R.string.new_game),
-            style = GameButtonStyle.OUTLINED,
-            modifier = Modifier.weight(1f).testTag(NEW_GAME_TAG),
-            enabled = state.ready,
-            icon = { GameButtonIcon(R.drawable.ic_restart) },
-        )
-        Box {
-            GameIconButton(
-                onClick = { onMenuOpenChange(true) },
-                icon = R.drawable.ic_more_vert,
-                contentDescription = stringResource(R.string.more_options),
-                style = GameIconButtonStyle.TONAL,
-                modifier = Modifier.testTag(MORE_TAG),
-            )
-            GameMoreMenu(
-                menuOpen = menuOpen,
-                onMenuOpenChange = onMenuOpenChange,
-                onNavigate = onNavigate,
-            )
-        }
     }
 }
 

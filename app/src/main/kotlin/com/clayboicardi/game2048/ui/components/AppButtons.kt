@@ -6,6 +6,8 @@ import androidx.compose.foundation.interaction.Interaction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,12 +29,17 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.isSpecified
 import com.clayboicardi.game2048.ui.theme.GameDimens
 import kotlinx.coroutines.flow.Flow
 
@@ -110,7 +117,8 @@ fun GameButton(
 /**
  * An icon-only game button (DESIGN_SYSTEM.md §7.3): the Material 3 icon button of [style] with
  * `IconButtonDefaults.shapes()`, [containerSize] (`IconButtonDefaults.mediumContainerSize()` unless
- * given), [icon] described by [contentDescription] (the string DESIGN_SYSTEM.md §6 names), the
+ * given), [icon] described by [contentDescription] (the string DESIGN_SYSTEM.md §6 names) and drawn
+ * at [iconSize] (the icon button's default when unspecified; the pad's `GameDimens.PadIcon`), the
  * focus ring and the [interactive] gate of [GameButton].
  */
 @Composable
@@ -123,13 +131,18 @@ fun GameIconButton(
     enabled: Boolean = true,
     interactive: Boolean = true,
     containerSize: DpSize = IconButtonDefaults.mediumContainerSize(),
+    iconSize: Dp = Dp.Unspecified,
 ) {
     val shapes = IconButtonDefaults.shapes()
     val click = if (interactive) onClick else ({})
     val chrome = modifier.size(containerSize).controlModifier(shapes.shape, interactive)
     val interactions = rememberKeyboardFocusInteractions()
     val content: @Composable () -> Unit = {
-        Icon(painterResource(icon), contentDescription = contentDescription)
+        Icon(
+            painterResource(icon),
+            contentDescription = contentDescription,
+            modifier = if (iconSize.isSpecified) Modifier.size(iconSize) else Modifier,
+        )
     }
     when (style) {
         GameIconButtonStyle.TONAL ->
@@ -218,6 +231,26 @@ private fun RowScope.ButtonLabel(text: String, icon: (@Composable () -> Unit)?) 
         textAlign = TextAlign.Center,
         maxLines = 2,
     )
+}
+
+/**
+ * The narrowest a [GameButton] of [text] (no icon) can be without cutting a word of its label, in
+ * px: the label's longest word in the button's text style plus `contentPaddingFor(ControlHeight)`
+ * (D-084). A row that cannot give the button this much puts it on a row of its own (D-252).
+ */
+@Composable
+fun rememberGameButtonMinWidth(text: String): Int {
+    val measurer = rememberTextMeasurer()
+    val style = ButtonDefaults.textStyleFor(GameDimens.ControlHeight)
+    val padding = ButtonDefaults.contentPaddingFor(GameDimens.ControlHeight, false)
+    val density = LocalDensity.current
+    val direction = LocalLayoutDirection.current
+    return remember(text, style, padding, density, direction, measurer) {
+        val word = text.split(' ').maxOf { measurer.measure(it, style, maxLines = 1).size.width }
+        val sides =
+            padding.calculateStartPadding(direction) + padding.calculateEndPadding(direction)
+        word + with(density) { sides.roundToPx() }
+    }
 }
 
 /** The minimum height, the focus ring and, while not [interactive], no focus and `disabled()`. */

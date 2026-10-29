@@ -3,9 +3,11 @@ package com.clayboicardi.game2048.game.feedback
 import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
@@ -154,46 +156,61 @@ class HapticsController(
 
     private class Scheduled(val pulse: Pulse, val job: Job)
 
-    private companion object {
-        /** Reduced and Off fire at the origin (MOTION_SPEC.md §6.1). */
-        const val AT_ORIGIN_MS = 0
+    companion object {
+        /**
+         * A Settings switch turned [checked] (D-065, D-185; MOTION_SPEC.md §6.1 "separate" rows;
+         * FEATURES.md F11 item 7, F14): `ToggleOn` or `ToggleOff` through [feedback] at once, and
+         * nothing when [enabledAfter], the Haptics setting after this change, is off. So turning
+         * the Haptics switch off fires nothing and turning it on fires `ToggleOn`. The Settings
+         * screen's only haptic; it needs no timeline, so it is a function of this class rather than
+         * of a screen-scope instance (D-248).
+         */
+        fun toggle(feedback: HapticFeedback, checked: Boolean, enabledAfter: Boolean) {
+            if (!enabledAfter) return
+            feedback.performHapticFeedback(
+                if (checked) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
+            )
+        }
 
-        val WIN_FIRST =
+        /** Reduced and Off fire at the origin (MOTION_SPEC.md §6.1). */
+        private const val AT_ORIGIN_MS = 0
+
+        private val WIN_FIRST =
             Pulse(
                 HapticFeedbackType.Confirm,
                 GameMotion.Win.HAPTIC_1_FROM_ORIGIN_MS,
                 AT_ORIGIN_MS,
                 carriesOver = true,
             )
-        val WIN_SECOND =
+        private val WIN_SECOND =
             Pulse(
                 HapticFeedbackType.Confirm,
                 GameMotion.Win.HAPTIC_2_FROM_ORIGIN_MS,
                 GameMotion.Win.REDUCED_HAPTIC_GAP_MS,
                 carriesOver = true,
             )
-        val NEW_BEST =
+        private val NEW_BEST =
             Pulse(
                 HapticFeedbackType.GestureThresholdActivate,
                 GameMotion.NewBest.AT_MS,
                 AT_ORIGIN_MS,
                 carriesOver = true,
             )
-        val BIG_MERGE =
+        private val BIG_MERGE =
             Pulse(
                 HapticFeedbackType.Confirm,
                 GameMotion.MERGE_REVEAL_MS,
                 AT_ORIGIN_MS,
                 carriesOver = false,
             )
-        val MERGE =
+        private val MERGE =
             Pulse(
                 HapticFeedbackType.SegmentTick,
                 GameMotion.MERGE_REVEAL_MS,
                 AT_ORIGIN_MS,
                 carriesOver = false,
             )
-        val GAME_OVER =
+        private val GAME_OVER =
             Pulse(
                 HapticFeedbackType.Reject,
                 GameMotion.GameOver.AT_MS,
@@ -202,7 +219,7 @@ class HapticsController(
             )
 
         /** The pulses of an accepted move: its resolved haptic, then the separate game over. */
-        fun pulsesOf(moved: BoardEvent.Moved): List<Pulse> = buildList {
+        private fun pulsesOf(moved: BoardEvent.Moved): List<Pulse> = buildList {
             when (moved.haptic) {
                 MoveHaptic.WIN -> addAll(listOf(WIN_FIRST, WIN_SECOND))
                 MoveHaptic.NEW_BEST -> add(NEW_BEST)
@@ -214,6 +231,15 @@ class HapticsController(
         }
     }
 }
+
+/**
+ * The Haptics setting (D-006; ARCHITECTURE.md §4.7, §5.8): provided by `App()` from
+ * `AppViewModel.appearance`; read by the Game screen's [HapticsController] and by the Settings
+ * switches ([HapticsController.toggle]). `true`, the default setting, where `App()` is not
+ * composed.
+ */
+@Suppress("ComposeCompositionLocalUsage") // ARCHITECTURE.md §4.7: set once by App() (D-248)
+val LocalHapticsEnabled: ProvidableCompositionLocal<Boolean> = compositionLocalOf { true }
 
 /**
  * The screen scope's [HapticsController] (ARCHITECTURE.md §4.11 item 2, §5.9), from

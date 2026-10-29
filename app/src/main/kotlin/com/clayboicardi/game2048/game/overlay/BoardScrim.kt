@@ -32,13 +32,13 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntRect
 import com.clayboicardi.game2048.game.board.boardGeometryPx
 import com.clayboicardi.game2048.ui.theme.GameDimens
+import com.clayboicardi.game2048.ui.theme.GameTextStyles
 import com.clayboicardi.game2048.ui.theme.LocalTileSkin
 import kotlin.math.roundToInt
 
@@ -151,13 +151,13 @@ internal fun OverlayCard(
             fit.choice(width, budget) {
                 val probe = Constraints(minWidth = width, maxWidth = width)
                 val regularHeight =
-                    subcompose(PROBE_REGULAR) { Probe(fit) { regular(true) } }
+                    subcompose(PROBE_REGULAR) { if (fit.probing.value) Probe { regular(true) } }
                         .maxOf { it.measure(probe).height }
                 val compactHeight =
                     if (regularHeight <= budget) {
                         0
                     } else {
-                        subcompose(PROBE_COMPACT) { Probe(fit) { compact(true) } }
+                        subcompose(PROBE_COMPACT) { if (fit.probing.value) Probe { compact(true) } }
                             .maxOf { it.measure(probe).height }
                     }
                 when {
@@ -188,12 +188,14 @@ internal fun OverlayCard(
 }
 
 /**
- * The measured copy of a layout, composed only while [fit] is probing: no semantics of its own or
- * of its children, and nothing at all between measurements.
+ * The measured copy of a layout: no semantics of its own or of its children. Its slot composes it
+ * only while the [FitCache] is probing, and reads that flag in the slot's own lambda, which every
+ * `subcompose` call runs again: a `Probe` that read the flag itself would be skipped with unchanged
+ * arguments when the board rect changes right after a first probe, and leave its slot empty.
  */
 @Composable
-private fun Probe(fit: FitCache, content: @Composable () -> Unit) {
-    if (fit.probing.value) Box(Modifier.clearAndSetSemantics {}) { content() }
+private fun Probe(content: @Composable () -> Unit) {
+    Box(Modifier.clearAndSetSemantics {}) { content() }
 }
 
 /**
@@ -222,16 +224,15 @@ private class FitCache {
 }
 
 /**
- * A card's title (DESIGN_SYSTEM.md §6.3, §6.4): `displaySmall` (Regular) or `headlineSmall`
- * (Compact) at the Medium weight of their emphasized styles, which are 1.5-only and so stay in
- * `ui/theme` and `ui/components` (D-026), centred in `onSurface`, [inset] clear of the win card's
- * Share button on both sides. Unless [measuring], it is the one assertive live region of its card
- * (D-081).
+ * A card's title (DESIGN_SYSTEM.md §3.5, §6.3, §6.4): `GameTextStyles.cardTitle`
+ * (`displaySmallEmphasized`, Regular) or `cardTitleCompact` (`headlineSmallEmphasized`, Compact),
+ * the 1.5-only emphasized styles read through their `ui/theme` wrappers (D-026), centred in
+ * `onSurface`, [inset] clear of the win card's Share button on both sides. Unless [measuring], it
+ * is the one assertive live region of its card (D-081).
  */
 @Composable
 internal fun CardTitle(text: String, compact: Boolean, inset: Dp, measuring: Boolean) {
-    val typography = MaterialTheme.typography
-    val style = if (compact) typography.headlineSmall else typography.displaySmall
+    val style = if (compact) GameTextStyles.cardTitleCompact else GameTextStyles.cardTitle
     Text(
         text = text,
         modifier =
@@ -243,7 +244,7 @@ internal fun CardTitle(text: String, compact: Boolean, inset: Dp, measuring: Boo
                 ),
         color = MaterialTheme.colorScheme.onSurface,
         textAlign = TextAlign.Center,
-        style = style.copy(fontWeight = FontWeight.Medium),
+        style = style,
     )
 }
 

@@ -117,7 +117,12 @@ private fun SizeRow(option: SizeOption, onClick: () -> Unit, modifier: Modifier 
     }
 }
 
-/** The pill of a size in progress, then the check of the current size (DESIGN_SYSTEM.md §6.7). */
+/**
+ * The pill of a size in progress, then the check of the current size (DESIGN_SYSTEM.md §6.7). On
+ * the current size's row, whose container is `secondaryContainer`, the pill is `secondary` with
+ * `onSecondary` text, so its shape stays visible (D-250); on the other rows it is
+ * `secondaryContainer` with `onSecondaryContainer` text.
+ */
 @Composable
 private fun SizeRowTrailing(option: SizeOption, modifier: Modifier = Modifier) {
     Row(
@@ -126,12 +131,15 @@ private fun SizeRowTrailing(option: SizeOption, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (option.inProgress) {
+            val scheme = MaterialTheme.colorScheme
+            val pill = if (option.current) scheme.secondary else scheme.secondaryContainer
+            val ink = if (option.current) scheme.onSecondary else scheme.onSecondaryContainer
             Text(
                 text = stringResource(R.string.in_progress),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                color = ink,
                 modifier =
-                    Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                    Modifier.background(pill, CircleShape)
                         .padding(horizontal = GameDimens.Space8, vertical = GameDimens.Space4),
             )
         }

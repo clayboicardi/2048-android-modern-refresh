@@ -253,7 +253,7 @@ internal class BoardOverlayLink(
 }
 
 /** The screen scope's [BoardOverlayLink]; `null` (no link) outside the Game screen. */
-@Suppress("ComposeCompositionLocalUsage") // D-236: the screen scope's link to the live board
+@Suppress("ComposeCompositionLocalUsage") // ARCHITECTURE.md §5.3: the screen's link to the board
 internal val LocalBoardOverlayLink = staticCompositionLocalOf<BoardOverlayLink?> { null }
 
 /**

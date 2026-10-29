@@ -17,10 +17,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
@@ -46,33 +45,42 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.traversalIndex
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.clayboicardi.game2048.R
 import com.clayboicardi.game2048.game.GameUiState
 import com.clayboicardi.game2048.game.HeaderUi
+import com.clayboicardi.game2048.game.LocalChromeProbe
 import com.clayboicardi.game2048.game.board.BoardEventKind
 import com.clayboicardi.game2048.game.board.BoardUi
 import com.clayboicardi.game2048.game.board.ContentEffects
+import com.clayboicardi.game2048.game.board.HeaderStyle
 import com.clayboicardi.game2048.game.motion.LocalMotionProbe
 import com.clayboicardi.game2048.game.motion.LocalMoveTimeline
 import com.clayboicardi.game2048.game.motion.MotionProbe
 import com.clayboicardi.game2048.game.motion.MoveTimeline
 import com.clayboicardi.game2048.game.motion.ProbeBestChip
 import com.clayboicardi.game2048.game.motion.ProbeHeader
-import com.clayboicardi.game2048.ui.components.GameNumeralStyle
 import com.clayboicardi.game2048.ui.components.ScoreChip
 import com.clayboicardi.game2048.ui.components.ScoreChipLabel
 import com.clayboicardi.game2048.ui.components.SizeChip
+import com.clayboicardi.game2048.ui.components.rememberScoreAdvance14
 import com.clayboicardi.game2048.ui.components.rememberScoreValueSize
 import com.clayboicardi.game2048.ui.theme.GameDimens
+import com.clayboicardi.game2048.ui.theme.GameFonts
 import com.clayboicardi.game2048.ui.theme.GameMotion
 import com.clayboicardi.game2048.ui.theme.LocalEffectiveMotion
 import com.clayboicardi.game2048.ui.theme.LocalTileSkin
@@ -91,15 +99,48 @@ const val SCORE_TAG = "game:score"
 const val BEST_TAG = "game:best"
 const val SIZE_CHIP_TAG = "game:sizeChip"
 const val BEST_STAR_TAG = "game:bestStar"
+const val TITLE_TAG = "game:title"
+
+/** Where a [GameHeader] sits (DESIGN_SYSTEM.md §5.4, §6.1 header layouts; D-188, D-249). */
+enum class HeaderForm {
+    /** STACKED with `HeaderStyle.FULL`: the title row, then the size chip's row with More. */
+    FULL,
+
+    /** STACKED and SCROLL with `HeaderStyle.COMPACT`: no title; the size chip without its icon. */
+    COMPACT,
+
+    /** The THREE_COLUMN stats rail: the title, Score above Best, the size chip. */
+    RAIL,
+
+    /** The SIDE_PANEL's top: the title row with More, the chips, the size chip. */
+    PANEL,
+}
+
+/** The STACKED and SCROLL header form of [style]. */
+fun HeaderStyle.form(): HeaderForm =
+    when (this) {
+        HeaderStyle.FULL -> HeaderForm.FULL
+        HeaderStyle.COMPACT -> HeaderForm.COMPACT
+    }
 
 /**
- * The FULL header of the STACKED arrangement (DESIGN_SYSTEM.md §6.1 INLINE; §7.2, §7.3): row 1 is
- * the "2048" title (heading, `skin.titleColor`, auto-sized from `TitleMin` to [titleMax]) and the
- * Score and Best chips; row 2 is the board-size chip ([onSizeChipClick]). While [ui] is not ready
- * (Loading, DESIGN_SYSTEM.md §6.1) both chips show "–" and the size chip shows [loadingSize].
+ * The Game header (DESIGN_SYSTEM.md §6.1 header layouts, §7.2, §7.3; D-084, D-188, D-249): the
+ * "2048" title (a heading in `skin.titleColor`, auto-sized from `TitleMin` to [titleMax]; not in
+ * the COMPACT [form], and in the rail only while [showTitle]), the Score and Best chips, the
+ * board-size chip ([onSizeChipClick]; without its grid icon in COMPACT) and, given as [more], the
+ * More button at the end of the size chip's row (FULL, COMPACT) or of the title row (PANEL). While
+ * [ui] is not ready (Loading, DESIGN_SYSTEM.md §6.1) both chips show "–" and the size chip shows
+ * [loadingSize].
+ *
+ * The chips take the `ChipLayout` that `scoreFit` gives for the width this header is measured at
+ * and the live digit count: INLINE beside the title or the size chip and More, OWN_ROW side by side
+ * on a row of their own, or STACKED on full-width rows, a value too long for its row wrapping
+ * between digits. Their value size is `ScoreValue`'s one fitted size. More is the last item of the
+ * header's traversal group (D-080, D-249).
  *
  * Header motion (ARCHITECTURE.md §4.11 item 4; MOTION_SPEC.md §3.4–§3.6, §4.2): [header] and
- * [board] are its arrangement scope's presented values.
+ * [board] are its arrangement scope's presented values; one `GameHeader` per arrangement slot keeps
+ * its composition and running moments when [form] changes.
  * - The displayed score follows `awaitOffset(deltaMoveId, scoreAtMs)` after a move under Full and
  *   the true score at once otherwise; BEST shows `max(stored best, displayed score)`.
  * - "+N" floats: [ScoreFloats], composed inside `key(header.epoch, header.event)`.
@@ -109,6 +150,10 @@ const val BEST_STAR_TAG = "game:bestStar"
  *   advanced the epoch by exactly one. Until its label flip the chip keeps the BEST style;
  *   otherwise the NEW BEST style shows iff `newBestAnnounced`.
  * - [onHeaderPresented] reports `deltaMoveId` once the moments were launched and one frame passed.
+ *
+ * Under `LocalChromeProbe` (the never-placed measurement copy of `GameLayout`, DESIGN_SYSTEM.md
+ * §5.3) it runs no effect, starts no moment or float, registers no probe reader and never calls
+ * [onHeaderPresented]: it only lays out the values it is given.
  */
 @Composable
 fun GameHeader(
@@ -116,48 +161,292 @@ fun GameHeader(
     board: State<BoardUi>,
     ui: State<GameUiState>,
     loadingSize: Int,
+    form: HeaderForm,
     titleMax: TextUnit,
     effects: ContentEffects,
     onHeaderPresented: (deltaMoveId: Long) -> Unit,
     onSizeChipClick: () -> Unit,
     modifier: Modifier = Modifier,
+    more: (@Composable () -> Unit)? = null,
+    showTitle: Boolean = true,
 ) {
+    val chromeProbe = LocalChromeProbe.current
     val presented = header.value
     val state = ui.value
     val level = LocalEffectiveMotion.current
-    val plan = remember(level) { GameMotion.plan(level) }
+    val plan =
+        remember(level, chromeProbe) {
+            GameMotion.plan(if (chromeProbe) MotionLevel.OFF else level)
+        }
     val timeline = LocalMoveTimeline.current
     val scope = rememberCoroutineScope()
     val motion = remember { HeaderMotion(presented.score, presented.best) }
 
-    LaunchedEffect(presented.deltaMoveId) {
-        motion.onHeader(presented, plan, timeline, scope, effects)
-        withFrameNanos {}
-        if (presented.lastDelta != 0L) onHeaderPresented(presented.deltaMoveId)
+    if (!chromeProbe) {
+        LaunchedEffect(presented.deltaMoveId) {
+            motion.onHeader(presented, plan, timeline, scope, effects)
+            withFrameNanos {}
+            if (presented.lastDelta != 0L) onHeaderPresented(presented.deltaMoveId)
+        }
     }
 
     val view = motion.view(presented, plan)
-    ProbeRegistration(motion, view, effects)
+    if (!chromeProbe) ProbeRegistration(motion, view, effects)
 
-    Column(modifier.testTag(HEADER_TAG)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = GameDimens.HeaderRow1),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            GameTitle(titleMax, Modifier.weight(1f))
-            Spacer(Modifier.width(GameDimens.Space8))
-            ScoreRow(presented, board, view, motion, plan, loading = !state.ready)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = GameDimens.HeaderRow2),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    val loading = !state.ready
+    val digits = if (loading) 1 else maxOf(presented.score, presented.best).toString().length
+    val titleLead = rememberTitleLead()
+    val hasTitle = form != HeaderForm.COMPACT && (form != HeaderForm.RAIL || showTitle)
+    val railTitleMax = if (form == HeaderForm.RAIL) GameDimens.RailTitleMax else titleMax
+    HeaderLayout(
+        form = form,
+        digits = digits,
+        advance14 = rememberScoreAdvance14(),
+        titleLead = titleLead,
+        title = if (hasTitle) ({ GameTitle(railTitleMax) }) else null,
+        sizeChip = {
             SizeChip(
                 n = if (state.ready) state.size.n else loadingSize,
                 onClick = onSizeChipClick,
                 modifier = Modifier.testTag(SIZE_CHIP_TAG),
+                gridIcon = form != HeaderForm.COMPACT,
+                enabled = !chromeProbe,
             )
+        },
+        more =
+            more?.let { button ->
+                {
+                    // More is read last in the header group (D-080, D-249), also where it sits
+                    // in the title row (SIDE_PANEL): a group of its own, ordered by its index.
+                    Box(
+                        Modifier.semantics {
+                            isTraversalGroup = true
+                            traversalIndex = MORE_TRAVERSAL_INDEX
+                        },
+                    ) {
+                        button()
+                    }
+                }
+            },
+        chips = { fit -> ScoreRow(presented, board, view, motion, plan, fit, digits, loading) },
+        modifier = modifier.testTag(HEADER_TAG).semantics { isTraversalGroup = true },
+    )
+}
+
+/**
+ * Places the header's parts for [form] (DESIGN_SYSTEM.md §6.1): it measures the size chip and More
+ * first, so the COMPACT `lead` (the size chip, 8 dp and More, D-249) is exact; the FULL `lead` is
+ * [titleLead], the title's "2048" at 32 sp; then `scoreFit` at the header's width decides the
+ * chips' layout, and [chips] is composed and measured for that fit. Rows follow each other with no
+ * extra gap: the title row is at least `HeaderRow1`, the size chip's row `HeaderRow2`, the COMPACT
+ * INLINE row `HeaderCompact`.
+ */
+@Composable
+private fun HeaderLayout(
+    form: HeaderForm,
+    digits: Int,
+    advance14: Float,
+    titleLead: Float,
+    title: (@Composable () -> Unit)?,
+    sizeChip: @Composable () -> Unit,
+    more: (@Composable () -> Unit)?,
+    chips: @Composable (ScoreFit) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SubcomposeLayout(modifier) { constraints ->
+        val width = constraints.maxWidth
+        val loose = Constraints(maxWidth = width)
+        val gap = GameDimens.Space8.roundToPx()
+        val row =
+            SizeChipRow(
+                size = subcompose(HeaderSlot.SIZE_CHIP, sizeChip).map { it.measure(loose) },
+                more = more?.let { m -> subcompose(HeaderSlot.MORE, m).map { it.measure(loose) } },
+                gap = gap,
+            )
+        val lead =
+            when (form) {
+                HeaderForm.FULL -> titleLead
+                HeaderForm.COMPACT -> row.lead.toDp().value
+                HeaderForm.RAIL,
+                HeaderForm.PANEL -> null
+            }
+        val fit =
+            scoreFit(digits, width.toDp().value, lead, advance14, ownRow = form != HeaderForm.RAIL)
+        val inline = fit.layout == ChipLayout.INLINE
+        val chipsMax =
+            when {
+                !inline -> width
+                form == HeaderForm.COMPACT -> width - row.lead - gap
+                else -> width - titleLead.dp.roundToPx() - gap
+            }.coerceAtLeast(0)
+        val chipsConstraints =
+            if (inline) Constraints(maxWidth = chipsMax) else Constraints.fixedWidth(chipsMax)
+        val chipParts =
+            subcompose(HeaderSlot.CHIPS) { chips(fit) }.map { it.measure(chipsConstraints) }
+        val chipsW = chipParts.maxOfOrNull { it.width } ?: 0
+        val titleMaxW = if (inline && form == HeaderForm.FULL) width - chipsW - gap else width
+        val titleConstraints = Constraints(maxWidth = titleMaxW.coerceAtLeast(0))
+        val titleParts = title?.let { t ->
+            subcompose(HeaderSlot.TITLE, t).map { it.measure(titleConstraints) }
         }
+        val parts = HeaderParts(titleParts.orEmpty(), chipParts, row, inline)
+        val rows =
+            HeaderRows(
+                form,
+                parts,
+                row1Min = GameDimens.HeaderRow1.roundToPx(),
+                row2 = maxOf(GameDimens.HeaderRow2.roundToPx(), row.rowHeight(form)),
+            )
+        layout(width, rows.height) { placeHeader(form, width, parts, rows) }
+    }
+}
+
+/**
+ * The measured size chip and More of one header (D-249): their widths and heights, and the COMPACT
+ * `lead`, the size chip, 8 dp and More.
+ */
+private class SizeChipRow(val size: List<Placeable>, val more: List<Placeable>?, gap: Int) {
+    val sizeH = size.maxOfOrNull { it.height } ?: 0
+    val moreW = more?.maxOfOrNull { it.width } ?: 0
+    val moreH = more?.maxOfOrNull { it.height } ?: 0
+
+    /** More and the gap before it, or 0 without More. */
+    val moreSpan = if (more == null) 0 else gap + moreW
+
+    val lead = (size.maxOfOrNull { it.width } ?: 0) + moreSpan
+
+    /** The height the size chip's row needs: More counts except in the PANEL title row. */
+    fun rowHeight(form: HeaderForm): Int =
+        if (form == HeaderForm.PANEL) sizeH else maxOf(sizeH, moreH)
+}
+
+/** One header's measured parts. */
+private class HeaderParts(
+    val title: List<Placeable>,
+    val chips: List<Placeable>,
+    val row: SizeChipRow,
+    val inline: Boolean,
+) {
+    val titleH = title.maxOfOrNull { it.height } ?: 0
+    val chipsW = chips.maxOfOrNull { it.width } ?: 0
+    val chipsH = chips.maxOfOrNull { it.height } ?: 0
+}
+
+/** Places [parts] in [rows] for [form] (DESIGN_SYSTEM.md §6.1), mirrored in RTL. */
+private fun Placeable.PlacementScope.placeHeader(
+    form: HeaderForm,
+    width: Int,
+    parts: HeaderParts,
+    rows: HeaderRows,
+) {
+    // Each part at x, centred vertically in the row of rowHeight at rowTop.
+    fun centred(placeables: List<Placeable>, x: Int, rowTop: Int, rowHeight: Int) {
+        for (p in placeables) p.placeRelative(x, rowTop + (rowHeight - p.height) / 2)
+    }
+    // The chips' own rows, at the start of the row at top.
+    fun below(placeables: List<Placeable>, top: Int) {
+        for (p in placeables) p.placeRelative(0, top)
+    }
+    val row = parts.row
+    val more = row.more.orEmpty()
+    val moreX = width - row.moreW
+    when (form) {
+        HeaderForm.FULL -> {
+            centred(parts.title, 0, 0, rows.first)
+            if (parts.inline) {
+                centred(parts.chips, width - parts.chipsW, 0, rows.first)
+            } else {
+                below(parts.chips, rows.first)
+            }
+            centred(row.size, 0, rows.sizeTop, rows.row2)
+            centred(more, moreX, rows.sizeTop, rows.row2)
+        }
+        HeaderForm.COMPACT -> {
+            centred(row.size, 0, 0, rows.first)
+            centred(more, moreX, 0, rows.first)
+            if (parts.inline) {
+                centred(parts.chips, width - parts.chipsW - row.moreSpan, 0, rows.first)
+            } else {
+                below(parts.chips, rows.first)
+            }
+        }
+        HeaderForm.RAIL -> {
+            centred(parts.title, 0, 0, rows.first)
+            below(parts.chips, rows.first)
+            centred(row.size, 0, rows.sizeTop, rows.row2)
+        }
+        HeaderForm.PANEL -> {
+            centred(parts.title, 0, 0, rows.first)
+            centred(more, moreX, 0, rows.first)
+            below(parts.chips, rows.first)
+            centred(row.size, 0, rows.sizeTop, rows.row2)
+        }
+    }
+}
+
+/**
+ * The row tops and heights of one header (DESIGN_SYSTEM.md §6.1): [first] is the title row (the
+ * COMPACT size chip's row or INLINE row), [sizeTop] the top of the size chip's row where it comes
+ * last, [height] the whole header. [row1Min] is `HeaderRow1`; [row2] the size chip's row.
+ */
+private class HeaderRows(form: HeaderForm, parts: HeaderParts, row1Min: Int, val row2: Int) {
+    val first: Int
+    val sizeTop: Int
+    val height: Int
+
+    init {
+        val inline = parts.inline
+        val chipsH = parts.chipsH
+        when (form) {
+            HeaderForm.FULL -> {
+                first = maxOf(row1Min, parts.titleH, if (inline) chipsH else 0)
+                sizeTop = first + if (inline) 0 else chipsH
+                height = sizeTop + row2
+            }
+            HeaderForm.COMPACT -> {
+                first = if (inline) maxOf(row1Min, chipsH, row2) else row2
+                sizeTop = 0
+                height = first + if (inline) 0 else chipsH
+            }
+            HeaderForm.RAIL -> {
+                first = parts.titleH
+                sizeTop = first + chipsH
+                height = sizeTop + row2
+            }
+            HeaderForm.PANEL -> {
+                first = maxOf(row1Min, parts.titleH, parts.row.moreH)
+                sizeTop = first + chipsH
+                height = sizeTop + row2
+            }
+        }
+    }
+}
+
+/** The subcomposition slots of [HeaderLayout]. */
+private enum class HeaderSlot {
+    TITLE,
+    SIZE_CHIP,
+    MORE,
+    CHIPS,
+}
+
+/**
+ * The width in dp of the title "2048" at its `autoSize` minimum, `TitleMin` (DESIGN_SYSTEM.md
+ * §7.2).
+ */
+@Composable
+private fun rememberTitleLead(): Float {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val skin = LocalTileSkin.current
+    return remember(density, measurer, skin) {
+        val style = GameFonts.title(skin).copy(fontSize = GameDimens.TitleMin)
+        val width =
+            measurer
+                .measure(TITLE_VALUE.toString(), style, softWrap = false, maxLines = 1)
+                .size
+                .width
+        width / density.density
     }
 }
 
@@ -169,17 +458,22 @@ fun GameHeader(
  */
 @Composable
 private fun GameTitle(max: TextUnit, modifier: Modifier = Modifier) {
-    val color = LocalTileSkin.current.titleColor
+    val skin = LocalTileSkin.current
+    val color = skin.titleColor
     BasicText(
         text = TITLE_VALUE.toString(),
-        modifier = modifier.semantics { heading() },
-        style = GameNumeralStyle.copy(color = color),
+        modifier = modifier.testTag(TITLE_TAG).semantics { heading() },
+        style = GameFonts.title(skin).copy(color = color),
         maxLines = 1,
         autoSize = TextAutoSize.StepBased(GameDimens.TitleMin, max, GameDimens.TitleStep),
     )
 }
 
-/** Score, 8 dp, Best: the filmstrip's header region (`game:scores`). */
+/**
+ * Score, then Best, in [fit]'s layout (DESIGN_SYSTEM.md §6.1, §7.2): side by side 8 dp apart
+ * (INLINE: content-sized from `ScoreChipMinWidth` to `chipSlot`; OWN_ROW: `chipSlot` each), or
+ * stacked on full-width rows 8 dp apart. Tagged `game:scores`, the filmstrip's header region.
+ */
 @Composable
 private fun ScoreRow(
     header: HeaderUi,
@@ -187,12 +481,13 @@ private fun ScoreRow(
     view: HeaderView,
     motion: HeaderMotion,
     plan: MotionPlan,
+    fit: ScoreFit,
+    digits: Int,
     loading: Boolean,
-    modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
-    val digits = if (loading) 1 else maxOf(header.score, header.best).toString().length
-    val fontSize = rememberScoreValueSize(digits)
+    val chromeProbe = LocalChromeProbe.current
+    val fontSize = rememberScoreValueSize(digits, fit)
     val placeholder = if (loading) LOADING_VALUE else null
     val scoreLabel = stringResource(R.string.score_label)
     val bestLabel =
@@ -201,18 +496,23 @@ private fun ScoreRow(
     val onSurfaceVariant = colors.onSurfaceVariant
     // Moves and undos roll the digits; new game, size switch and restore swap them (§4.2).
     val roll = header.event == BoardEventKind.Moved || header.event == BoardEventKind.Undo
-    Row(
-        modifier = modifier.testTag(SCORES_TAG),
-        horizontalArrangement = Arrangement.spacedBy(GameDimens.Space8),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    val chipWidth =
+        when (fit.layout) {
+            ChipLayout.INLINE ->
+                Modifier.widthIn(min = GameDimens.ScoreChipMinWidth, max = fit.chipSlot.dp)
+            ChipLayout.OWN_ROW -> Modifier.width(fit.chipSlot.dp)
+            ChipLayout.STACKED -> Modifier.fillMaxWidth()
+        }
+    val score: @Composable () -> Unit = {
         ScoreChip(
             spokenLabel = scoreLabel,
             spokenValue = placeholder ?: header.score.toString(),
             label = { ScoreChipLabel(scoreLabel, { onSurfaceVariant }) },
-            modifier = Modifier.testTag(SCORE_TAG),
+            modifier = chipWidth.testTag(SCORE_TAG),
             overlay = {
-                key(header.epoch, header.event) { ScoreFloats(header, board, plan) }
+                if (!chromeProbe) {
+                    key(header.epoch, header.event) { ScoreFloats(header, board, plan) }
+                }
             },
         ) {
             ScoreOdometer(
@@ -222,8 +522,11 @@ private fun ScoreRow(
                 plan,
                 roll,
                 placeholder = placeholder,
+                digitsPerLine = fit.digitsPerLine,
             )
         }
+    }
+    val best: @Composable () -> Unit = {
         val container =
             bestColor(motion, view, colors.surfaceContainerHigh, colors.tertiaryContainer)
         val ink = bestColor(motion, view, onSurface, colors.onTertiaryContainer)
@@ -232,10 +535,36 @@ private fun ScoreRow(
             spokenLabel = bestLabel,
             spokenValue = placeholder ?: header.best.toString(),
             label = { BestLabel(view, motion, plan, labelInk) },
-            modifier = Modifier.testTag(BEST_TAG).onPlaced { motion.bestCoordinates = it },
+            modifier = chipWidth.testTag(BEST_TAG).onPlaced { motion.bestCoordinates = it },
             container = container,
         ) {
-            ScoreOdometer(view.best, fontSize, ink, plan, roll, placeholder = placeholder)
+            ScoreOdometer(
+                view.best,
+                fontSize,
+                ink,
+                plan,
+                roll,
+                placeholder = placeholder,
+                digitsPerLine = fit.digitsPerLine,
+            )
+        }
+    }
+    if (fit.layout == ChipLayout.STACKED) {
+        Column(
+            modifier = Modifier.testTag(SCORES_TAG).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(GameDimens.Space8),
+        ) {
+            score()
+            best()
+        }
+    } else {
+        Row(
+            modifier = Modifier.testTag(SCORES_TAG),
+            horizontalArrangement = Arrangement.spacedBy(GameDimens.Space8),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            score()
+            best()
         }
     }
 }
@@ -563,6 +892,9 @@ private fun startsMoment(h: HeaderUi, plan: MotionPlan): Boolean =
 
 /** The game's name as a numeral: the title "2048" in every locale and build. */
 private const val TITLE_VALUE = 2048L
+
+/** More's traversal index in the header group: after every other item (D-249). */
+private const val MORE_TRAVERSAL_INDEX = 1f
 
 /** What both chips show while the game loads (DESIGN_SYSTEM.md §6.1): an en dash. */
 private const val LOADING_VALUE = "–"

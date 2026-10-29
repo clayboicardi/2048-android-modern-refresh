@@ -420,7 +420,7 @@ Complements: `RecreateNoReplayTest` (Robolectric `ActivityScenario.recreate()` a
 | Check | Where | Rule |
 |---|---|---|
 | ATF (D-085, D-204) | `atfRule(compose)` from `testing/Accessibility.kt` (below), applied with `RuleChain.outerRule(compose).around(atfRule(compose))` in every screen-level screenshot class (`GameScreenshotTest`, `ScreensScreenshotTest`, `LocaleScreenshotTest`, `LayoutScreenshotTest`) and in `PlaceholderScreenshotTest` from M0. The rule checks the main window's root after the test, so a `dialog_*` or `sheet_*` test also calls `onNode(isDialog()).assertAccessible()` while that window is open, with the same options. ATF therefore runs on every `game_*`, `layout_*`, `settings_*`, `stats_*`, `howtoplay_*`, `about_*`, `licenses_*`, `sheet_*` and `dialog_*` golden; only `motion_*` (`MotionFilmstripTest`) is exempt | `AccessibilityCheckPreset.LATEST`, `CheckLevel.Error`, after every test and on each open dialog or sheet window. The rule captures no images of its own (verified). The opt-in it needs is D-174. Seeded once in M3 part 1: a 20 dp unlabeled clickable in the new-game dialog fails `assertAccessible()` with `SpeakableTextPresentCheck`, which the after-test check alone never saw |
-| Touch targets (D-084, D-205) | `assertTouchTargets()` called after every screen-level capture, in the same classes; for a dialog or sheet golden, `assertDialogTouchTargets()` while its window is open, and `assertTouchTargets()` once it is closed | A gate, like ATF: every clickable's touch bounds ≥ 48 × 48 dp, and no two clickables' touch bounds overlap (V6), each window in its own coordinates; in a dialog or sheet window, the clickable that covers the whole window (`ModalBottomSheet`'s "Close sheet" scrim, under the sheet) is checked for size only (D-238). ATF's size-only check is vacuous under Compose's 48 dp touch-bounds expansion |
+| Touch targets (D-084, D-205) | `assertTouchTargets()` called after every screen-level capture, in the same classes; for a dialog or sheet golden, `assertDialogTouchTargets()` while its window is open, and `assertTouchTargets()` once it is closed | A gate, like ATF: every clickable's touch bounds ≥ 48 × 48 dp, and no two clickables' touch bounds overlap (V6), each window in its own coordinates; in a dialog or sheet window, the clickable that covers the whole window (`ModalBottomSheet`'s "Close sheet" scrim, under the sheet) is checked for size only (D-238); a clickable scrolled entirely out of its container's viewport is skipped until it scrolls in (D-252). ATF's size-only check is vacuous under Compose's 48 dp touch-bounds expansion |
 | Semantics | `BoardSemanticsTest`, `TalkBackModeTest` | D-080–D-082, D-202: `CollectionInfo(N, N)`, cell labels, custom actions, live regions, status lines, direction pad |
 | Contrast and CVD | `PaletteContrastTest` (JVM) | `DESIGN_SYSTEM.md` §2.13 with the unquantized contrast and CVD ΔE method (D-205): the D-083 ink floors for exponents 1–17, the ΔE gates, every quoted contrast ratio, the chrome pairs of §2.9, HC ink rule |
 | Font scale 2.0 | `GameScreenTest.chromeTextNotTruncatedAtFontScale2` + goldens 27–28 | No text node reports `hasVisualOverflow` (`FEATURES.md` F17-AC15) |
@@ -510,16 +510,33 @@ private fun ComposeTestRule.touchTargets(
     scrimExempt: Boolean = false,
 ): Int {
     val minPx = with(density) { 48.dp.toPx() } - 0.5f
-    val nodes = onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes()
+    val nodes =
+        onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().filterNot {
+            it.isScrolledAway()
+        }
     val tooSmall =
         nodes
             .filter { it.touchBoundsInRoot.width < minPx || it.touchBoundsInRoot.height < minPx }
-            .map { "too small: ${it.id} ${it.touchBoundsInRoot}" }
+            .map { "too small: ${it.id} ${it.describe()} ${it.touchBoundsInRoot}" }
     val overlapping = if (scrimExempt) nodes.filterNot { it.coversItsWindow() } else nodes
     val problems = tooSmall + overlaps(overlapping)
     check(problems.isEmpty()) { "Touch-target violations: " + problems.joinToString() }
     return nodes.size
 }
+
+/**
+ * Whether this node has a laid-out size but none of it is visible: a clickable scrolled out of its
+ * container's viewport (a tab of a scrollable tab row past the screen edge), which no touch can
+ * reach until it scrolls in, and is checked then (D-252).
+ */
+private fun SemanticsNode.isScrolledAway(): Boolean =
+    size.width > 0 && size.height > 0 && (boundsInRoot.width <= 0f || boundsInRoot.height <= 0f)
+
+/** The node's text or content description, for a failure message. */
+private fun SemanticsNode.describe(): String =
+    (config.getOrNull(SemanticsProperties.Text)?.joinToString()
+            ?: config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString())
+        .orEmpty()
 
 /** Whether this node's touch bounds are its window's whole bounds (a modal scrim). */
 private fun SemanticsNode.coversItsWindow(): Boolean =

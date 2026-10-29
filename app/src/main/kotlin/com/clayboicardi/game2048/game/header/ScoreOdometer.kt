@@ -28,19 +28,25 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.TextUnit
 import com.clayboicardi.game2048.game.motion.LocalMotionProbe
-import com.clayboicardi.game2048.ui.components.ScoreNumeralStyle
+import com.clayboicardi.game2048.ui.components.ScoreValueLines
 import com.clayboicardi.game2048.ui.components.ScoreValueText
+import com.clayboicardi.game2048.ui.theme.GameFonts
+import com.clayboicardi.game2048.ui.theme.LocalTileSkin
 import com.clayboicardi.game2048.ui.theme.MotionPlan
 import kotlin.math.roundToInt
 
 /**
- * A Score or Best value (MOTION_SPEC.md §3.5; DESIGN_SYSTEM.md §7.2; D-064). Under Full
+ * A Score or Best value (MOTION_SPEC.md §3.5; DESIGN_SYSTEM.md §7.2; D-064, D-084). Under Full
  * ([MotionPlan.odometerSlide] set) it is an odometer: one `AnimatedContent` per digit position,
  * keyed by place value, so a units change never animates the tens. A rise slides the new digit in
  * from below and the old one out upwards; a fall (undo) reverses it; no stagger. A new leading
  * digit grows in and a removed one shrinks out (`odometerResize`, `odometerFade`). Each changed
  * digit rolls once to its new value. Under Reduced and Off ([MotionPlan.odometerSlide] `null`) it
- * is one plain text that changes at once.
+ * is one plain text per line that changes at once.
+ *
+ * A value longer than [digitsPerLine] (a STACKED value that wraps, `ScoreFit.digitsPerLine`) is cut
+ * into the lines of `scoreLines`, most significant first; the odometer places its digit positions,
+ * still keyed by place value, in those lines, and the first baseline is the last line's.
  *
  * The places run left to right, most significant first, in LTR and RTL alike (D-104). Every digit
  * is drawn at the one [fontSize], in [color]. [value] is the displayed value, never the semantics
@@ -57,10 +63,18 @@ fun ScoreOdometer(
     animate: Boolean,
     modifier: Modifier = Modifier,
     placeholder: String? = null,
+    digitsPerLine: Int = Int.MAX_VALUE,
 ) {
     val text = placeholder ?: value.toString()
+    val lines = scoreLines(text, digitsPerLine)
     if (placeholder != null || plan.odometerSlide == null) {
-        ScoreValueText(text = text, fontSize = fontSize, color = color, modifier = modifier)
+        if (lines.size == 1) {
+            ScoreValueText(text = text, fontSize = fontSize, color = color, modifier = modifier)
+        } else {
+            ScoreValueLines(modifier) {
+                for (line in lines) ScoreValueText(text = line, fontSize = fontSize, color = color)
+            }
+        }
         return
     }
     // The direction of the latest change: the previous value is kept outside the snapshot system
@@ -70,27 +84,53 @@ fun ScoreOdometer(
     SideEffect { previous.value = value }
     val digits = text.length
     val baseline = rememberRestingBaseline(fontSize)
-    // The places keep their physical left-to-right order in every layout direction: the chips
-    // mirror in RTL, a number's digits do not (D-104, DESIGN_SYSTEM.md §3.7, §5.7).
+    val place: @Composable (Int) -> Unit = { p ->
+        key(p) {
+            OdometerPlace(
+                digit = if (p < digits) text[digits - 1 - p] else BLANK,
+                rising = rising,
+                animate = animate,
+                fontSize = fontSize,
+                color = color,
+                plan = plan,
+            )
+        }
+    }
+    if (lines.size == 1) {
+        // Places from the most significant down to the units; one spare place on the left lets
+        // a removed leading digit shrink out.
+        PlaceRow(modifier.restingBaseline(baseline)) {
+            for (p in digits downTo 0) place(p)
+        }
+    } else {
+        ScoreValueLines(modifier) {
+            var highest = digits
+            for ((i, line) in lines.withIndex()) {
+                // The spare place goes with the first line.
+                val top = if (i == 0) highest else highest - 1
+                val bottom = highest - line.length
+                PlaceRow(Modifier.restingBaseline(baseline)) {
+                    for (p in top downTo bottom) place(p)
+                }
+                highest = bottom
+            }
+        }
+    }
+}
+
+/**
+ * One line of odometer places. The places keep their physical left-to-right order in every layout
+ * direction: the chips mirror in RTL, a number's digits do not (D-104, DESIGN_SYSTEM.md §3.7,
+ * §5.7).
+ */
+@Composable
+private fun PlaceRow(modifier: Modifier = Modifier, places: @Composable () -> Unit) {
     Row(
-        modifier = modifier.restingBaseline(baseline),
+        modifier = modifier,
         horizontalArrangement = Arrangement.Absolute.Left,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Places from the most significant down to the units; one spare place on the left lets
-        // a removed leading digit shrink out.
-        for (place in digits downTo 0) {
-            key(place) {
-                OdometerPlace(
-                    digit = if (place < digits) text[digits - 1 - place] else BLANK,
-                    rising = rising,
-                    animate = animate,
-                    fontSize = fontSize,
-                    color = color,
-                    plan = plan,
-                )
-            }
-        }
+        places()
     }
 }
 
@@ -157,8 +197,9 @@ private fun AnimatedContentTransitionScope<Char>.odometerTransform(
 private fun rememberRestingBaseline(fontSize: TextUnit): Int {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(fontSize, density, measurer) {
-        val style = ScoreNumeralStyle.copy(fontSize = fontSize)
+    val skin = LocalTileSkin.current
+    return remember(fontSize, density, measurer, skin) {
+        val style = GameFonts.score(skin).copy(fontSize = fontSize)
         measurer.measure("0", style, softWrap = false, maxLines = 1).firstBaseline.roundToInt()
     }
 }

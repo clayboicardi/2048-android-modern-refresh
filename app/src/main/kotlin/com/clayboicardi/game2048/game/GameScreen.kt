@@ -2,20 +2,15 @@ package com.clayboicardi.game2048.game
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -26,43 +21,36 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.navigation3.runtime.NavKey
+import com.clayboicardi.game2048.AppViewModel
 import com.clayboicardi.game2048.R
+import com.clayboicardi.game2048.about.ChangelogEntry
+import com.clayboicardi.game2048.about.WhatsNewSheet
 import com.clayboicardi.game2048.data.platform.MonotonicClock
-import com.clayboicardi.game2048.data.settings.Settings
 import com.clayboicardi.game2048.engine.BoardSize
 import com.clayboicardi.game2048.engine.Direction
 import com.clayboicardi.game2048.game.board.BoardEvent
 import com.clayboicardi.game2048.game.board.BoardOverlayLink
 import com.clayboicardi.game2048.game.board.BoardUi
-import com.clayboicardi.game2048.game.board.BoardView
 import com.clayboicardi.game2048.game.board.ContentEffects
 import com.clayboicardi.game2048.game.board.ContentEffectsCanvas
 import com.clayboicardi.game2048.game.board.LocalBoardOverlayLink
 import com.clayboicardi.game2048.game.board.LocalRecompositionCounter
-import com.clayboicardi.game2048.game.board.horizontalMargin
-import com.clayboicardi.game2048.game.board.verticalMargin
 import com.clayboicardi.game2048.game.feedback.HapticsEffects
+import com.clayboicardi.game2048.game.feedback.LocalHapticsEnabled
 import com.clayboicardi.game2048.game.feedback.rememberHapticsController
-import com.clayboicardi.game2048.game.header.GameHeader
 import com.clayboicardi.game2048.game.input.GameKeyInput
 import com.clayboicardi.game2048.game.input.SwipeConfig
 import com.clayboicardi.game2048.game.input.swipeToMove
@@ -81,11 +69,12 @@ import com.clayboicardi.game2048.game.overlay.WinCard
 import com.clayboicardi.game2048.game.overlay.rememberOverlayController
 import com.clayboicardi.game2048.game.share.ShareStrings
 import com.clayboicardi.game2048.game.share.ShareText
-import com.clayboicardi.game2048.ui.components.GameSnackbarHost
+import com.clayboicardi.game2048.ui.components.KeepScreenOn
+import com.clayboicardi.game2048.ui.components.rememberTouchExplorationEnabled
 import com.clayboicardi.game2048.ui.components.shareText
 import com.clayboicardi.game2048.ui.components.showGameSnackbar
-import com.clayboicardi.game2048.ui.theme.GameDimens
 import com.clayboicardi.game2048.ui.theme.LocalTilePalette
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.launch
 
 /**
@@ -93,26 +82,32 @@ import kotlinx.coroutines.launch
  * D-047, D-054, D-186, D-199). It collects `viewModel.board`, `header` and `overlay` once each with
  * `collectAsStateWithLifecycle()` and never reads their values in its own body, so it recomposes 0
  * times per move (MOTION_SPEC.md §7.2, `onScreen()`); it makes the screen scope's
- * `rememberPresented` states and, until M4.3, the one arrangement's (ARCHITECTURE.md §4.11 item 2).
- * It creates and provides the screen scope's `MoveTimeline`, `HapticsController`, `ContentEffects`,
- * board link (`LocalBoardOverlayLink`) and `GameKeyInput`, applies `Modifier.swipeToMove` to the
- * content area inside `safeDrawing` and the key handlers, owns the new-game dialog, the board-size
- * sheet and the game menu (each `rememberSaveable`, ARCHITECTURE.md §7.2) and the snackbars
- * (D-186), and reports the presentations of the values its readers start. Its `OverlayController`
- * (screen scope) sequences the win and game-over cards, which the overlay host draws over the board
- * outside the arrangement (scrim, `ContentEffectsCanvas`, card; D-008, D-187, D-200); while a card
- * is shown the controls-bar Undo and New game and the U, Ctrl+Z, Backspace, N and R keys act like
- * its buttons (D-199). [settings] gives the Haptics, Move timing and Swipe sensitivity settings;
+ * `rememberPresented` states (ARCHITECTURE.md §4.11 item 2). It creates and provides the screen
+ * scope's `MoveTimeline`, `HapticsController`, `ContentEffects`, board link
+ * (`LocalBoardOverlayLink`) and `GameKeyInput`, applies `Modifier.swipeToMove` to the content area
+ * inside `safeDrawing` and the key handlers, owns the new-game dialog, the board-size sheet and the
+ * game menu (each `rememberSaveable`, ARCHITECTURE.md §7.2) and the snackbars (D-186), and reports
+ * the presentations of the values its readers start. Its `OverlayController` (screen scope)
+ * sequences the win and game-over cards, which the overlay host draws over the board outside the
+ * arrangement (scrim, `ContentEffectsCanvas`, card; D-008, D-187, D-200); while a card is shown the
+ * controls-bar Undo and New game and the U, Ctrl+Z, Backspace, N and R keys act like its buttons
+ * (D-199). [appViewModel] gives the Move timing and Swipe sensitivity settings and the Loading size
+ * of `AppViewModel.appearance` (the Haptics setting comes from `LocalHapticsEnabled`), and its
+ * `whatsNew` makes the What's new sheet one of the modals (D-248, ARCHITECTURE.md §6.6, §7.2);
  * [clock] is the container's `MonotonicClock` (rate limits, flash limiter); [onNavigate] pushes a
  * sub-screen (`AppNavHost`'s `navigate`, ARCHITECTURE.md §7.1), called by the game menu.
  *
- * M3 part 1 composes the one STACKED arrangement with the FULL header (DESIGN_SYSTEM.md §5.3, §5.5
- * A); M4's `GameLayout` replaces it.
+ * [GameLayout] draws the arrangement that `resolveGameLayout` picks (DESIGN_SYSTEM.md §5.3, §5.4;
+ * D-188), each in its own subcomposition slot with its own presentation scope; the screen passes it
+ * the `board` and `header` collectors, never a screen-scope retention state. Touch exploration
+ * (`rememberTouchExplorationEnabled`) shows the TalkBack pad and status line (D-081, D-082), and
+ * the Keep screen on setting holds the screen on while the game is in progress and Game is resumed
+ * (F20).
  */
 @Composable
 fun GameScreen(
     viewModel: GameViewModel,
-    settings: Settings,
+    appViewModel: AppViewModel,
     clock: MonotonicClock,
     onNavigate: (NavKey) -> Unit,
     modifier: Modifier = Modifier,
@@ -124,12 +119,13 @@ fun GameScreen(
     val nudge = viewModel.nudge.collectAsStateWithLifecycle()
     val message = viewModel.message.collectAsStateWithLifecycle()
     val sizeOptions = viewModel.sizeOptions.collectAsStateWithLifecycle()
+    val appearance by appViewModel.appearance.collectAsStateWithLifecycle()
+    val whatsNew = appViewModel.whatsNew.collectAsStateWithLifecycle()
     // The screen scope: the readers composed outside the arrangement (haptics, snackbars, cards).
+    // Each arrangement makes its own scope in its GameLayout slot (ARCHITECTURE.md §4.11 item 2).
     val screenBoard = boardIn.rememberPresented(sameBoardPresentation)
     val screenOverlay = overlayIn.rememberPresented(sameOverlayPresentation)
-    // Until M4.3, the one arrangement's scope, made here beside the screen scope.
-    val board = boardIn.rememberPresented(sameBoardPresentation)
-    val header = headerIn.rememberPresented(sameHeaderPresentation)
+    val talkBack = rememberTouchExplorationEnabled()
 
     val counter = LocalRecompositionCounter.current
     SideEffect { counter?.onScreen() }
@@ -143,6 +139,7 @@ fun GameScreen(
     val onPaused: () -> Unit = viewModel::onPaused
     val onSizeSheetOpened: () -> Unit = viewModel::onSizeSheetOpened
     val onSizeSelected: (BoardSize) -> Unit = viewModel::onSizeSelected
+    val onHintDismissed: () -> Unit = viewModel::onHintDismissed
     var dialogOpen by rememberSaveable { mutableStateOf(false) }
     var sheetOpen by rememberSaveable { mutableStateOf(false) }
     var menuOpen by rememberSaveable { mutableStateOf(false) }
@@ -151,9 +148,12 @@ fun GameScreen(
         remember(uiState, onNewGame) {
             { if (uiState.value.inProgress) dialogOpen = true else onNewGame() }
         }
-    // ARCHITECTURE.md §6.6: the dialog, the sheet and the menu are fully modal; the board takes
-    // input only with no modal, no card, a loaded game and no size switch loading.
-    val modalOpen = remember { derivedStateOf { dialogOpen || sheetOpen || menuOpen } }
+    // ARCHITECTURE.md §6.6: the dialog, the sheets (size, What's new) and the menu are fully
+    // modal; the board takes input only with no modal, no card, a loaded game and no size switch
+    // loading.
+    val modalOpen = remember {
+        derivedStateOf { dialogOpen || sheetOpen || menuOpen || !whatsNew.value.isNullOrEmpty() }
+    }
     val cardShown =
         remember(screenOverlay) {
             derivedStateOf { screenOverlay.value != OverlayUi.None }
@@ -172,16 +172,18 @@ fun GameScreen(
     val onBoardPresented: (Long) -> Unit = viewModel::onBoardPresented
     val onHeaderPresented: (Long) -> Unit = viewModel::onHeaderPresented
     val currentOnNavigate = rememberUpdatedState(onNavigate)
-    val chromeActions = remember {
-        ChromeCallbacks(
-            onSizeChip = { sheetOpen = true },
-            onMenuOpenChange = { open -> menuOpen = open },
-            onNavigate = { key -> currentOnNavigate.value(key) },
-        )
-    }
+    val chromeActions =
+        remember(onHintDismissed) {
+            ChromeCallbacks(
+                onSizeChip = { sheetOpen = true },
+                onMenuOpenChange = { open -> menuOpen = open },
+                onNavigate = { key -> currentOnNavigate.value(key) },
+                onHintDismissed = onHintDismissed,
+            )
+        }
     val swipeConfig =
         rememberUpdatedState(
-            SwipeConfig(settings.moveTiming, settings.swipeSensitivity.thresholdDp),
+            SwipeConfig(appearance.moveTiming, appearance.swipeSensitivity.thresholdDp),
         )
     val timeline = remember { MoveTimeline() }
     val effects = remember { ContentEffects() }
@@ -189,6 +191,12 @@ fun GameScreen(
     val snackbars = remember { SnackbarHostState() }
     val boardFocus = remember { FocusRequester() }
     val boardBounds = remember { BoardBounds() }
+    val report = remember { LayoutReport() }
+    // D-051, D-188: the whole content takes swipes, except in SCROLL, where only the board does.
+    val surfaceSwipe =
+        remember(boardInputEnabled, report) {
+            derivedStateOf { boardInputEnabled.value && !report.isScroll }
+        }
     val background = LocalTilePalette.current.background
 
     LifecycleResumeEffect(onResumed, onPaused) {
@@ -196,12 +204,13 @@ fun GameScreen(
         onPauseOrDispose { onPaused() }
     }
     SizeSheetEffects(sheetOpen, uiState, onSizeSheetOpened)
+    KeepScreenOnWhilePlaying(appearance.keepScreenOn, uiState)
 
     CompositionLocalProvider(
         LocalMoveTimeline provides timeline,
         LocalBoardOverlayLink provides link,
     ) {
-        val haptics = rememberHapticsController(settings.haptics, clock)
+        val haptics = rememberHapticsController(LocalHapticsEnabled.current, clock)
         HapticsEffects(haptics, screenBoard, nudge)
         val cards = rememberOverlayController(screenOverlay, screenBoard, haptics, commands)
         // D-199: while a card is shown, the chrome and the U, Ctrl+Z, Backspace, N and R keys act
@@ -243,31 +252,44 @@ fun GameScreen(
                     onHeaderPresented = onHeaderPresented,
                 )
             }
-        Box(
-            modifier.fillMaxSize().background(background).onPreviewKeyEvent(keyInput::onPreviewKey),
-        ) {
-            SnackbarEffects(screenBoard, message, snackbars)
-            // The gesture surface (D-051): the content inside safeDrawing, around the arrangement
-            // and the overlay, so a swipe that starts on an exiting card reaches the board (I6).
-            Box(
-                Modifier.fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .swipeToMove(swipeConfig, boardInputEnabled, onMove),
-            ) {
-                StackedArrangement(
-                    board = board,
-                    header = header,
+        val cardComposed = remember(cards) { derivedStateOf { cards.shown != OverlayUi.None } }
+        val inputs =
+            remember(callbacks, chromeActions, cards) {
+                LayoutInputs(
+                    board = boardIn,
+                    header = headerIn,
                     ui = uiState,
                     nudge = nudge,
-                    loadingSize = settings.lastBoardSize,
+                    talkBack = talkBack,
                     clock = clock,
                     effects = effects,
                     snackbars = snackbars,
                     boardFocus = boardFocus,
                     cardShown = cardShown,
+                    cardComposed = cardComposed,
                     boardBounds = boardBounds,
+                    report = report,
                     callbacks = callbacks,
-                    chromeActions = chromeActions,
+                    chrome = chromeActions,
+                    swipeConfig = swipeConfig,
+                    boardInputEnabled = boardInputEnabled,
+                )
+            }
+        Box(
+            modifier.fillMaxSize().background(background).onPreviewKeyEvent(keyInput::onPreviewKey),
+        ) {
+            SnackbarEffects(screenBoard, message, snackbars)
+            // The gesture surface (D-051): the content inside safeDrawing, around the arrangement
+            // and the overlay, so a swipe that starts on an exiting card reaches the board (I6);
+            // in SCROLL the board alone takes swipes (D-188).
+            Box(
+                Modifier.fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .swipeToMove(swipeConfig, surfaceSwipe, onMove),
+            ) {
+                GameLayout(
+                    inputs = inputs,
+                    loadingSize = appearance.lastBoardSize,
                     menuOpen = menuOpen,
                 )
                 OverlayHost(cards, effects, screenBoard, boardBounds.rect, boardFocus)
@@ -292,8 +314,23 @@ fun GameScreen(
                     onDismissRequest = { sheetOpen = false },
                 )
             }
+            WhatsNewHost(whatsNew, appViewModel::onWhatsNewDismissed)
         }
     }
+}
+
+/**
+ * The What's new sheet over the Game root while [entries] (`AppViewModel.whatsNew`) holds entries
+ * (D-009, D-248; ARCHITECTURE.md §7.2, §4.13). [entries] is read here only, so a change recomposes
+ * this host, not the screen.
+ */
+@Composable
+private fun WhatsNewHost(
+    entries: State<ImmutableList<ChangelogEntry>?>,
+    onDismissRequest: () -> Unit,
+) {
+    val shown = entries.value
+    if (!shown.isNullOrEmpty()) WhatsNewSheet(shown, onDismissRequest)
 }
 
 /**
@@ -435,249 +472,18 @@ private fun OverlayUi.summaryOrNull(): GameSummary? =
 /** A plain holder, not snapshot state, written only from effects. */
 private class Holder<T>(var value: T)
 
-/** The commands the arrangement's readers send (method references of the screen's ViewModel). */
-@Immutable
-private class GameCallbacks(
-    val onMove: (Direction) -> Unit,
-    val onUndo: () -> Unit,
-    /** The screen's New game request: it confirms while the game is in progress (D-007). */
-    val onNewGame: () -> Unit,
-    val onBoardKey: (KeyEvent) -> Boolean,
-    val onBoardPresented: (Long) -> Unit,
-    val onHeaderPresented: (Long) -> Unit,
-)
-
-/** The chrome commands of the arrangement: the size chip, the game menu and navigation (D-236). */
-@Immutable
-private class ChromeCallbacks(
-    /** Opens the board-size sheet (DESIGN_SYSTEM.md §6.7). */
-    val onSizeChip: () -> Unit,
-    /** Opens or closes the game menu (DESIGN_SYSTEM.md §6.1). */
-    val onMenuOpenChange: (Boolean) -> Unit,
-    /** Pushes a sub-screen (ARCHITECTURE.md §7.1). */
-    val onNavigate: (NavKey) -> Unit,
-)
-
 /**
- * The STACKED arrangement (DESIGN_SYSTEM.md §5.3 STACKED row, §5.5 A): inside `safeDrawing` (the
- * screen's gesture surface around it, D-051) and the D-188 margins, the FULL header, the board and
- * the controls bar, as wide as the board, whose side is `min(max(availW, BoardFloor), availH −
- * (HeaderHeight + 2·StackGap + ControlsBarHeight), BoardMax)`. It publishes the board's bounds in
- * its parent into [boardBounds] for the screen's overlay and requests the board's focus when it
- * appears (D-053), unless a card is shown then ([cardShown]): the card's primary button has it
- * (D-081), and the board takes it back when the card leaves.
+ * Keeps the screen on while [setting] (Keep screen on while playing, D-006) is on, the Game
+ * destination is resumed and its game is in progress ([ui]; FEATURES.md F20): a card, a fresh
+ * board, the Loading state and every sub-screen leave it off. [ui] is read here only, so the screen
+ * does not recompose.
  */
 @Composable
-private fun StackedArrangement(
-    board: State<BoardUi>,
-    header: State<HeaderUi>,
-    ui: State<GameUiState>,
-    nudge: State<Nudge?>,
-    loadingSize: Int,
-    clock: MonotonicClock,
-    effects: ContentEffects,
-    snackbars: SnackbarHostState,
-    boardFocus: FocusRequester,
-    cardShown: State<Boolean>,
-    boardBounds: BoardBounds,
-    callbacks: GameCallbacks,
-    chromeActions: ChromeCallbacks,
-    menuOpen: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    // Placed inside safeDrawing by the screen's gesture surface: the window is this box plus the
-    // safe insets.
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val density = LocalDensity.current
-        val direction = LocalLayoutDirection.current
-        val safe = WindowInsets.safeDrawing
-        val gestures = WindowInsets.systemGestures
-        val safeWidth =
-            with(density) {
-                (safe.getLeft(this, direction) + safe.getRight(this, direction)).toDp()
-            }
-        val safeHeight = with(density) { (safe.getTop(this) + safe.getBottom(this)).toDp() }
-        val windowWidth = maxWidth + safeWidth
-        val windowHeight = maxHeight + safeHeight
-        val marginLeft =
-            horizontalMargin(
-                windowWidth,
-                with(density) { gestures.getLeft(this, direction).toDp() },
-            )
-        val marginRight =
-            horizontalMargin(
-                windowWidth,
-                with(density) { gestures.getRight(this, direction).toDp() },
-            )
-        val marginVertical = verticalMargin(windowHeight)
-        val availW = maxWidth - marginLeft - marginRight
-        val availH = maxHeight - marginVertical * 2
-        val chrome =
-            GameDimens.HeaderHeight + GameDimens.StackGap * 2 + GameDimens.ControlsBarHeight
-        val side =
-            minOf(maxOf(availW, GameDimens.BoardFloor), availH - chrome, GameDimens.BoardMax)
-                .coerceAtLeast(Dp.Hairline)
-        val titleMax =
-            if (windowWidth >= GameDimens.WidthExpandedMin) {
-                GameDimens.TitleMaxExpanded
-            } else {
-                GameDimens.TitleMax
-            }
-        val origin = with(density) { IntOffset(marginLeft.roundToPx(), marginVertical.roundToPx()) }
-        StackedLayout(
-            boardSide = side,
-            boardBounds = boardBounds,
-            boardOrigin = origin,
-            header = {
-                GameHeader(
-                    header = header,
-                    board = board,
-                    ui = ui,
-                    loadingSize = loadingSize,
-                    titleMax = titleMax,
-                    effects = effects,
-                    onHeaderPresented = callbacks.onHeaderPresented,
-                    onSizeChipClick = chromeActions.onSizeChip,
-                )
-            },
-            board = { BoardSlot(board, ui, nudge, clock, boardFocus, callbacks) },
-            controls = {
-                GameControls(
-                    board = board,
-                    ui = ui,
-                    onUndo = callbacks.onUndo,
-                    onNewGame = callbacks.onNewGame,
-                    menuOpen = menuOpen,
-                    onMenuOpenChange = chromeActions.onMenuOpenChange,
-                    onNavigate = chromeActions.onNavigate,
-                )
-            },
-            snackbar = { GameSnackbarHost(snackbars) },
-            modifier =
-                Modifier.fillMaxSize()
-                    .absolutePadding(
-                        left = marginLeft,
-                        top = marginVertical,
-                        right = marginRight,
-                        bottom = marginVertical,
-                    ),
-        )
-        // A card shown when the arrangement appears keeps its primary button focused (D-081).
-        LaunchedEffect(boardFocus) { if (!cardShown.value) boardFocus.requestFocus() }
-    }
-}
-
-/** The board of this arrangement: its presented `BoardUi` with the chrome state it needs. */
-@Composable
-private fun BoardSlot(
-    board: State<BoardUi>,
-    ui: State<GameUiState>,
-    nudge: State<Nudge?>,
-    clock: MonotonicClock,
-    focus: FocusRequester,
-    callbacks: GameCallbacks,
-    modifier: Modifier = Modifier,
-) {
-    val state = ui.value
-    BoardView(
-        board = board.value,
-        nudge = nudge.value,
-        status = state.status,
-        canUndo = state.canUndo,
-        loading = !state.ready,
-        clock = clock,
-        onMove = callbacks.onMove,
-        onUndo = callbacks.onUndo,
-        onNewGame = callbacks.onNewGame,
-        onBoardKey = callbacks.onBoardKey,
-        onPresented = callbacks.onBoardPresented,
-        modifier = modifier,
-        focusRequester = focus,
-    )
-}
-
-/**
- * The board's bounds in the screen's inset box, for the overlay (the scrim and the card placed on
- * the board): written by the arrangement's measure, read by the overlay in layout only.
- */
-@Stable
-private class BoardBounds {
-    private val state = mutableStateOf(IntRect.Zero)
-
-    val rect: State<IntRect>
-        get() = state
-
-    /** Stores [rect] when it changed, without observing the old value. */
-    fun publish(rect: IntRect) {
-        if (Snapshot.withoutReadObservation { state.value } != rect) state.value = rect
-    }
-}
-
-/**
- * Places the STACKED column (DESIGN_SYSTEM.md §5.5 A): [header] at the top and [controls] at the
- * bottom, both [boardSide] wide, and the [boardSide] square [board] centred between them, so the
- * two gaps flex equally (at least `StackGap` by the board-size rule); the board's bounds in the
- * parent, offset by [boardOrigin] (this layout's position there), go to [boardBounds] in measure.
- * The [snackbar] host, board − 16 dp wide, sits in the gap between the board and the controls when
- * that gap is at least its height + 16 dp, and otherwise over the board, bottom-centred, 8 dp above
- * its bottom edge: it never covers the controls bar (D-186).
- */
-@Composable
-private fun StackedLayout(
-    boardSide: Dp,
-    boardBounds: BoardBounds,
-    boardOrigin: IntOffset,
-    header: @Composable () -> Unit,
-    board: @Composable () -> Unit,
-    controls: @Composable () -> Unit,
-    snackbar: @Composable () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Layout(contents = listOf(header, board, controls, snackbar), modifier = modifier) {
-        slots,
-        constraints ->
-        val side = boardSide.roundToPx()
-        val column =
-            Constraints(minWidth = side, maxWidth = side, maxHeight = constraints.maxHeight)
-        val headerPlaceable = slots[SLOT_HEADER].first().measure(column)
-        val controlsPlaceable = slots[SLOT_CONTROLS].first().measure(column)
-        val boardPlaceable = slots[SLOT_BOARD].first().measure(Constraints.fixed(side, side))
-        val snackWidth = (side - GameDimens.Space16.roundToPx()).coerceAtLeast(0)
-        val snackPlaceable =
-            slots[SLOT_SNACKBAR]
-                .first()
-                .measure(
-                    Constraints(
-                        minWidth = snackWidth,
-                        maxWidth = snackWidth,
-                        maxHeight = constraints.maxHeight,
-                    ),
-                )
-        val width = constraints.maxWidth
-        val height = constraints.maxHeight
-        val x = (width - side) / 2
-        val controlsY = height - controlsPlaceable.height
-        val boardY = headerPlaceable.height + (controlsY - headerPlaceable.height - side) / 2
-        // Measured before the screen's overlay, which reads the bounds in its own measure pass.
-        val rect =
-            IntRect(IntOffset(boardOrigin.x + x, boardOrigin.y + boardY), IntSize(side, side))
-        boardBounds.publish(rect)
-        layout(width, height) {
-            val boardBottom = boardY + side
-            val gap = controlsY - boardBottom
-            val snackHeight = snackPlaceable.height
-            val snackY =
-                if (gap >= snackHeight + GameDimens.Space16.roundToPx()) {
-                    boardBottom + (gap - snackHeight) / 2
-                } else {
-                    boardBottom - GameDimens.Space8.roundToPx() - snackHeight
-                }
-            headerPlaceable.place(x, 0)
-            boardPlaceable.place(x, boardY)
-            controlsPlaceable.place(x, controlsY)
-            snackPlaceable.place((width - snackPlaceable.width) / 2, snackY)
-        }
-    }
+private fun KeepScreenOnWhilePlaying(setting: Boolean, ui: State<GameUiState>) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val stage by lifecycle.currentStateAsState()
+    val resumed = stage.isAtLeast(Lifecycle.State.RESUMED)
+    KeepScreenOn(setting && resumed && ui.value.inProgress)
 }
 
 /**
@@ -716,9 +522,3 @@ private fun SnackbarEffects(
 
 /** The id of the last message shown; only the snackbar effect writes it. */
 private class MessageMark(var id: Long?)
-
-/** The content slots of [StackedLayout], in the order it lists them. */
-private const val SLOT_HEADER = 0
-private const val SLOT_BOARD = 1
-private const val SLOT_CONTROLS = 2
-private const val SLOT_SNACKBAR = 3

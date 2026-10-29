@@ -2,15 +2,19 @@ package com.clayboicardi.game2048.game
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.DpSize
 import androidx.navigation3.runtime.NavKey
 import com.clayboicardi.game2048.AboutKey
 import com.clayboicardi.game2048.HowToPlayKey
@@ -18,6 +22,65 @@ import com.clayboicardi.game2048.R
 import com.clayboicardi.game2048.SettingsKey
 import com.clayboicardi.game2048.StatsKey
 import com.clayboicardi.game2048.menuItemTag
+import com.clayboicardi.game2048.ui.components.GameIconButton
+import com.clayboicardi.game2048.ui.components.GameIconButtonStyle
+
+/** The More button that opens the game menu (M3-D3). */
+const val MORE_TAG = "game:more"
+
+/**
+ * The More button (DESIGN_SYSTEM.md §6.1, §7.3; D-199, D-249): a `FilledTonalIconButton`
+ * (`GameIconButton` TONAL, `ic_more_vert`, `more_options`) with [GameMoreMenu] anchored to it,
+ * wherever the arrangement places it: at the end of the size chip's header row in STACKED and
+ * SCROLL ([containerSize] `GameDimens.HeaderMoreSize`, 40 dp, centred in the 48 dp minimum
+ * interactive size, so header row 2 stays 48 dp), last in the THREE_COLUMN actions rail and at the
+ * end of the SIDE_PANEL title row (`IconButtonDefaults.mediumContainerSize()`, [containerSize]
+ * `null`). It is always enabled, also while a card is shown (D-199), except in the chrome probe
+ * ([enabled] false), which is never placed. [menuOpen], [onMenuOpenChange] and [onNavigate] are the
+ * menu's (below).
+ */
+@Composable
+fun GameMoreButton(
+    menuOpen: Boolean,
+    onMenuOpenChange: (Boolean) -> Unit,
+    onNavigate: (NavKey) -> Unit,
+    modifier: Modifier = Modifier,
+    containerSize: DpSize? = null,
+    enabled: Boolean = true,
+) {
+    Box(modifier.minimumInteractiveComponentSize(), contentAlignment = Alignment.Center) {
+        val onClick = { onMenuOpenChange(true) }
+        val description = stringResource(R.string.more_options)
+        val tagged = Modifier.testTag(MORE_TAG)
+        if (containerSize == null) {
+            GameIconButton(
+                onClick = onClick,
+                icon = R.drawable.ic_more_vert,
+                contentDescription = description,
+                style = GameIconButtonStyle.TONAL,
+                modifier = tagged,
+                enabled = enabled,
+            )
+        } else {
+            GameIconButton(
+                onClick = onClick,
+                icon = R.drawable.ic_more_vert,
+                contentDescription = description,
+                style = GameIconButtonStyle.TONAL,
+                modifier = tagged,
+                enabled = enabled,
+                containerSize = containerSize,
+            )
+        }
+        if (enabled) {
+            GameMoreMenu(
+                menuOpen = menuOpen,
+                onMenuOpenChange = onMenuOpenChange,
+                onNavigate = onNavigate,
+            )
+        }
+    }
+}
 
 /**
  * The game menu that the More button opens (DESIGN_SYSTEM.md §6.1; FEATURES.md F21 item 2; D-023):

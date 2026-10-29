@@ -32,7 +32,8 @@ class MotionProbe {
     private val header = Readers<ProbeHeader>()
     private val effects = Readers<ProbeEffects>()
     private val overlay = Readers<ProbeOverlay?>()
-    private val chrome = Readers<ProbeChrome>()
+    private val palette = Readers<Float>()
+    private val undoIcon = Readers<Float>()
     private val running = Readers<Boolean>()
 
     /** The latest `MoveTimeline` origin; written by `BoardView` right after it publishes. */
@@ -79,8 +80,11 @@ class MotionProbe {
     /** The win or game-over card (`OverlayController`; part 2). */
     fun registerOverlay(read: () -> ProbeOverlay?): ProbeRegistration = overlay.add(read)
 
-    /** Palette crossfade fraction (M4) and the Undo icon rotation (`GameControls`). */
-    fun registerChrome(read: () -> ProbeChrome): ProbeRegistration = chrome.add(read)
+    /** The palette crossfade fraction (`GameTheme`, M4.2; MOTION_SPEC.md §3.15; D-248). */
+    fun registerPalette(read: () -> Float): ProbeRegistration = palette.add(read)
+
+    /** The Undo icon rotation in degrees (`GameControls`; MOTION_SPEC.md §3.9). */
+    fun registerUndoIcon(read: () -> Float): ProbeRegistration = undoIcon.add(read)
 
     /**
      * One "is anything of mine running" reader per owner: any registered `Animatable.isRunning`,
@@ -105,8 +109,16 @@ class MotionProbe {
             header = header.readLatest(),
             effects = effects.readLatest() ?: NoEffects,
             overlay = overlay.readLatest(),
-            chrome = chrome.readLatest(),
+            chrome = readChrome(),
         )
+
+    /** [MotionSnapshot.chrome]: `null` with neither reader; a missing one reads neutral. */
+    private fun readChrome(): ProbeChrome? {
+        val fraction = palette.readLatest()
+        val rotation = undoIcon.readLatest()
+        if (fraction == null && rotation == null) return null
+        return ProbeChrome(paletteFraction = fraction ?: 1f, undoIconRotationDeg = rotation ?: 0f)
+    }
 
     private companion object {
         /** The neutral [MotionSnapshot.effects]: no ring, no confetti, no scrim. */
@@ -261,7 +273,8 @@ data class MotionSnapshot(
     val effects: ProbeEffects,
     val overlay: ProbeOverlay?,
     /**
-     * `null` while no chrome reader is registered; `paletteFraction` is 1 when no crossfade runs.
+     * `null` while neither the palette nor the Undo icon reader is registered; `paletteFraction` is
+     * 1 when no crossfade runs or no `GameTheme` reports, and the rotation 0 without controls.
      */
     val chrome: ProbeChrome?,
 )

@@ -7,14 +7,13 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
-import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.clayboicardi.game2048.ui.theme.GameFonts
+import com.clayboicardi.game2048.ui.theme.TileSkin
 
 /**
  * A measured tile label (DESIGN_SYSTEM.md §3.3): the layout and the font size it was measured at
@@ -29,8 +28,8 @@ import androidx.compose.ui.unit.sp
  * numerals follow density only. The ink colour is applied at draw time, so high contrast never
  * invalidates an entry.
  *
- * Numerals use `FontFamily.Default`, bold, with `tnum`, the D-076 fallback, until M4 brings the
- * bundled numeral subset. They are laid out left to right whatever the measurer's layout direction
+ * Numerals are `GameFonts.tile(skin, chars)` (DESIGN_SYSTEM.md §3.2: the skin's weight and ROND,
+ * the label's width, `"lnum"`), laid out left to right whatever the measurer's layout direction
  * (D-104). Main thread only.
  */
 @Stable
@@ -41,44 +40,38 @@ internal class TileTextCache(private val measurer: TextMeasurer) {
                 size > CAPACITY
         }
 
-    /** The label of [exp] on a tile of [tilePx] px at [density] px per dp, for skin [skinId]. */
-    fun text(exp: Int, tilePx: Float, density: Float, skinId: String): TileText {
+    /**
+     * The label of [exp] on a tile of [tilePx] px at [density] px per dp, in [skin]'s numerals; the
+     * cache key holds `skin.id` (D-025).
+     */
+    fun text(exp: Int, tilePx: Float, density: Float, skin: TileSkin): TileText {
         val label = TileLabels.label(exp, tilePx / density)
-        val key = Key(label.text, label.fontSizeDp * density, skinId)
-        return entries.getOrPut(key) { measure(label, tilePx, density) }
+        val key = Key(label.text, label.fontSizeDp * density, skin.id)
+        return entries.getOrPut(key) { measure(label, tilePx, density, skin) }
     }
 
-    private fun measure(label: TileLabel, tilePx: Float, density: Float): TileText {
+    private fun measure(label: TileLabel, tilePx: Float, density: Float, skin: TileSkin): TileText {
         val noFontScale = Density(density, fontScale = 1f)
+        val numerals = GameFonts.tile(skin, label.text.length)
         var sizeDp = label.fontSizeDp
-        var layout = measureAt(label.text, sizeDp, noFontScale)
+        var layout = measureAt(label.text, numerals, sizeDp, noFontScale)
         val maxWidth = FIT_WIDTH * tilePx
         if (layout.size.width > maxWidth) {
             sizeDp *= maxWidth / layout.size.width
-            layout = measureAt(label.text, sizeDp, noFontScale)
+            layout = measureAt(label.text, numerals, sizeDp, noFontScale)
         }
         return TileText(layout, sizeDp * density)
     }
 
-    private fun measureAt(text: String, sizeDp: Float, density: Density): TextLayoutResult =
+    private fun measureAt(
+        text: String,
+        numerals: TextStyle,
+        sizeDp: Float,
+        density: Density,
+    ): TextLayoutResult =
         measurer.measure(
             text = text,
-            style =
-                TextStyle(
-                    fontFamily = FontFamily.Default,
-                    fontWeight = FontWeight.Bold,
-                    fontFeatureSettings = NUMERAL_FEATURES,
-                    textDirection = TextDirection.Ltr,
-                    fontSize = sizeDp.sp,
-                    letterSpacing = LETTER_SPACING_EM.em,
-                    lineHeight = 1f.em,
-                    lineHeightStyle =
-                        LineHeightStyle(
-                            LineHeightStyle.Alignment.Center,
-                            LineHeightStyle.Trim.Both,
-                        ),
-                    platformStyle = PlatformTextStyle(includeFontPadding = false),
-                ),
+            style = numerals.merge(LabelStyle).copy(fontSize = sizeDp.sp),
             softWrap = false,
             maxLines = 1,
             density = density,
@@ -97,8 +90,17 @@ internal class TileTextCache(private val measurer: TextMeasurer) {
         /** Step 5. */
         const val LETTER_SPACING_EM = -0.02f
 
-        /** The D-076 fallback's tabular figures. */
-        const val NUMERAL_FEATURES = "tnum"
+        /**
+         * Step 5 on top of the numerals: tracking, a 1 em line box trimmed both ends, no padding.
+         */
+        val LabelStyle =
+            TextStyle(
+                letterSpacing = LETTER_SPACING_EM.em,
+                lineHeight = 1f.em,
+                lineHeightStyle =
+                    LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            )
     }
 }
 

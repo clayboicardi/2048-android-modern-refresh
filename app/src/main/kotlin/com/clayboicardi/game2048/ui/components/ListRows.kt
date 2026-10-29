@@ -60,3 +60,28 @@ fun LinkRow(
         headline()
     }
 }
+
+/**
+ * A row that shows something and does nothing on a tap (D-246, M4.1): the M3 1.5 `ListItem` with
+ * neither `onClick` nor `selected`, with M3's default colours, shape and padding. The Statistics
+ * rows (DESIGN_SYSTEM.md §6.9: the value as [trailingContent]) and the Licenses entry rows (§6.12:
+ * copyright and group as [supportingContent]) use it. [headline] is the row's headline; the slots
+ * are `ListItem`'s.
+ */
+@Composable
+fun PlainRow(
+    modifier: Modifier = Modifier,
+    leadingContent: (@Composable () -> Unit)? = null,
+    trailingContent: (@Composable () -> Unit)? = null,
+    supportingContent: (@Composable () -> Unit)? = null,
+    headline: @Composable () -> Unit,
+) {
+    ListItem(
+        modifier = modifier,
+        leadingContent = leadingContent,
+        trailingContent = trailingContent,
+        supportingContent = supportingContent,
+    ) {
+        headline()
+    }
+}

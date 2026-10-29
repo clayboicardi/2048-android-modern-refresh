@@ -36,6 +36,7 @@ import com.clayboicardi.game2048.ui.theme.ClassicDarkSkin
 import com.clayboicardi.game2048.ui.theme.ClassicLightPalette
 import com.clayboicardi.game2048.ui.theme.ClassicLightSkin
 import com.clayboicardi.game2048.ui.theme.GameDimens
+import com.clayboicardi.game2048.ui.theme.GameFonts
 import com.clayboicardi.game2048.ui.theme.GameTheme
 import com.clayboicardi.game2048.ui.theme.Glow
 import com.clayboicardi.game2048.ui.theme.LocalTilePalette
@@ -191,7 +192,8 @@ class MiniTileTest {
             BasicText(
                 text = label.text,
                 style =
-                    GameNumeralStyle.copy(fontSize = label.fontSizeDp.sp, color = palette.ink(exp)),
+                    GameFonts.tile(LocalTileSkin.current, label.text.length)
+                        .copy(fontSize = label.fontSizeDp.sp, color = palette.ink(exp)),
                 softWrap = false,
                 maxLines = 1,
             )

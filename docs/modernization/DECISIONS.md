@@ -252,6 +252,15 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-245 | Architecture | `GameScreen` asks for the size sheet's rows whenever the game becomes ready with no size switch loading while the sheet is open; a reading first shows what memory holds, then the peeks |
 | D-246 | Architecture | Every `ListItem` overload that 1.5 does not deprecate is 1.5-only, so `ListItem` is called only in `ui/components`: `ListRows.kt`'s `SelectableRow` and `LinkRow` (M3); A3 checks `ListItem(` |
 | D-247 | Quality | F03-AC12 reads "no confetti particle" (D-187's one canvas is always composed); AC-SCALE-3 also compares the live confetti count with the burst stepped at scale 2 on every frame; F21-AC10's "next frame" is the first frame `NavDisplay` composes Settings, at most two frames after the tap |
+| D-248 | Architecture | M4 contracts: `App`, `AppNavHost` and `GameScreen` take the container; `AppViewModel.appearance` with `lastBoardSize`; the contrast and system-bar seams; entry ViewModel constructors; `GameFonts` and `GameTextStyles` as the only numeral and emphasized styles; `PlainRow`, `SubScreenScaffold` actions and snackbars, `openUrl`; the eight M4 icons; ownership exceptions |
+| D-249 | Adaptive layout | More moves to the size chip's header row in STACKED and SCROLL (40 dp container, 48 dp target); the controls bar is Undo and New game at 1 : 1; the COMPACT size chip drops its grid icon; F18-AC16 checks one-line labels |
+| D-250 | Visual design | On the selected size row the "In progress" pill is `secondary` / `onSecondary` (≥ 4.0:1 boundary, ≥ 6.4:1 text); the row's text is already `onSecondaryContainer` at full emphasis |
+| D-251 | Visual design | No crossfade on restore (Motion Off until the game is ready); the crossfade also lerps the title colour and tile outlines; the Neon well over the board and cells; the font's output sha256 and CRLF OFL file; the subset's 1.252 em score line makes the score chip about 67 dp, so rendered boards come from the measured chrome |
+| D-252 | Adaptive layout | A motion-level change composes the arrangement and its presentation scope anew (no double offset from `animateBounds`, no replay); the pad leaves on F0; AC-LAYOUT-1, F18-AC6, F18-AC12 and the traversal as tested; the blank status line hidden from accessibility and a repeated status read again; the game-over card wraps digits and stacks its boxes and New game rather than cut them; the touch-target gate skips clickables scrolled out of view |
+| D-253 | Settings | F11-AC2 under Motion Off; switch rows keep unselected colours; `ChoiceDialog` takes an `ImmutableList` and an `optionExtra`; `openAppLanguageSettings(context, launch)`; Statistics formats per locale in `StatsUi` |
+| D-254 | About | The bullet glyph, credit separator and version titles as non-resource text; the What's new sheet lists all newer bullets oldest first; the merge illustration stacks below 400 dp; the OFL group shows its text |
+| D-255 | Motion | The restore gate holds Motion Off until a composition has shown the loaded appearance (`AppearanceUi.loaded`), so settings and game loads landing in one frame do not crossfade |
+| D-256 | Adaptive layout | The layout preference, the title and the hero badge read `GameLayout`'s measured window (constraints plus safe insets) at the `WindowSizeClass` breakpoints; `rememberLayoutMode()` is removed |
 
 ---
 
@@ -601,6 +610,7 @@ Not in the research/05 roadmap but **In v1.0**:
 ---
 
 ## 3. Platform & toolchain
+- **Note:** Extended by D-254 (the What's new sheet lists every newer bullet, oldest first).
 
 #### D-010 — Gradle wrapper 9.7.1
 - **Decision:**
@@ -946,7 +956,7 @@ detekt = { id = "dev.detekt", version.ref = "detekt" }
   - research/04 §0.1 (own motion tokens).
 - **Rejected:** using the `motionScheme` springs directly; the experimental expressive APIs.
 - **Source:** [ORCH] O1, O4 · [RESEARCH].
-- **Note:** Amended by D-184; extended by D-246 (`ListItem` only in `ui/components`).
+- **Note:** Amended by D-184; extended by D-246 (`ListItem` only in `ui/components`); amended by D-256 (no v1.0 caller of `currentWindowAdaptiveInfoV2()`).
 
 ---
 
@@ -1735,6 +1745,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - A digit subset is about 18 KB (research/04 §9.1).
 - **Rejected:** Clear Sans (no `tnum`, Latin only; research/04 §9.2); Inter for all UI text; downloadable fonts.
 - **Source:** [ORCH] O6 · [RESEARCH]. O6's "tile numerals + title" is read to include every digit-only game numeral listed under **Usage**, because they need `tnum` and carry no translated text (OI-3, settled).
+- **Note:** Extended by D-251 (the subset's output pin and its 1.252 em score line).
 
 #### D-077 — Tile label sizing and compact labels
 - **Decision.** Font size in **dp** (it ignores `fontScale`) as a fraction of the tile side `t`, with letter spacing −0.02 em and `LineHeightStyle(Center, Trim.Both)`:
@@ -1795,6 +1806,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/04 §6.3; research/05 §4.21 (TalkBack consumes swipes).
 - **Rejected:** per-tile semantics (tiles are transient during animation, research/04 §6.3); swipe-only play under TalkBack.
 - **Source:** [RESEARCH].
+- **Note:** Amended by D-249 (More is the last item of the header group).
 
 #### D-081 — Announcements
 - **Decision:**
@@ -1809,7 +1821,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** `announceForAccessibility` is `@Deprecated` in API 36 and 37 (research/04 §2, §6.3).
 - **Rejected:** research/04's Brief/Detailed verbosity setting (deferred).
 - **Source:** [RESEARCH].
-- **Note:** Amended by D-202.
+- **Note:** Amended by D-202; extended by D-252 (a repeated status is read again).
 
 #### D-082 — TalkBack direction pad
 - **Decision:**
@@ -1928,6 +1940,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/07 C4 (the V1 API is deprecated), G11.
 - **Rejected:** `material3-window-size-class` (older API, research/03 §1.7); legacy screen-size buckets.
 - **Source:** [RESEARCH].
+- **Note:** Amended by D-256 (the preference reads `GameLayout`'s measured window at the same breakpoints).
 
 #### D-093 — Edge-to-edge and Immersive mode
 - **Decision:**
@@ -1964,6 +1977,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 ---
 
 ## 12. Localization & RTL
+- **Note:** Amended by D-252 (the pad leaves on F0; a motion-level change composes the arrangement anew).
 
 #### D-100 — Locale set and completeness
 - **Decision:**
@@ -2199,6 +2213,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/07 G3 (a hand-curated list avoids GMS and extra plugins). The coverage check stops it from drifting as dependencies change.
 - **Rejected:** `play-services-oss-licenses` (GMS); third-party license plugins (research/07 G3).
 - **Source:** [ORCH] O15.
+- **Note:** Extended by D-254 (the OFL group shows its text).
 
 #### D-123 — Privacy
 - **Decision.**
@@ -3014,6 +3029,7 @@ jobs:
   - A hand-rolled Off snackbar would duplicate M3's accessibility timeout.
 - **Rejected:** a fixed `MotionScheme.expressive()`; rewriting dialog window animations; a custom Off snackbar renderer.
 - **Source:** [ORCH] O4 · [RESEARCH] MOTION_SPEC.md §2.2, §3.18.
+- **Note:** Clarified by D-251 (M3 components that animate their own colours follow the level scheme).
 
 #### D-185 — Haptic ownership, timing and interruption (extends D-065, D-066)
 - **Decision:**
@@ -3104,6 +3120,7 @@ jobs:
 - **Source:** [RESEARCH] DESIGN_SYSTEM.md §5.2–§5.4.
 - **Amended in plan review (Codex r1):** the arrangement is now resolved from the board each candidate gives, and SCROLL was added. Before, the height rule chose THREE_COLUMN for every window under 480 dp tall, so a 360×450 split-screen pane got a −16 dp board (35 dp at 411×450, −61 dp there with the 208 dp TalkBack rails), and the fit guard fell back to THREE_COLUMN without checking its width.
 - **Amended in plan review (Codex r2):** the score chips enter the measured chrome with the live digit count, and the FULL header is dropped when its one re-measure still overflows. Before, the probe measured the header with scores of 0, so a header whose long values had to stack (D-084) was measured one row tall and overlapped the board; and a header that grows in steps as it narrows could leave the single re-measure short of `availH`. F18-AC15 was added.
+- **Note:** Extended by D-252 (a motion-level change composes the arrangement anew); clarified by D-251 (rendered boards come from the measured chrome).
 
 #### D-189 — Theme token additions (extends D-070, D-071)
 - **Decision:**
@@ -3320,6 +3337,7 @@ jobs:
   - Reaching the target is the moment players most want to share.
 - **Rejected:** shrinking the board; dismissible cards (D-054); Share only at game over.
 - **Source:** [ORCH] O8, O12 · [RESEARCH] DESIGN_SYSTEM.md §5.3, §6.3, §6.4.
+- **Note:** Extended by D-252 (wrapped digits, stacked boxes and a New game row of its own in the Compact game-over card).
 
 #### D-201 — First-launch hint condition (amends D-009)
 - **Decision:**
@@ -3344,6 +3362,7 @@ jobs:
   - TalkBack consumes swipes, so "Swipe to move" is wrong under TalkBack.
 - **Rejected:** a Brief/Detailed verbosity setting (still deferred).
 - **Source:** [RESEARCH] research/04 §6.3; FEATURES.md F17, F22.
+- **Note:** Extended by D-252 (the blank status line is hidden from accessibility).
 
 #### D-203 — Keyboard shortcuts helper (extends D-053)
 - **Decision:** `MainActivity.onProvideKeyboardShortcuts` returns one `KeyboardShortcutGroup` titled with `app_name`. It lists:
@@ -3379,6 +3398,7 @@ jobs:
   - ATF's size-only touch-target check is vacuous under Compose's 48 dp touch-bounds expansion (QUALITY.md V6).
 - **Rejected:** the quantized research/04 numbers as the oracle; ATF alone for D-084.
 - **Source:** [ORCH] O16 · [RESEARCH] DESIGN_SYSTEM.md §2.13; QUALITY.md §1.12, V6.
+- **Note:** Extended by D-252 (the touch-target gate skips clickables scrolled out of view).
 
 #### D-206 — High-contrast empty cells (extends D-073)
 - **Decision:** with high contrast on, the empty-cell `drawBehind` pass also strokes each empty cell:
@@ -3766,7 +3786,7 @@ jobs:
   - A stub sub-screen without a title and a back arrow would not satisfy F21 item 3, which M3 tests.
 - **Rejected:** a fourth part 2 work package (PLAN.md §5.3 allows three at once); passing `AppViewModel` as a placeholder type; reading the six game files from composition; exposing `SheetState` (it carries `ExperimentalMaterial3Api`); stub screens with hard-coded titles (AGENTS.md).
 - **Source:** [ORCH] O17 (D-173 change control, M3 part 2 contracts).
-- **Note:** Amended by D-245 (the sheet's reading waits for the game to be ready).
+- **Note:** Amended by D-245 (the sheet's reading waits for the game to be ready); extended by D-248 (the M4 contracts).
 
 #### D-237 — The win overlay carries the winning spawn cell (clarifies MOTION_SPEC.md §3.12; amends ARCHITECTURE.md §4.7; extends D-236)
 - **Decision:**
@@ -3864,6 +3884,137 @@ jobs:
   - `NavDisplay` reads the new back stack on the frame after the tap and starts its transition there, so its target is composed one frame later even with `EnterTransition.None`. What F21-AC10 protects is that Off shows Settings complete and still, with no animated frames.
 - **Rejected:** probe fields for particle positions (a §8.2 contract change, and positions are already fixed by AC-PERF-3 and D-243's comparison); a custom `NavDisplay` transition state that composes the target on the tap's frame (it would replace the library's predictive-back handling, AC-BACK-1).
 - **Source:** [ORCH] O17 (D-173 change control, M3 part 2 review).
+
+#### D-248 — M4 contracts and work split: one container parameter, `AppViewModel`'s appearance, the seams, `GameFonts` and the shared components (amends PLAN.md §5.4 M4.1–M4.6; ARCHITECTURE.md §4.2, §4.7, §4.12, §4.13, §6.6, §7.1, §7.2, §10.3–§10.5; DESIGN_SYSTEM.md §3.2, §4.1; MOTION_SPEC.md §8.2; FEATURES.md F19 item 2; extends D-236)
+- **Decision:**
+  - **Wiring (M4.1).**
+    - `App(appViewModel, gameViewModel, container, modifier)`, `AppNavHost(gameViewModel, appViewModel, container, modifier)` and `GameScreen(viewModel, appViewModel, clock, onNavigate, modifier)`: ARCHITECTURE.md §7.1's form plus the `AppContainer`, which carries the animator-scale and contrast sources, the system-bar controller, the clock and the entry ViewModel factories, and the clock that D-236 already passed. `MainActivity` calls `App(appViewModel, gameViewModel, container)`.
+    - `App()` collects `AppViewModel.appearance`, provides `LocalHapticsEnabled`, sets the system-bar icon style for the effective theme in a `DisposableEffect(activity, dark)` through `LocalActivity` (F12-AC9), and applies Immersive mode in a `DisposableEffect` on the setting. `MainActivity.onWindowFocusChanged(true)` re-applies it (F19-AC4). `ImmersiveMode.apply(window, on, controller)` takes the container's `SystemBarsController`.
+    - `AppViewModel(settings: SettingsRepository, versionCode: Int)` exposes `appearance: StateFlow<AppearanceUi>` (`stateIn(viewModelScope, Eagerly, …)` over `SettingsRepository.state`), `whatsNew: StateFlow<ImmutableList<ChangelogEntry>?>` and `onWhatsNewDismissed()`. `AppearanceUi` holds ARCHITECTURE.md §4.7's ten settings plus `lastBoardSize`, which the size chip shows while the game loads (DESIGN_SYSTEM.md §6.1). `ChangelogEntry(versionCode, lines: ImmutableList<Int>)` (string resources) is in `about/Changelog.kt`. M4.1 completes `appearance`; M4.5 adds the one What's new evaluation of §4.13 and `CHANGELOG`.
+    - `LocalHapticsEnabled` is declared in `game/feedback/HapticsController.kt`. The Settings switches fire `HapticsController.toggle(feedback, checked, enabledAfter)`, a companion function of the controller class, which needs no timeline (D-066, D-185).
+    - **Seams** (PLAN.md §2.6 E): `ui/theme/ContrastLevel.kt` holds `ContrastLevelSource { contrast: StateFlow<Float> }`, `StandardContrastLevel` (always 0), `SystemContrastLevelSource(context, scope)` and `systemForcesHighContrast(level)` (`level ≥ SYSTEM_HIGH_CONTRAST_MIN` = 0.5). `ui/components/ImmersiveMode.kt` holds `SystemBarsController { setSystemBarsBehavior, hide, show }`, `WindowSystemBarsController` and `ImmersiveMode`. `AppContainer` gains `contrastLevel` (default `StandardContrastLevel`), `systemBars` (default `WindowSystemBarsController`) and a public `ioDispatcher`; `AppContainer.create(context, systemBars, contrastLevel)` passes the system ones by default. `Game2048Application` is `open` with `createContainer()`, and `testing/SeamsTestApplication` (`@Config(application = …)`) injects `FakeSystemBarsController` and `FakeContrastLevelSource` into activity-level tests.
+    - **Entry ViewModels.** `SettingsViewModel(settings, animatorScale, contrastLevel)`, `StatsViewModel(records, games, settings)` and `AboutViewModel(resources, ioDispatcher)`, made by `settingsViewModelFactory()`, `statsViewModelFactory()` and `aboutViewModelFactory(resources)` inside their entries (the entry passes `LocalResources.current`, so the per-app locale applies). The screens are `SettingsScreen(viewModel, onBack, modifier)`, `StatsScreen(viewModel, onBack, modifier)`, `AboutScreen(viewModel, onBack, onOpenLicenses, modifier)` and `LicensesScreen(viewModel, onBack, modifier)`; `HowToPlayScreen` is unchanged. The constructors are the contract; each WP owns its ViewModel's members.
+    - **Theme.** M4.2 gives `GameTheme` the signature `GameTheme(darkTheme, palette, highContrast, systemContrast, dynamicChrome, motion, animatorScale, content)`, every new parameter defaulted to the M3 behaviour; M4-A passes the new arguments in `App()`'s one `GameTheme` call (`systemContrast` from `container.contrastLevel`). `MotionProbe` reads the palette fraction and the Undo icon rotation from two readers, `registerPalette` (`GameTheme`) and `registerUndoIcon` (`GameControls`), and still reports one `ProbeChrome` (MOTION_SPEC.md §8.2), so AC-THEME-1 needs no file of another work package. `resolveTilePalette(id, dark): ResolvedPalette(palette, skin)` (`GameTheme.kt`) is the palette of an option without high contrast: what `GameTheme` starts from and what the Palette dialog's swatches draw (D-234).
+    - **Numerals.** `object GameFonts` (`ui/theme/NumeralFont.kt`) is the only source of numeral styles: `score(skin)`, `plusN(skin)`, `title(skin)` and `tile(skin, chars)`. M4.1 moves every call site except `TileTextCache` to them, with D-076's fallback bodies (the M3 numerals), so no golden changes; `ScoreNumeralStyle` and `GameNumeralStyle` are gone. M4.2 writes the DESIGN_SYSTEM.md §3.2 instances or keeps the fallback.
+    - **Emphasized styles.** `object GameTextStyles` (`ui/theme/Typography.kt`): `sectionHeader`, `cardTitle`, `cardTitleCompact` and `chipLabel`, the material3 1.5-only emphasized styles, for code outside `ui/theme` and `ui/components` (D-026, PLAN.md §5.7 A3). `NumeralFont.kt` and `Typography.kt` carry a file-level `MatchingDeclarationName` suppression with its reason, because PLAN.md §2.1 and ARCHITECTURE.md §10.3 name the files and each holds one object.
+    - **Shared components.** `PlainRow` (D-246's plain row, `ListRows.kt`); `SubScreenScaffold(title, onBack, modifier, actions, snackbars, content)` (Statistics' Reset action; the sub-screens' `SnackbarHost`); `Intents.kt`'s `viewUrlIntent`, `startIntent`, `openUrl` and `rememberIntentLauncher(snackbars)`, which shows `link_open_failed` when no activity handles an intent (ARCHITECTURE.md §10.3 assigned `openUrl` to M3 part 2; About and Settings need it).
+    - **What's new** is composed by `GameScreen` over the Game root (ARCHITECTURE.md §7.2) as `WhatsNewSheet(entries, onDismissRequest)`; `GameScreen`'s `modalOpen` includes a non-empty `whatsNew` from M4.1, and the integrator adds the sheet's call after M4-B and M4-D.
+    - **Tokens** added to `GameDimens`: `HeaderMoreSize` (D-249), `PadIcon`, `PadControlsWidth`, `RailTitleMax`, `StatsEmptyGlyph`, `AboutIcon`, `AboutTitle`, `HowToPlayArrow`.
+    - **Icons.** The integrator adds the eight M4 icons (`ic_pad_up`, `ic_pad_down`, `ic_pad_left`, `ic_pad_right`, `ic_delete`, `ic_open_in_new`, `ic_chevron_right`, `ic_expand_less`) at the M3 pin `10ecc147…`, normalized as DESIGN_SYSTEM.md §8.1 says, so How to play (M4-D) does not wait for M4-B's `ic_pad_right`.
+    - **Strings.** `strings_pending.xml` gains the region `M4-shared` (`got_it`, `link_open_failed`, `a11y_action_open`, each used by two work packages) and the empty regions `M4-A` … `M4-D`.
+  - **Ownership exceptions** (PLAN.md §6.5), beyond PLAN.md §5.4's:
+    - M4-A also edits `game/board/TileTextCache.kt` and `game/board/TileView.kt` (tile labels through `GameFonts.tile`), `game/overlay/BoardScrim.kt` (card titles through `GameTextStyles`, the M3 part 2 review's carried P3) and the `GameTheme` call in `App.kt`, and owns `ui/theme/Typography.kt` and `NumeralFont.kt` as created here.
+    - M4-B also edits `game/GameControls.kt`, `game/GameMenu.kt`, `ui/components/SizeChip.kt` and `ui/components/GameSnackbar.kt` (D-249 and the per-arrangement snackbar placement), owns `ui/components/ImmersiveMode.kt` as created here, and may make additions to `motion/MotionHarness.kt` (new helpers for its motion and layout tests; no existing member changes), as its brief grants.
+    - M4-C also edits `ui/components/Dialogs.kt` (`ChoiceDialog`) and owns `settings/SettingsViewModel.kt` and `stats/StatsViewModel.kt` as created here.
+    - M4-D also edits `AppViewModel.kt` (the What's new body) and `about/Changelog.kt`, and owns `about/AboutViewModel.kt` as created here.
+    - The integrator keeps `ListRows.kt`, `game/overlay/BoardSizeSheet.kt` (D-250), `Intents.kt`, `SubScreenScaffold.kt`, `HapticsController.kt`, `game/board/BoardEffects.kt` and the carried P3s of the M3 part 2 review that touch no WP file (D-244's landscape window, `EffectiveMotionTest`'s F13-AC4, the screenshot tests' milestone comments, MotionFixtures' deviations from MOTION_SPEC.md §8.6, ARCHITECTURE.md's `LocalBoardOverlayLink` and `BoardCardSequence`).
+  - **Reading of PLAN.md §5.4** "call sites … for components owned by other WPs (What's new sheet, hint, pad)": the hint and the pad are M4-B's own components, which its arrangements place because they are measured chrome (D-188); the integrator adds only the What's new sheet's call.
+- **Rationale:**
+  - Four work packages edit around `App()`, `AppNavHost` and the shared components at once. Contracts that compile and keep every M3 golden let each work package run its tests in its own worktree; the WPs then change only bodies.
+  - The sub-screen entries need the container's factories, and `App()` needs its sources; ARCHITECTURE.md §7.1's two-ViewModel signature had no way to reach either, as D-236 found for the clock.
+  - The numeral call sites are spread over files that M4-B (`ScoreCard.kt`, `ScoreOdometer.kt`, `GameHeader.kt`) and no work package own; moving them once to `GameFonts` lets M4-A change only `NumeralFont.kt` and the tile path.
+  - A test can only inject the system-bar fake into an activity through the application's container, which `Game2048Application` creates.
+- **Rejected:** passing each source as its own `App()` parameter (six parameters, and every test call site changes again when one is added); reading the container from `LocalContext`'s application in the entries (a test container and the application's container would both open the same DataStore files, D-022); letting M4-A edit `ScoreCard.kt` (M4-B's).
+- **Source:** [ORCH] O17 (D-173 change control, M4 contracts).
+- **Note:** Extended by D-251 (the public API of `ui/theme`), D-252 (`GameIconButton`'s `iconSize`, the layout test hooks), D-253 and D-254.
+
+#### D-249 — More moves to the size chip's header row in STACKED and SCROLL; the controls bar is Undo and New game (amends D-080, D-081 traversal; DESIGN_SYSTEM.md §4.1, §5.3, §5.4, §5.5, §5.6, §5.7, §6.1, §6.6, §7.2, §7.3; FEATURES.md F17 items 3–4, F17-AC7, F18 item 3; L10N_STORE_LEGAL.md's RTL golden checks; ARCHITECTURE.md §10.3; adds FEATURES.md F18-AC16)
+- **Decision:**
+  - **Placement.** In STACKED and SCROLL, More (`GameMoreMenu`'s `FilledTonalIconButton`, `ic_more_vert`, `more_options`) leaves the controls bar and sits at the end of the header row that holds the board-size chip (start): row 2 of the FULL header in every chip layout, and the size-chip row of the COMPACT header (in INLINE, the one row: size chip, Score, Best, More). Its container is `IconButtonDefaults.smallContainerSize()` (40 dp, `GameDimens.HeaderMoreSize`) inside the 48 dp minimum interactive size, so FULL row 2 stays 48 dp and the touch target is 48 × 48 dp. The menu anchors to it as before. THREE_COLUMN keeps More last in the actions rail and SIDE_PANEL at the end of the panel's title row, both at `mediumContainerSize()`.
+  - **Controls bar.** Undo and New game, weights 1 : 1, 8 dp apart, as in M3 part 1. At `fontScale` 1.0 in English both labels lay out on one line at 360 dp and at the Pixel 7's 411 dp window width; `maxLines = 2` stays the fallback for larger font scales and long translations (DESIGN_SYSTEM.md §7.3).
+  - **TalkBack pad.** With the pad, the column beside it holds New game only (text only, `PadControlsWidth` 104 dp); More stays in the header.
+  - **COMPACT header width.** In the COMPACT header the board-size chip has no leading `ic_grid_view` icon, only the label and `ic_expand_more`. The COMPACT INLINE row (size chip, Score, Best, More and three 8 dp gaps) then needs about 314 dp at `fontScale` 1.0, less than the 328 dp content width of a 360 dp window, so the COMPACT header stays INLINE (64 dp) where it was, and every worked example of DESIGN_SYSTEM.md §5.3, F18-AC8 and F18-AC10 keep their numbers. `scoreFit`'s COMPACT `lead` is the size chip's and More's widths and their gaps; F17-AC22's vectors stay inputs of the pure function. M4-B confirms the measured row width at 328 dp and reports to the integrator if it does not fit.
+  - **RTL** (D-104): the controls bar becomes [New game][Undo], and the header rows mirror (More at the start, the size chip at the end).
+  - **Traversal and focus** (D-080, D-081): More is the last item of the header group in every layout. STACKED FULL: title, Score, Best, size chip, More, board, Undo, New game; COMPACT: size chip, Score, Best, More, board, controls; with the pad: …, More, board, status line, pad, New game. F17-AC7's "with the pad" order becomes "status line, pad, New game".
+  - **Measured chrome** (DESIGN_SYSTEM.md §5.3): the controls term is the bar of two buttons; the header terms include More; nominal heights are unchanged (FULL row 2 is 48 dp either way).
+  - **New criterion F18-AC16:** given `FIX_MID_4`, English, `fontScale` 1.0, Motion Off, windows `w360dp-h800dp` and `w411dp-h914dp`, when the Game screen renders, then the Undo and New game labels each report `TextLayoutResult.lineCount == 1` (read through `SemanticsActions.GetTextLayoutResult`), and More is in the header, not in the controls bar. Test `GameScreenTest.controlsLabelsFitOnOneLine` (M4-B).
+- **Rationale:** since M3 part 2 added More to the STACKED controls bar, each button is about 153 dp wide at the 411 dp golden width, and `contentPaddingFor(56.dp)`, the 20 dp icon and the 8 dp spacing leave about 74 dp for "New game" in `titleMedium` (about 79 dp), so the label wraps to two lines at `fontScale` 1.0 (golden `game_mid-4x4_classic-light`); at 360 dp it is worse. Two buttons at 1 : 1 leave about 109 dp. The size chip's row has room at its end, and SIDE_PANEL already puts More in its title row. In the COMPACT INLINE row the size chip with both icons, More and the chips would need about 340 dp, so a 360 dp window would get the 112 dp OWN_ROW header, and its 450 dp split-screen pane would turn from STACKED (a 258 dp board with the nominal chrome and zero insets, F18-AC10) into SCROLL; the grid icon repeats the leading glyph of the size sheet's rows and carries no information the label lacks.
+- **Rejected:** keeping More in the controls bar with wrapped labels; icon-only Undo and New game; More in the controls bar of the COMPACT header only (two placements in one arrangement); growing FULL row 2 for a 56 dp More (the 40 dp container keeps the 48 dp row and its touch target).
+- **Source:** [ORCH] O17 (D-173 change control, M4 contracts; orchestrator decision on the M3 part 2 goldens).
+- **Note:** Extended by D-252 (F18-AC12 scrolls to New game; THREE_COLUMN and SIDE_PANEL traversal of More).
+
+#### D-250 — The board-size sheet's selected row keeps its pill visible (amends DESIGN_SYSTEM.md §6.7)
+- **Decision:**
+  - On the selected (current-size) row, whose container is `secondaryContainer`, the "In progress" pill is `secondary` with `onSecondary` text: text 6.42 / 7.72 / 6.43 / 7.71:1 and boundary against the row 4.98 / 5.31 / 4.00 / 5.11:1 in Classic light / Classic dark / Neon light / Neon dark (DESIGN_SYSTEM.md §2.8 values, the §2.13 formula), so its text is above 4.5:1 and its shape above 3:1. On the other rows it stays `secondaryContainer` / `onSecondaryContainer`. Shape (`CircleShape`), padding (8 × 4 dp) and `labelMedium` are unchanged.
+  - The selected row's headline, supporting text and trailing check keep material3's selected colours, which are already `onSecondaryContainer` at full emphasis: in 1.5.0-beta02 `ListTokens.ItemSelectedLabelTextColor`, `ItemSelectedSupportingTextColor`, `ItemSelectedTrailingSupportingTextColor` and `ItemSelectedTrailingIconColor` are all `OnSecondaryContainer`, with no alpha (`javap -c` on `ListTokens`). The 4.6:1 measured on golden 42 is the Classic light pair itself (DESIGN_SYSTEM.md §2.9: `onSecondaryContainer` on `secondaryContainer` 4.60, as on Undo and the hint card), not a dimming, so `SelectableRow` sets no colours of its own.
+  - Golden 42 (`sheet_boardsize_classic-light`) is re-recorded in M4.6 and Read.
+- **Rationale:** the pill and the selected row were both `secondaryContainer`, so the pill's shape disappeared on the 4×4 row of golden 42 (M3 part 2 goldens).
+- **Rejected:** a `surface` pill with a 1 dp `outline` border (`outline` on `secondaryContainer` is only 2.74–3.49:1, below 3:1 in three schemes; `surface` itself is 1.21–2.23:1); overriding the selected row's text with `onSurface` (it would differ from every other `secondaryContainer` surface of the app and from M3's selected list item); dropping the pill on the current size (F02-AC7 shows "In progress" on every unfinished size).
+- **Source:** [ORCH] O17 (D-173 change control, M4 contracts; orchestrator decision on the M3 part 2 goldens).
+
+#### D-251 — Theming as built: no crossfade on restore, the crossfade's extent, the Neon well's order, the font's pins and its score line (amends MOTION_SPEC.md §3.14, §3.15, §8.2; DESIGN_SYSTEM.md §3.1, §4.7, §5.3, §7.2; L10N_STORE_LEGAL.md §0.3 item 8, §4.4; ARCHITECTURE.md §4.12, §10.3; FEATURES.md F18-AC10, F18-AC13, F18-AC14; MOTION_SPEC.md AC-LAYOUT-2, AC-LAYOUT-3; extends D-076, D-248)
+- **Decision:**
+  - **No crossfade on restore.** `App()` passes Motion Off to `GameTheme` until `GameViewModel.ready` (which implies the settings are loaded), then the effective level. A cold start composes the default appearance before DataStore has read the settings, and without the gate a saved Dark, Neon or high-contrast appearance would crossfade from the defaults just after the splash (MOTION_SPEC.md §3.14: no motion on restore). D-252 covers what the Off → Full switch means for the arrangement.
+  - **What the crossfade covers** (MOTION_SPEC.md §3.15): besides the `TilePalette` roles and the M3 `ColorScheme`, `TileSkin.titleColor` and `tileOutline` are lerped too (a missing outline is the other at alpha 0), so the "2048" title and the high-contrast outlines do not snap at t = 0. The skin's geometry and numerals (gap, radius, weight, ROND) switch on F0. A crossfade interrupted by another change starts from the colours shown, frozen at that frame. M3 components that animate their own colours through the `MotionScheme` (the `TopAppBar` container) follow D-184's level scheme: one frame after the recomposition under Off, and under Reduced with the expressive effects spring that D-184 keeps; §3.15's "new colors on F0" is about the colours `GameTheme` resolves.
+  - **`paletteOriginMs`** (MOTION_SPEC.md §8.2) is the frame time of a `withFrameNanos` launched undispatched beside the crossfade's first frame, because `Animatable.animateTo`'s block has no `startTimeNanos`.
+  - **The Neon inset well** is drawn by `BoardFrame` (`game/board/Board.kt`) as an `innerShadow` in the board shape over the board fill and the empty cells (and their D-206 strokes), under the tiles: `drawBoardCells` draws the fill and the cells in one pass. DESIGN_SYSTEM.md §4.7 steps 1–2 read so.
+  - **Font pins** (DESIGN_SYSTEM.md §3.1; L10N_STORE_LEGAL.md §4.4): the subset is 19,016 bytes, sha256 `3d8049577691260aca85af47ae79e9cf4b9239444b61cde2612394225654d6a7`, from `google/fonts` `9b59ea9f333c5b8a99fa44e2a698496d6cde5b8e` (L10N_STORE_LEGAL.md §0.3 item 8; the same TTF bytes as `main` at `b68b528a`), reproducible with `SOURCE_DATE_EPOCH` set to the source's `head.modified`. `ofl_google_sans_flex.txt` is `OFL.txt` byte for byte, CRLF line endings included (4,488 bytes, sha256 `fc13d69f…3137`): `.gitattributes` marks the file `-text`, so `* text=auto eol=lf` does not rewrite it.
+  - **The score line box** (DESIGN_SYSTEM.md §7.2, measured with the same `TextMeasurer`) of the subset is 1.252 em (`hhea` 1932 / −572 at 2000 units per em) against the M3 numerals' 1.172 em, so a 28 sp score line is about 2.3 dp taller and a score chip about 67 dp tall at `fontScale` 1.0, not 64. DESIGN_SYSTEM.md §5.3's nominal chrome and its worked examples stay the inputs of the pure `BoardGeometryTest`; the rendered boards come from the measured chrome (D-188): at `w411dp-h450dp` with zero insets the STACKED board is about 255 dp and the SCROLL board about 295 dp, not 258 and 298 (F18-AC10, F18-AC13, F18-AC14, AC-LAYOUT-2, AC-LAYOUT-3). Tests compare a rendered board with `resolveGameLayout`'s board over the measured chrome, and allow 4 dp against the nominal numbers.
+  - **New public API of `ui/theme`** (ARCHITECTURE.md §10.3): `chromeScheme(id, dark)`, `lerpColorScheme`, `ClassicLightScheme`, `ClassicDarkScheme`, `NeonLightScheme`, `NeonDarkScheme`, `NeonLightPalette`, `NeonDarkPalette`, `NeonLightSkin`, `NeonDarkSkin`, `NeonWellColor`, `NEON_WELL_ALPHA`, `HighContrastPalette`, `highContrastInk`, `highContrastSkin`, `HIGH_CONTRAST_SUFFIX` and `GameFonts.numerals`; `TileTextCache.text(exp, tilePx, density, skin)` takes the skin.
+- **Rationale:** each item is what M4-A built against the contracts of D-248, recorded where the specification said less or differently; the score-line growth was found when M4-B's layout met M4-A's font.
+- **Rejected:** a fixed `lineHeight` for the score style (DESIGN_SYSTEM.md §7.2 measures the line box, and a fixed height would clip other sizes of the same style); splitting `drawBoardCells` to put the well under the cells (the well then disappears behind the opaque cells and reads as a border); starting the crossfade from the defaults on a cold start.
+- **Source:** [ORCH] O17 (D-173 change control, M4 integration).
+- **Note:** Amended by D-255 (the gate also waits for a composition of the loaded appearance).
+
+#### D-252 — Adaptive layout and accessibility as built, and the integration's fixes (amends MOTION_SPEC.md §3.16, AC-LAYOUT-1; FEATURES.md F17 item 5, F17-AC7, F17-AC11, F18-AC6, F18-AC12; DESIGN_SYSTEM.md §5.4, §5.7, §6.4a, §6.6, §7.3; QUALITY.md §1.12; ARCHITECTURE.md §4.11, §10.3; extends D-081, D-188, D-200, D-202, D-205, D-249)
+- **Decision:**
+  - **A motion-level change composes the arrangement anew.** `GameLayout` keys the slot's arrangement scope (its two `rememberPresented` states, ARCHITECTURE.md §4.11 item 2) and `ArrangementSlot` (`ArrangementParts` and the `LookaheadScope`) on whether the effective level is Full, and the board's focus request reruns with it. With D-251's gate a cold start under Full switches Off → Full when the game is ready; adding `animateBounds` to a board already placed left it offset by its own position a second time (the board drawn over the controls bar in a 320 × 470 dp window). The new composition is static, from the collectors' settled values (D-047), like an arrangement switch: a scope kept across the change would still hold the last move's `Moved` board and its `lastDelta`, which its retention policy keeps once presented, and the new board and header would replay the move's entrances and its "+N" float (the system animator scale turned back from 0 to 1 after a move; `GameScreenTest.settledMoveNotReplayedWhenMotionTurnsOn`).
+  - **The direction pad's exit is immediate** (MOTION_SPEC.md §3.16): under Full the pad fades in with `fastEffects` when it appears in a live arrangement, but when it hides the bottom region switches back to the controls bar on F0, because the region holds either the pad row or the controls bar and a fading pad would draw over the returning bar. Bounds still animate.
+  - **AC-LAYOUT-1** reads: the board height rises on every frame from 16 until it first enters the `overlaySpatial` spring's overshoot band (first peak at 269 ms, 1.52 %), stays within the band after it, and is final at 416; frames are counted from the AC's own origin F1.
+  - **F18-AC6** masks out `CONFIG_MCC | CONFIG_MNC`, which Robolectric's `ActivityInfo.configChanges` always reports; every other bit is 0.
+  - **F18-AC12** scrolls the column until New game (the controls bar) is visible, because D-249 moved More into the header.
+  - **Traversal** (F17-AC7): in THREE_COLUMN More sits last in the actions rail but is read right after the stats rail's header (traversal index 0.5), so More is the last item of the header group in every arrangement; in SIDE_PANEL More is its own traversal group at index 1 inside the header.
+  - **RTL** (DESIGN_SYSTEM.md §5.7): each arrangement places its parts at explicit left-to-right positions mirrored inside the available area: the rails swap and the side panel moves to the left, the safe margins stay on their physical sides, and the overlays read the placed (mirrored) board bounds.
+  - **The blank status line is hidden from accessibility** until its first text, so TalkBack has no stop that reads nothing (ATF `SpeakableTextPresentCheck` on golden 36). It is the same polite live-region node throughout, so its first announcement is made like the later ones.
+  - **A repeated status is read again** (FEATURES.md F17 item 5, F17-AC11; DESIGN_SYSTEM.md §6.6): a live region is announced when its text changes, so a status whose text equals the text shown (a second blocked move in the same direction, two undos to the same score) would be silent. The line is then blank for one frame (still in the accessibility tree) and shows the text again on the next, so the text changes both times. Compose 1.12 sends the accessibility change events of each applied semantics change from a handler message before the next frame, so the blank frame reaches TalkBack. `TalkBackModeTest.statusLineRepeatsBlockedMove`.
+  - **The game-over card never cuts a digit or a label** (D-084, D-200; DESIGN_SYSTEM.md §6.4a): a Score or Best value that does not fit its width at 14 sp wraps between digits (`scoreLines`) and is spoken as one node with the full value; the Compact card puts its three boxes in a column when a third of the row cannot hold a label's longest word, gives New game a row of its own above Undo and Share when the row leaves it too narrow for a word of its label (`rememberGameButtonMinWidth`), and its summary line wraps without a line limit. With 10-digit values at `fontScale` 2.0 on a 220 dp board (F17-AC24) the card scrolls inside itself, as D-200 allows.
+  - **`GameIconButton(…, iconSize)`**: the pad draws its icons at `GameDimens.PadIcon` (32 dp); every other caller keeps the icon button's default.
+  - **The touch-target gate skips a clickable scrolled entirely out of its container's viewport** (QUALITY.md §1.12; D-205): a node that has a laid-out size but no visible bounds (a tab of the Statistics screen's scrollable tab row past the screen edge) cannot be touched until it scrolls in, and is checked in any screenshot where it is visible. The gate's failure message names each node's text or description.
+  - **Test hooks:** `SNACKBAR_TAG` on the Game snackbar host, `layoutTag(mode)` and `LayoutSpecKey`, a semantics key on each arrangement root that holds its `GameLayoutSpec` (no accessibility service reads it).
+  - **Wrapped labels kept:** in the 280 dp SIDE_PANEL of golden 33, and in the 104 dp column beside the TalkBack pad (golden 36), "New game" wraps to two lines at `fontScale` 1.0, which `maxLines = 2` allows; D-249's one-line rule is the STACKED controls bar's.
+- **Rationale:** the motion re-key, the status line, the card's fit and the gate's scroll rule were found while integrating M4 (a layout test in the default window, ATF on golden 36, F17-AC24 and golden 19), and the presentation scope under the motion key and the repeated status in the M4 review; the rest is what M4-B built against D-188 and D-249, recorded where the specification said otherwise.
+- **Rejected:** keeping `animateBounds` attached at every level with a `snap()` spec under Reduced and Off (the snap lands one frame after F0, which AC-LAYOUT-1 forbids); dropping D-251's gate (a restored appearance would crossfade); fading the pad out over the returning controls bar; smaller label text in the Compact card.
+- **Source:** [ORCH] O17 (D-173 change control, M4 integration).
+
+#### D-253 — Settings and Statistics as built (amends FEATURES.md F11-AC2; DESIGN_SYSTEM.md §6.8, §7.5; L10N_STORE_LEGAL.md §1.13; ARCHITECTURE.md §10.3)
+- **Decision:**
+  - **F11-AC2** is proved under Motion Off: the screen background is dark on the frame after the tap and M3's `TopAppBar` container one frame later (it animates its colour through the `MotionScheme`, D-251). Under Full the chrome crossfades over 299 ms (MOTION_SPEC.md §3.15), so "on the next frame" cannot hold there.
+  - **Switch rows** (DESIGN_SYSTEM.md §6.8): M3 1.5 draws a checked `ListItem(checked, onCheckedChange)` as a selected item, a `secondaryContainer` band behind every switch that is on; `SettingsSwitchRow` gives its checked state the unselected colours, and the `Switch` alone shows the state.
+  - **`ChoiceDialog`** (DESIGN_SYSTEM.md §7.5) takes `options: ImmutableList<Choice<T>>`, so Compose treats it as stable, an optional trailing `optionExtra: (@Composable (T) -> Unit)?` (the Palette dialog's swatch under each label) and tags its options `choiceOptionTag(index)`. `Choice<T>(value, label, supporting)` is an `@Immutable` data class. The options are `ListItem(selected, onClick)` rows with a transparent container; the selected option keeps M3's selected container (D-250).
+  - **App language** (L10N_STORE_LEGAL.md §1.13): `openAppLanguageSettings(context, launch: (Intent) -> Unit)` takes `rememberIntentLauncher(snackbars)`'s function, so a missing settings activity shows `link_open_failed` on Intents.kt's one path.
+  - **Statistics formatting:** `StatsViewModel` cannot know the composition's locale, so `StatsUi` holds the folded records per tab and `StatsUi.tab(index, locale)` formats them (`formatCount`, `formatPercent`, `formatElapsed`); the screen calls it in `remember(ui, tab, locale)`. `StatsViewModel.ui` is `null` until the settings, the records and every size's `peek` are read; the screen shows only its top bar until then.
+- **Rationale:** what M4-C built against D-248's contracts, recorded where the specification said less or otherwise.
+- **Rejected:** a `List` parameter for `ChoiceDialog` (unstable; the Compose lint flags it); M3's selected band on switch rows.
+- **Source:** [ORCH] O17 (D-173 change control, M4 integration).
+
+#### D-254 — About, How to play, Licenses and What's new as built (amends L10N_STORE_LEGAL.md §1.3; DESIGN_SYSTEM.md §6.10, §6.12, §6.13; extends D-009, D-122)
+- **Decision:**
+  - **Visible text that is not a string resource** (L10N_STORE_LEGAL.md §1.3) adds About's and the What's new sheet's bullet glyph "•", the " — " between a credit's name and role, the legacy releases' "version (code)" titles from `legacy_history.json` (English static data, D-124) and the What's new history's titles from `versionNameOf(versionCode)` (D-130, "3.0.0" for 30000).
+  - **The What's new sheet** lists the bullet lines of every entry newer than the last seen version, oldest version first, under one "Version {versionName}" subtitle and without per-version headings.
+  - **The merge illustration** of How to play shows "2 2 2 2" and "4 4 · ·" on `palette.board` side by side with `ic_pad_right` when the column is at least 400 dp wide, otherwise stacked with the same arrow turned to point down (so stacked at 360 dp and on the Pixel 7, golden 20); it is one node described by `htp_merging_illustration_cd`.
+  - **The OFL group** of Licenses shows the font's license text (`ofl_google_sans_flex.txt`), as the MIT and Apache groups show theirs (D-122); a group without a text has no Show license text row.
+- **Rationale:** what M4-D built against D-248's contracts, recorded where the specification said less.
+- **Rejected:** translating the static history data (D-124).
+- **Source:** [ORCH] O17 (D-173 change control, M4 integration).
+
+#### D-255 — The restore gate waits for a composition of the loaded appearance (amends D-251; MOTION_SPEC.md §3.14, §3.15, §3.16; ARCHITECTURE.md §4.7, §10.3)
+- **Decision:**
+  - `AppearanceUi` gains `loaded: Boolean = false`, true once its values are the settings file's: `AppViewModel.appearance` is `combine(settings.state, settings.loaded) { value, loaded -> value.toAppearance(loaded) }`. `DocumentHolder` publishes the file's value before it sets `loaded`, so a loaded appearance never holds the defaults.
+  - `App()` passes Motion Off to `GameTheme` until `GameViewModel.ready` and until a composition has shown a loaded appearance: a remembered flag, initialised to `appearance.loaded` and set from a `SideEffect` of the first composition whose appearance is loaded. The real level applies from the next frame. A composition that starts with a loaded appearance (an activity recreation, or a test that composes after the load) has no defaults to leave and is not held.
+  - D-251's gate alone assumed that some frame composes the loaded appearance under Off before `ready` turns true. When the settings and the game load finish within one frame interval, one recomposition sees both, `GameTheme` gets a new colour target at Full, and the saved theme crossfades from the defaults as the splash leaves. Under this entry that composition is still Off, so the colours are the saved ones at once. `RestoreNoMotionTest.savedAppearanceIsNotCrossfadedWhenLoadsLandInOneFrame` holds the I/O until the defaults are composed, then lets both loads land before the next frame, and checks that no crossfade starts, nothing runs, and a later palette change still crossfades.
+  - In that one-frame case the switch to Full comes one frame after the board's first frame and recomposes the arrangement statically (D-252).
+- **Rationale:** the gate must be tied to what was composed, not to the order in which two flows arrive (MOTION_SPEC.md §3.14: no motion on restore; D-047).
+- **Rejected:** keeping D-251's `ready`-only gate (timing-dependent on devices); suppressing every crossfade on the composition where the level turns Full (it still crossfades if the appearance arrives after `ready`); reading `SettingsRepository.loaded` separately in `App()` (a second flow, with the same ordering problem).
+- **Source:** [ORCH] O17 (D-173 change control, M4 review).
+
+#### D-256 — The layout preference comes from the window `GameLayout` measures (amends D-026, D-092; DESIGN_SYSTEM.md §5.1; FEATURES.md F18 item 2, §8 H10 and seams; PLAN.md §2.2; ARCHITECTURE.md §10.3)
+- **Decision:**
+  - `GameLayout` measures its window as its incoming constraints plus the safe-drawing insets it pads by (§5.2). `resolveGameLayout` applies D-091's preference to that window through `preferredLayoutMode(width, height)`, at the `WindowSizeClass` breakpoints (height < 480 dp → THREE_COLUMN, width ≥ 840 dp → SIDE_PANEL). Two of DESIGN_SYSTEM.md §5.1's "expanded" checks, the 64 sp title and the 120 dp hero badge, read the same width. The 144-particle confetti count reads `LocalWindowInfo.containerDpSize`, the window container, which is the same width in the app.
+  - When the Game content fills the activity window, as it does in the app, this equals `currentWindowAdaptiveInfoV2().windowSizeClass`. A sub-window, such as a test's `requiredSize` box or a future pane, composes as its own window. This is why the screen tests can check several windows in one host, for example `winCardFitsBoard` at `w915dp-h412dp-land` inside a 1000 × 1000 host.
+  - `rememberLayoutMode()` had no caller and is removed. In v1.0 no code calls `currentWindowAdaptiveInfoV2()`. The `material3-adaptive` artifact stays in D-016's catalog for H10's posture modes, so the dependency set and the merged manifest do not change. `layoutModeFor(widthDp, heightDp)` stays as the pure table of F18-AC1.
+- **Rationale:** M4-B built the preference from the measured window, and the tests rely on that, so D-092 and the code had diverged without a record. Reading one window value for both the preference and the fit keeps them consistent.
+- **Rejected:** taking the preference from the size class and the fit from the constraints (two window readings that can disagree in a sub-window, and every multi-window screen test would need its own device qualifiers); keeping `rememberLayoutMode()` without a caller or a test.
+- **Source:** [ORCH] O17 (D-173 change control, M4 review).
 
 ---
 

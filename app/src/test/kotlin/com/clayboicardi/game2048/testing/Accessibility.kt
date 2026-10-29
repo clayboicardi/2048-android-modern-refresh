@@ -5,6 +5,8 @@
 package com.clayboicardi.game2048.testing
 
 import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.hasAnyAncestor
@@ -78,16 +80,33 @@ private fun ComposeTestRule.touchTargets(
     scrimExempt: Boolean = false,
 ): Int {
     val minPx = with(density) { 48.dp.toPx() } - 0.5f
-    val nodes = onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes()
+    val nodes =
+        onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().filterNot {
+            it.isScrolledAway()
+        }
     val tooSmall =
         nodes
             .filter { it.touchBoundsInRoot.width < minPx || it.touchBoundsInRoot.height < minPx }
-            .map { "too small: ${it.id} ${it.touchBoundsInRoot}" }
+            .map { "too small: ${it.id} ${it.describe()} ${it.touchBoundsInRoot}" }
     val overlapping = if (scrimExempt) nodes.filterNot { it.coversItsWindow() } else nodes
     val problems = tooSmall + overlaps(overlapping)
     check(problems.isEmpty()) { "Touch-target violations: " + problems.joinToString() }
     return nodes.size
 }
+
+/**
+ * Whether this node has a laid-out size but none of it is visible: a clickable scrolled out of its
+ * container's viewport (a tab of a scrollable tab row past the screen edge), which no touch can
+ * reach until it scrolls in, and is checked then.
+ */
+private fun SemanticsNode.isScrolledAway(): Boolean =
+    size.width > 0 && size.height > 0 && (boundsInRoot.width <= 0f || boundsInRoot.height <= 0f)
+
+/** The node's text or content description, for a failure message. */
+private fun SemanticsNode.describe(): String =
+    (config.getOrNull(SemanticsProperties.Text)?.joinToString()
+            ?: config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString())
+        .orEmpty()
 
 /** Whether this node's touch bounds are its window's whole bounds (a modal scrim). */
 private fun SemanticsNode.coversItsWindow(): Boolean =

@@ -39,6 +39,7 @@ import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
 import com.clayboicardi.game2048.testing.FakeClock
 import com.clayboicardi.game2048.testing.FixedSeedSource
 import com.clayboicardi.game2048.testing.TEST_VERSION_CODE
+import com.clayboicardi.game2048.testing.TestApp
 import com.clayboicardi.game2048.testing.seedGame
 import com.clayboicardi.game2048.testing.seedSettings
 import com.google.common.truth.Truth.assertThat
@@ -127,12 +128,7 @@ class SplashGateTest {
                 scenario.onActivity {
                     it.setContent {
                         CompositionLocalProvider(LocalMotionProbe provides probe) {
-                            App(
-                                vm,
-                                container.settingsRepository.state,
-                                container.animatorScale,
-                                container.clock,
-                            )
+                            TestApp(container, vm)
                         }
                     }
                 }

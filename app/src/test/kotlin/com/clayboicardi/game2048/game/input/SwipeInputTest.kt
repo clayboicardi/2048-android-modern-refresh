@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -19,12 +20,15 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.TouchInjectionScope
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -33,8 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.clayboicardi.game2048.App
 import com.clayboicardi.game2048.StatsKey
+import com.clayboicardi.game2048.about.WHATS_NEW_SHEET_TAG
 import com.clayboicardi.game2048.data.game.SavedGame
 import com.clayboicardi.game2048.data.settings.MoveTiming
 import com.clayboicardi.game2048.data.settings.Settings
@@ -56,6 +60,7 @@ import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
 import com.clayboicardi.game2048.testing.FakeClock
 import com.clayboicardi.game2048.testing.FixedSeedSource
 import com.clayboicardi.game2048.testing.TEST_VERSION_CODE
+import com.clayboicardi.game2048.testing.TestApp
 import com.clayboicardi.game2048.testing.seedGame
 import com.clayboicardi.game2048.testing.seedSettings
 import com.clayboicardi.game2048.ui.components.DIALOG_DISMISS_TAG
@@ -233,6 +238,7 @@ class SwipeInputTest {
 
     /** F15-AC9 */
     @Test
+    @Config(qualifiers = "w411dp-h914dp-xxhdpi") // the FULL header: its title corner has no control
     fun tapDoesNothing() {
         GameScreenRig(tmp.newFolder(), GoldenFixtures.FIX_MID_4).use { rig ->
             compose.showGame(rig)
@@ -253,8 +259,8 @@ class SwipeInputTest {
     fun ignoredWhileModalOpen() {
         GameScreenRig(tmp.newFolder(), GoldenFixtures.FIX_MID_4).use { rig ->
             compose.showGame(rig)
-            // The size sheet and the game menu (M3.10), the new-game dialog (M3 part 1) and the win
-            // card (M3.9); What's new joins this test in M4 (D-233).
+            // The size sheet, the game menu, the new-game dialog and the win card; the What's new
+            // sheet is ignoredWhileWhatsNewOpen (D-233).
             // The size sheet; Back on its window closes it again.
             compose.onNodeWithTag(SIZE_CHIP_TAG).performClick()
             compose.onNodeWithTag(SIZE_SHEET_TAG).assertExists()
@@ -291,6 +297,88 @@ class SwipeInputTest {
             compose.onNodeWithTag(WIN_CARD_TAG).assertExists()
         }
     }
+
+    /** F15-AC11 */
+    @Test
+    fun ignoredWhileWhatsNewOpen() {
+        // The What's new sheet, F15-AC11's modal of M4 (D-233): a version seen before this one.
+        val settings =
+            Settings(lastBoardSize = 4, onboardingDone = true, lastSeenVersionCode = SEEN_BEFORE)
+        GameScreenRig(tmp.newFolder(), GoldenFixtures.FIX_MID_4, settings).use { rig ->
+            compose.showGame(rig)
+            compose.awaitTag(WHATS_NEW_SHEET_TAG)
+            assertSwipeIgnored(rig)
+            compose.onNodeWithTag(WHATS_NEW_SHEET_TAG).assertExists()
+        }
+    }
+
+    /** F18-AC11 */
+    @Test
+    @Config(qualifiers = "w360dp-h360dp-xxhdpi")
+    fun scrollModeMovesOnlyFromBoard() {
+        // SCROLL without the pad, each case from a fresh FIX_MID_4 at scroll 0.
+        val rigs = List(SCROLL_CASES) { GameScreenRig(tmp.newFolder(), GoldenFixtures.FIX_MID_4) }
+        var shown: GameScreenRig? by mutableStateOf(null)
+        compose.setContent { shown?.let { rig -> key(rig) { TestApp(rig.container, rig.vm) } } }
+        try {
+            for ((case, rig) in rigs.withIndex()) {
+                shown = null
+                compose.waitForIdle()
+                shown = rig
+                rig.awaitReady(compose)
+                compose.waitForIdle()
+                assertThat(scrollValue()).isEqualTo(0f)
+                val before = rig.vm.board.value.moveId
+                when (case) {
+                    0 -> {
+                        // A left swipe that starts on the board moves and never scrolls.
+                        compose.onNodeWithTag(BOARD).performTouchInput {
+                            down(center)
+                            dragX(-SWIPE_DP)
+                            up()
+                        }
+                        compose.waitForIdle()
+                        assertMovedLeft(rig, before)
+                        assertThat(scrollValue()).isEqualTo(0f)
+                    }
+                    1 -> {
+                        // An upward drag that starts on the header scrolls and moves nothing.
+                        compose.onNodeWithTag(HEADER).performTouchInput {
+                            down(center)
+                            dragY(-SWIPE_DP)
+                            up()
+                        }
+                        compose.waitForIdle()
+                        assertThat(rig.vm.board.value.moveId).isEqualTo(before)
+                        assertThat(scrollValue()).isGreaterThan(0f)
+                    }
+                    else -> {
+                        // An upward swipe that starts on the board moves up and never scrolls.
+                        compose.onNodeWithTag(BOARD).performTouchInput {
+                            down(center)
+                            dragY(-SWIPE_DP)
+                            up()
+                        }
+                        compose.waitForIdle()
+                        assertThat(rig.vm.board.value.moveId).isGreaterThan(before)
+                        assertThat(rig.saved().state.moveLog.toList().last())
+                            .isEqualTo(Direction.UP)
+                        assertThat(scrollValue()).isEqualTo(0f)
+                    }
+                }
+            }
+        } finally {
+            rigs.forEach { it.close() }
+        }
+    }
+
+    /** The SCROLL column's scroll value in px. */
+    private fun scrollValue(): Float =
+        compose
+            .onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange]
+            .value()
 
     /** A left swipe on the board leaves the game unchanged. */
     private fun assertSwipeIgnored(rig: GameScreenRig) {
@@ -429,7 +517,30 @@ private fun TouchInjectionScope.dragX(dp: Float) {
     repeat(steps) { moveBy(step) }
 }
 
+/** A slow drag of [dp] along y (negative: upwards) in 5 dp steps, one event period apart. */
+private fun TouchInjectionScope.dragY(dp: Float) {
+    val steps = (kotlin.math.abs(dp) / STEP_DP).toInt()
+    val step = Offset(0f, (dp / steps).dp.toPx())
+    repeat(steps) { moveBy(step) }
+}
+
 private const val STEP_DP = 5f
+
+/** F18-AC11: three cases of 60 dp gestures. */
+private const val SCROLL_CASES = 3
+private const val SWIPE_DP = 60f
+
+/** A version seen before this one, so What's new shows (DESIGN_SYSTEM.md §10.4 row 44). */
+internal const val SEEN_BEFORE = 20000
+
+/** Waits until a node tagged [tag] exists, running the main looper between checks. */
+internal fun ComposeContentTestRule.awaitTag(tag: String) {
+    waitUntil(timeoutMillis = LOAD_TIMEOUT_MS) {
+        ShadowLooper.idleMainLooper()
+        onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+    }
+    waitForIdle()
+}
 
 /**
  * The Game screen over a container of its own (QUALITY.md §1.6): [game] and [settings] are written
@@ -496,12 +607,7 @@ internal fun assertMovedLeft(rig: GameScreenRig, beforeMoveId: Long) {
 /** Composes `App` over [rig] and waits until its game has loaded. */
 internal fun ComposeContentTestRule.showGame(rig: GameScreenRig) {
     setContent {
-        App(
-            gameViewModel = rig.vm,
-            settings = rig.container.settingsRepository.state,
-            animatorScale = rig.container.animatorScale,
-            clock = rig.container.clock,
-        )
+        TestApp(rig.container, rig.vm)
     }
     rig.awaitReady(this)
     waitForIdle()

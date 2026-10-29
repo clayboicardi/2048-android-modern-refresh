@@ -35,7 +35,9 @@ import org.robolectric.shadows.ShadowToast
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [24, 37])
+// A phone window (Pixel 7 size), whose STACKED arrangement shows the FULL header with the title.
+// The Pixel7 qualifier's wide colour gamut does not exist at SDK 24, so the size is spelled out.
+@Config(sdk = [24, 37], qualifiers = "w411dp-h914dp-420dpi")
 class LaunchSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 

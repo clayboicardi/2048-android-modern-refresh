@@ -17,6 +17,9 @@ import com.clayboicardi.game2048.data.settings.MotionPreference
 import com.clayboicardi.game2048.engine.Direction
 import com.clayboicardi.game2048.fixtures.GameFixture
 import com.clayboicardi.game2048.fixtures.MotionFixtures
+import com.clayboicardi.game2048.game.overlay.CARD_NEW_GAME_TAG
+import com.clayboicardi.game2048.game.overlay.CARD_SHARE_TAG
+import com.clayboicardi.game2048.game.overlay.CARD_UNDO_TAG
 import com.clayboicardi.game2048.game.overlay.KEEP_GOING_TAG
 import com.clayboicardi.game2048.motion.MotionHarness
 import com.clayboicardi.game2048.motion.MotionRule
@@ -37,8 +40,8 @@ import org.robolectric.annotation.GraphicsMode
  * The effective motion level (MOTION_SPEC.md §2.1; D-063): `effectiveMotion()`, the live
  * `SystemAnimatorScaleSource` over `Settings.Global.ANIMATOR_DURATION_SCALE`, and
  * `LocalEffectiveMotion` as `GameTheme` provides it; plus the rule that nothing animates forever.
- * F13-AC4 (`delaysScaleWithAnimatorScale`) reads the win card's `OverlayController.interactive`, so
- * M3-E2 adds it in M3 part 2 (PLAN.md §5.3 M3.11, D-233).
+ * F13-AC4 (`delaysScaleWithAnimatorScale`) reads the win card's `OverlayController.interactive` and
+ * every win-card button's enabled state.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -189,16 +192,16 @@ class EffectiveMotionTest {
                 systemScale = DOUBLE,
             )
         h.commitMove(Direction.LEFT)
-        val keepGoing = h.rule.onNodeWithTag(KEEP_GOING_TAG)
+        val buttons = WIN_BUTTON_TAGS.map { h.rule.onNodeWithTag(it) }
 
         h.advanceTo(LOCKED_AT_DOUBLE_MS)
         val locked = checkNotNull(h.snapshot().overlay) { "t = 1744: no win card" }
         assertWithMessage("t = 1744: interactive").that(locked.interactive).isFalse()
-        keepGoing.assertIsNotEnabled()
+        buttons.forEach { it.assertIsNotEnabled() }
         h.advanceTo(INTERACTIVE_AT_DOUBLE_MS)
         val open = checkNotNull(h.snapshot().overlay) { "t = 1760: no win card" }
         assertWithMessage("t = 1760: interactive").that(open.interactive).isTrue()
-        keepGoing.assertIsEnabled()
+        buttons.forEach { it.assertIsEnabled() }
     }
 
     private fun putSystemScale(scale: Float) {
@@ -216,5 +219,11 @@ class EffectiveMotionTest {
         /** ⌈2 × 880⌉ − 16 and ⌈2 × 880⌉: the win buttons' flip at animator scale 2. */
         const val LOCKED_AT_DOUBLE_MS = 1_744L
         const val INTERACTIVE_AT_DOUBLE_MS = 1_760L
+
+        /**
+         * Every button of the win card (DESIGN_SYSTEM.md §6.3): Keep going, New game, Undo, Share.
+         */
+        val WIN_BUTTON_TAGS =
+            listOf(KEEP_GOING_TAG, CARD_NEW_GAME_TAG, CARD_UNDO_TAG, CARD_SHARE_TAG)
     }
 }

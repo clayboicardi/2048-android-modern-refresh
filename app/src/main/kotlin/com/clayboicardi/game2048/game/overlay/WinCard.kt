@@ -42,8 +42,8 @@ import com.clayboicardi.game2048.ui.components.GameButton
 import com.clayboicardi.game2048.ui.components.GameButtonStyle
 import com.clayboicardi.game2048.ui.components.GameIconButton
 import com.clayboicardi.game2048.ui.components.GameIconButtonStyle
-import com.clayboicardi.game2048.ui.components.GameNumeralStyle
 import com.clayboicardi.game2048.ui.theme.GameDimens
+import com.clayboicardi.game2048.ui.theme.GameFonts
 import com.clayboicardi.game2048.ui.theme.GameShapes
 import com.clayboicardi.game2048.ui.theme.LocalTilePalette
 import com.clayboicardi.game2048.ui.theme.LocalTileSkin
@@ -257,7 +257,9 @@ internal fun WinBadge(
                 }
             }
             .drawWithCache {
-                val style = GameNumeralStyle.copy(fontSize = label.fontSizeDp.dp.toSp())
+                val style =
+                    GameFonts.tile(skin, label.text.length)
+                        .copy(fontSize = label.fontSizeDp.dp.toSp())
                 val text = measurer.measure(label.text, style, softWrap = false, maxLines = 1)
                 val textTopLeft =
                     Offset(

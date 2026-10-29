@@ -362,14 +362,14 @@ Rules:
 | `htp_goal` | Goal | — | Section heading (noun). | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_goal_body` | Slide the tiles to merge equal numbers and build the %1$s tile. On a 3×3 board the goal is %2$s. | %1$s = "2048"; %2$s = "256" | Keep "3×3" exactly (Latin digits, U+00D7). | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_moving` | Moving | — | Section heading (noun or gerund). | How to play | M4 | DESIGN_SYSTEM §6.10 |
-| `htp_moving_body` | Swipe up, down, left or right. Every tile slides as far as it can in that direction. | — | — | How to play | M4 | DESIGN_SYSTEM §6.10 |
+| `htp_moving_body` | Swipe up, down, left or right. Every tile slides as far as it can in that direction. | — | Body of the How to play section "Moving". | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_merging` | Merging | — | Section heading. | How to play | M4 | DESIGN_SYSTEM §6.10 |
-| `htp_merging_body` | Two touching tiles with the same number merge into one tile with their sum. A tile merges only once per move. | — | — | How to play | M4 | DESIGN_SYSTEM §6.10 |
+| `htp_merging_body` | Two touching tiles with the same number merge into one tile with their sum. A tile merges only once per move. | — | Body of the How to play section "Merging". | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_merging_illustration_cd` | Example: 2, 2, 2, 2 moved left becomes 4, 4 | — | Spoken description of the left-to-right example picture. Keep the digits and their order. | `MergeIllustration` | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_new_tiles` | New tiles | — | Section heading. | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_new_tiles_body` | After every move that changes the board, a new tile appears in a random empty cell: a 2 nine times out of ten, otherwise a 4. | — | "2" and "4" are tile values: keep them as Latin digits. "nine times out of ten" is written in words. | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_board_sizes` | Board sizes | — | Section heading. | How to play | M4 | DESIGN_SYSTEM §6.10 |
-| `htp_board_sizes_body` | Each size keeps its own game, best score and statistics. | — | — | How to play | M4 | DESIGN_SYSTEM §6.10 |
+| `htp_board_sizes_body` | Each size keeps its own game, best score and statistics. | — | Body of the How to play section "Board sizes", below the table of sizes and goals. | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_undo` | Undo | — | Section heading (noun; may differ from the `undo` button verb). | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_undo_body` | Undo is unlimited and also works after game over. Undo brings back the same next tile, so repeating a move gives the same result. Undos are counted, and games with undo don't count toward Best without undo. | — | "Best without undo" is the statistic name; match `stats_best_no_undo`. | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_keys` | Keyboard and controllers | — | Section heading for the key table. | How to play | M4 | DESIGN_SYSTEM §6.10 |
@@ -447,7 +447,9 @@ Rules:
 | Tile labels, scores, "+N", "2048"/"256" arguments | Game | Game numerals, `Long.toString()` (D-103) |
 | "–" | Loading chips; average score with 0 games | Typographic placeholder (`DESIGN_SYSTEM.md` §6.1, §6.9) |
 | "m:ss", "h:mm:ss" | Game-over card, Statistics, share text | `formatElapsed`, `Locale.ROOT` (§1.10) |
-| "3.0.0", "2.2 (25)" | About | `BuildConfig.VERSION_NAME` (compile-time, D-134); legacy data |
+| "3.0.0", "2.2 (25)" | About | `BuildConfig.VERSION_NAME` (compile-time, D-134) and `versionNameOf(versionCode)` for the What's new history titles (D-130); the legacy releases' "version (code)" titles from `legacy_history.json` (D-254) |
+| "•" | About's What's new history, the What's new sheet | The bullet glyph of a bullet row (D-254) |
+| " — " | About's credits rows | The separator in "name — role", around static English data (D-124, D-254) |
 | Credits and legacy history rows | About | English static data in `res/raw/legacy_history.json` (D-124, §4.5) |
 | License entry names, copyright lines and texts | Licenses | `res/raw/` data (D-122, §4.4) |
 | Share-text emoji | Share | Code table (`FEATURES.md` F10) |
@@ -748,7 +750,7 @@ fun formatElapsed(ms: Long): String {
 - Icons: `ic_arrow_back`, `ic_chevron_right`, `ic_open_in_new`, `ic_help` and `ic_undo` auto-mirror; `ic_pad_*` do not (`DESIGN_SYSTEM.md` §8.1).
 - **Mixed-direction text.** fa strings contain Latin runs ("TalkBack", "Ctrl+Z", "3×3") and receive Latin-digit arguments. The Unicode bidi algorithm orders them correctly in almost all cases, and numbers and "4×4" read the same in either direction. If a golden or an agent Read shows a Latin run out of order, wrap that run inside the fa string in first-strong isolates, U+2066 … U+2069, written as `⁦…⁩`. Never scatter U+200E/U+200F marks.
 - **Goldens:** 23 `game_mid-4x4_classic-light_fa` and 26 `game_mid-4x4_classic-light_ar-XB` (`DESIGN_SYSTEM.md` §10.4). On Read, check:
-  - title and score chips mirrored; controls bar order [⋮][New game][Undo];
+  - title and score chips mirrored; the size chip's header row mirrored (More at the start, D-249); controls bar order [New game][Undo];
   - the board identical to the LTR golden 3;
   - all numerals Latin;
   - Persian text neither clipped nor overlapping;
@@ -773,16 +775,15 @@ fun formatElapsed(ms: Long): String {
 ```kotlin
 // settings/AppLanguage.kt
 @RequiresApi(33)
-fun openAppLanguageSettings(context: Context, onFailure: () -> Unit) {
-    val intent = Intent(
-        Settings.ACTION_APP_LOCALE_SETTINGS,
-        Uri.fromParts("package", context.packageName, null),
+fun openAppLanguageSettings(context: Context, launch: (Intent) -> Unit) {
+    // `launch` is `rememberIntentLauncher(snackbars)`'s function (ui/components/Intents.kt): it
+    // starts the intent and shows R.string.link_open_failed when no activity handles it (D-253).
+    launch(
+        Intent(
+            Settings.ACTION_APP_LOCALE_SETTINGS,
+            Uri.fromParts("package", context.packageName, null),
+        ),
     )
-    try {
-        context.startActivity(intent)
-    } catch (_: ActivityNotFoundException) {
-        onFailure() // snackbar R.string.link_open_failed
-    }
 }
 
 @RequiresApi(33)
@@ -1363,7 +1364,7 @@ Raw files under `app/src/main/res/raw/` (M4):
 |---|---|---|
 | `license_mit.txt` | Byte copy of `LICENSE` (§4.2) | `check_legal_texts` (§2.6) |
 | `license_apache_2_0.txt` | `https://www.apache.org/licenses/LICENSE-2.0.txt` verbatim | 11,358 bytes, sha256 `cfc7749b…3d30` (`check_legal_texts`, §2.6) |
-| `ofl_google_sans_flex.txt` | `google/fonts` `ofl/googlesansflex/OFL.txt` verbatim | 4,488 bytes, sha256 `fc13d69f…3137` at `9b59ea9f…` (§0.3 item 8). `scripts/fonts/subset-google-sans-flex.sh` copies it and records its sha256 next to the TTF's |
+| `ofl_google_sans_flex.txt` | `google/fonts` `ofl/googlesansflex/OFL.txt` verbatim, CRLF line endings included (`.gitattributes` marks it `-text`, D-251) | 4,488 bytes, sha256 `fc13d69f…3137` at `9b59ea9f…` (§0.3 item 8). `scripts/fonts/subset-google-sans-flex.sh` copies it and records its sha256 next to the TTF's (19,016 bytes, sha256 `3d804957…d6a7`, `DESIGN_SYSTEM.md` §3.1) |
 | `third_party_licenses.json` | Below | `LicensesCoverageTest` (F26-AC1) |
 
 **`third_party_licenses.json`** is a JSON array. Entry fields: `name` (display), `groupOrPath` (Maven group, repository URL or file path), `licenseId` (SPDX: `MIT`, `OFL-1.1`, `Apache-2.0`) and `copyright`. The screen groups entries by `licenseId` in the order MIT, OFL-1.1, Apache-2.0, keeping file order inside each group (`DESIGN_SYSTEM.md` §6.12). There is one entry per Maven group, so `LicensesCoverageTest` can match `groupOrPath` against `config/license-groups.txt` exactly.

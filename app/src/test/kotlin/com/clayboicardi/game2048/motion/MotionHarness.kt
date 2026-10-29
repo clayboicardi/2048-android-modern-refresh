@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.view.accessibility.AccessibilityManager
 import androidx.activity.BackEventCompat
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
@@ -40,6 +41,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.navigation3.runtime.NavKey
 import com.clayboicardi.game2048.App
+import com.clayboicardi.game2048.AppViewModel
 import com.clayboicardi.game2048.data.game.SavedGame
 import com.clayboicardi.game2048.data.platform.MonotonicClock
 import com.clayboicardi.game2048.data.settings.MotionPreference
@@ -74,6 +76,7 @@ import com.clayboicardi.game2048.testing.TEST_VERSION_CODE
 import com.clayboicardi.game2048.testing.seedGame
 import com.clayboicardi.game2048.testing.seedRecords
 import com.clayboicardi.game2048.testing.seedSettings
+import com.clayboicardi.game2048.testing.testAppViewModel
 import com.clayboicardi.game2048.ui.theme.ClassicLightSkin
 import com.clayboicardi.game2048.ui.theme.GameMotion
 import com.google.common.truth.Truth.assertWithMessage
@@ -91,6 +94,7 @@ import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowLooper
 
 /** The board node (`BoardView`): test tag `game:board`, `CollectionInfo(N, N)`. */
@@ -237,6 +241,9 @@ object Curves {
  *   and, with `autoAdvance = false`, no frame runs, so its children would never be disposed;
  * - the static render that AC-CONS-3 calls `presenter.reemitStatic()` is [staticRender]: a
  *   [recreate] after the settle bound, which composes the ViewModel's settled (`Restored`) board.
+ *
+ * M4-B adds [setTouchExploration], [boardSideDp], [boardHeightPx] and [launch]'s `onboardingDone`,
+ * without changing the earlier members.
  *
  * M3 part 2 (M3-E2) adds, without changing the part 1 members: [tapCardButtonTag] (the card's New
  * game and Undo share their text with the controls bar), [commitNavigation], [pushFromMenu] and
@@ -567,6 +574,26 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
         return frames
     }
 
+    /**
+     * Turns touch exploration on or off as TalkBack does (M4-B; FEATURES.md F17-AC8, AC-LAYOUT-2,
+     * AC-LAYOUT-3): `ShadowAccessibilityManager.setTouchExplorationEnabled`, which calls the
+     * registered listeners at once, then sends the snapshot apply notifications so the next frame
+     * sees the change. No frame is advanced.
+     */
+    fun setTouchExploration(enabled: Boolean) {
+        val manager =
+            RuntimeEnvironment.getApplication().getSystemService(AccessibilityManager::class.java)
+        shadowOf(manager).setTouchExplorationEnabled(enabled)
+        Snapshot.sendApplyNotifications()
+    }
+
+    /** The board node's measured side on this frame, in dp (M4-B). */
+    fun boardSideDp(): Float =
+        rule.onNodeWithTag(BOARD_TAG).fetchSemanticsNode().size.width / rule.density.density
+
+    /** The board node's measured height on this frame, in px (M4-B). */
+    fun boardHeightPx(): Int = rule.onNodeWithTag(BOARD_TAG).fetchSemanticsNode().size.height
+
     /** The current frame in ms from the latest origin. */
     fun t(): Long = now() - originMs
 
@@ -834,13 +861,18 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
          * fake and the counter provided, sets `mainClock.autoAdvance = false` and advances until
          * the board is loaded, its origin published and nothing runs. [widthDp] sets the window
          * width qualifier before composing.
+         *
+         * M4-B adds, keeping every earlier call as it was: [onboardingDone], false for the
+         * first-launch hint (DESIGN_SYSTEM.md §6.2).
          */
+        @Suppress("LongParameterList") // one parameter per launch seam (MOTION_SPEC.md §8.1)
         fun launch(
             rule: MotionRule,
             fixture: GameFixture,
             motion: MotionPreference,
             systemScale: Float = 1f,
             widthDp: Int? = null,
+            onboardingDone: Boolean = true,
         ): MotionHarness {
             widthDp?.let { RuntimeEnvironment.setQualifiers("+w${it}dp") }
             val compose = rule.compose
@@ -855,7 +887,7 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
                     seedSource = FixedSeedSource(SEED),
                     animatorScale = FakeAnimatorScaleSource(systemScale),
                 )
-            runBlocking { seed(container, fixture, motion) }
+            runBlocking { seed(container, fixture, motion, onboardingDone) }
             val store = ViewModelStore()
             rule.onClose {
                 store.clear()
@@ -864,6 +896,7 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
             val vm =
                 ViewModelProvider(store, container.gameViewModelFactory())[
                     GameViewModel::class.java]
+            val appVm = testAppViewModel(container, store)
             // The load reads DataStore on real I/O threads and resumes on the main looper.
             compose.waitUntil(LOAD_TIMEOUT_MS) {
                 ShadowLooper.idleMainLooper()
@@ -874,6 +907,7 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
                     probe = MotionProbe(),
                     haptics = FakeHapticFeedback { compose.mainClock.currentTime },
                     vm = vm,
+                    appVm = appVm,
                     container = container,
                     counts = RecompositionCounts(),
                     host = RecreationHost(),
@@ -893,6 +927,7 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
             container: AppContainer,
             fixture: GameFixture,
             motion: MotionPreference,
+            onboardingDone: Boolean,
         ) {
             container.seedSettings(
                 Settings(
@@ -901,7 +936,7 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
                     haptics = fixture.haptics,
                     lastBoardSize = fixture.game.state.size.n,
                     lastSeenVersionCode = TEST_VERSION_CODE,
-                    onboardingDone = true,
+                    onboardingDone = onboardingDone,
                 ),
             )
             container.seedRecords(fixture.records)
@@ -916,6 +951,7 @@ internal data class Rig(
     val probe: MotionProbe,
     val haptics: FakeHapticFeedback,
     val vm: GameViewModel,
+    val appVm: AppViewModel,
     val container: AppContainer,
     val counts: RecompositionCounts,
     val host: RecreationHost,
@@ -930,12 +966,7 @@ internal data class Rig(
                 LocalHapticFeedback provides haptics,
                 LocalRecompositionCounter provides counts,
             ) {
-                App(
-                    gameViewModel = vm,
-                    settings = container.settingsRepository.state,
-                    animatorScale = container.animatorScale,
-                    clock = container.clock,
-                )
+                App(appViewModel = appVm, gameViewModel = vm, container = container)
             }
         }
     }

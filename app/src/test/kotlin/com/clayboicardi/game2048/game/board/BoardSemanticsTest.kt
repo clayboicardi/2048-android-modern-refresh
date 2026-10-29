@@ -1,9 +1,16 @@
 package com.clayboicardi.game2048.game.board
 
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Context
+import android.view.View
+import android.view.accessibility.AccessibilityManager
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.SnapshotMutationPolicy
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -11,12 +18,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -24,7 +34,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.clayboicardi.game2048.data.game.SavedGame
 import com.clayboicardi.game2048.data.platform.MonotonicClock
@@ -37,6 +49,16 @@ import com.clayboicardi.game2048.engine.MoveOutcome
 import com.clayboicardi.game2048.fixtures.GoldenFixtures
 import com.clayboicardi.game2048.game.GameScreen
 import com.clayboicardi.game2048.game.GameViewModel
+import com.clayboicardi.game2048.game.MORE_TAG
+import com.clayboicardi.game2048.game.NEW_GAME_TAG
+import com.clayboicardi.game2048.game.STATUS_LINE_TAG
+import com.clayboicardi.game2048.game.UNDO_TAG
+import com.clayboicardi.game2048.game.header.BEST_TAG
+import com.clayboicardi.game2048.game.header.SCORE_TAG
+import com.clayboicardi.game2048.game.header.SIZE_CHIP_TAG
+import com.clayboicardi.game2048.game.header.TITLE_TAG
+import com.clayboicardi.game2048.game.input.PAD_TAG
+import com.clayboicardi.game2048.game.layoutTag
 import com.clayboicardi.game2048.game.motion.LocalMotionProbe
 import com.clayboicardi.game2048.game.motion.LocalMoveTimeline
 import com.clayboicardi.game2048.game.motion.MotionProbe
@@ -45,8 +67,10 @@ import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
 import com.clayboicardi.game2048.testing.FakeClock
 import com.clayboicardi.game2048.testing.FixedSeedSource
 import com.clayboicardi.game2048.testing.TEST_VERSION_CODE
+import com.clayboicardi.game2048.testing.rememberTestAppViewModel
 import com.clayboicardi.game2048.testing.seedGame
 import com.clayboicardi.game2048.testing.seedSettings
+import com.clayboicardi.game2048.ui.components.LayoutMode
 import com.clayboicardi.game2048.ui.theme.ClassicLightSkin
 import com.clayboicardi.game2048.ui.theme.GameTheme
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
@@ -62,6 +86,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowLooper
@@ -211,6 +236,109 @@ class BoardSemanticsTest {
             .isGreaterThan(13)
     }
 
+    /** F17-AC7 */
+    @Test
+    @Config(qualifiers = "w1280dp-h914dp")
+    fun traversalOrderInAllLayoutModes() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val manager = shadowOf(context.getSystemService(AccessibilityManager::class.java))
+        // An enabled service, so Compose computes the traversal order it reports to TalkBack.
+        manager.setEnabledAccessibilityServiceList(listOf(AccessibilityServiceInfo()))
+        manager.setEnabled(true)
+        val screens = TRAVERSAL_CASES.associateWith {
+            host.load(GoldenFixtures.FIX_MID_4, SETTLED_SETTINGS) to host.container
+        }
+        var shown: TraversalCase? by mutableStateOf(null)
+        var root: View? = null
+        compose.setContent {
+            val view = LocalView.current
+            SideEffect { root = view }
+            shown?.let { case ->
+                key(case) {
+                    val (vm, container) = screens.getValue(case)
+                    Box(Modifier.requiredSize(case.window)) {
+                        GameTheme(darkTheme = false, motion = MotionPreference.OFF) {
+                            CompositionLocalProvider(LocalMotionProbe provides host.probe) {
+                                GameScreen(
+                                    vm,
+                                    rememberTestAppViewModel(container),
+                                    host.clock,
+                                    onNavigate = {},
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (case in TRAVERSAL_CASES) {
+            shown = null
+            compose.waitForIdle()
+            manager.setTouchExplorationEnabled(case.touchExploration)
+            shown = case
+            compose.waitForIdle()
+            if (case.touchExploration) {
+                // The status line is hidden from accessibility until its first text (D-252).
+                screens.getValue(case).first.onMove(Direction.LEFT)
+                compose.waitForIdle()
+            }
+            val label = "${case.mode} (${case.window})"
+            compose.onNodeWithTag(layoutTag(case.mode)).assertExists()
+            assertWithMessage("$label: traversal order")
+                .that(traversalOrder(checkNotNull(root)))
+                .containsExactlyElementsIn(case.order)
+                .inOrder()
+        }
+    }
+
+    /**
+     * The tagged chrome in the order TalkBack visits it: the chain of Compose's
+     * `EXTRA_DATA_TEST_TRAVERSALBEFORE_VAL` from the first node, each node named by its tag
+     * ([TRAVERSAL_NAMES]; the pad's buttons as one "pad"), untagged nodes left out.
+     */
+    private fun traversalOrder(view: View): List<String> {
+        val provider = checkNotNull(view.accessibilityNodeProvider) { "no node provider" }
+        val nodes =
+            compose
+                .onAllNodes(SemanticsMatcher("any node") { true }, useUnmergedTree = true)
+                .fetchSemanticsNodes()
+        val next = HashMap<Int, Int>()
+        for (node in nodes) {
+            val info = provider.createAccessibilityNodeInfo(node.id) ?: continue
+            provider.addExtraDataToAccessibilityNodeInfo(node.id, info, TRAVERSAL_BEFORE, null)
+            if (info.extras.containsKey(TRAVERSAL_BEFORE)) {
+                next[node.id] = info.extras.getInt(TRAVERSAL_BEFORE)
+            }
+        }
+        val head = (next.keys - next.values.toSet()).singleOrNull()
+        checkNotNull(head) { "no single first node in $next" }
+        val byId = nodes.associateBy { it.id }
+        val names = mutableListOf<String>()
+        var id: Int? = head
+        var steps = 0
+        while (id != null && steps++ <= next.size) {
+            val name = byId[id]?.let(::traversalName)
+            if (name != null && names.lastOrNull() != name) names += name
+            id = next[id]
+        }
+        return names
+    }
+
+    /**
+     * The name of the nearest tagged chrome at or above [node]: a board cell reads as "board", the
+     * chip inside the size chip's touch-target box as "size chip".
+     */
+    private fun traversalName(node: SemanticsNode): String? {
+        var current: SemanticsNode? = node
+        var name: String? = null
+        while (current != null && name == null) {
+            val tag = current.config.getOrNull(SemanticsProperties.TestTag).orEmpty()
+            name = if (tag.startsWith(PAD_TAG)) "pad" else TRAVERSAL_NAMES[tag]
+            current = current.parent
+        }
+        return name
+    }
+
     private fun boardNode(): SemanticsNode =
         compose.onNodeWithTag(BOARD_TAG, useUnmergedTree = true).fetchSemanticsNode()
 
@@ -258,10 +386,17 @@ internal class BoardHost(
     /** The containers' application scope; cancelled by [close]. */
     private val scope = CoroutineScope(SupervisorJob())
 
-    /** A ready `GameViewModel` whose current game is [fixture]. */
-    fun load(fixture: SavedGame): GameViewModel {
+    /** The container of the last [load]; [showScreen] makes its `AppViewModel`. */
+    lateinit var container: AppContainer
+        private set
+
+    /** A ready `GameViewModel` whose current game is [fixture], with [settings]. */
+    fun load(
+        fixture: SavedGame,
+        settings: Settings = Settings(lastBoardSize = fixture.state.size.n),
+    ): GameViewModel {
         val dir = folder.newFolder()
-        val container =
+        container =
             AppContainer(
                 files = { name -> File(dir, name) },
                 versionCode = TEST_VERSION_CODE,
@@ -271,7 +406,7 @@ internal class BoardHost(
                 animatorScale = FakeAnimatorScaleSource(),
             )
         runBlocking {
-            container.seedSettings(Settings(lastBoardSize = fixture.state.size.n))
+            container.seedSettings(settings)
             container.seedGame(fixture)
         }
         val vm =
@@ -324,7 +459,7 @@ internal class BoardHost(
         rule.setContent {
             GameTheme(darkTheme = false) {
                 CompositionLocalProvider(LocalMotionProbe provides probe) {
-                    GameScreen(vm, Settings(), clock, onNavigate = {})
+                    GameScreen(vm, rememberTestAppViewModel(container), clock, onNavigate = {})
                 }
             }
         }
@@ -456,3 +591,52 @@ private fun HostedBoard(vm: GameViewModel, clock: MonotonicClock, side: Dp) {
 private object SamePresentation : SnapshotMutationPolicy<BoardUi> {
     override fun equivalent(a: BoardUi, b: BoardUi): Boolean = a.moveId == b.moveId
 }
+
+/** F17-AC7: one window per arrangement, and the order of its tagged chrome (D-249). */
+private data class TraversalCase(
+    val window: DpSize,
+    val touchExploration: Boolean,
+    val mode: LayoutMode,
+    val order: List<String>,
+)
+
+/** The FULL header group (More last), the board, the controls bar (D-080, D-081, D-249). */
+private val FULL_ORDER =
+    listOf("title", "Score", "Best", "size chip", "More", "board", "Undo", "New game")
+
+/** The COMPACT header group (More last), the board, the status line, the pad and New game. */
+private val PAD_ORDER =
+    listOf("size chip", "Score", "Best", "More", "board", "status line", "pad", "New game")
+
+private val TRAVERSAL_CASES =
+    listOf(
+        TraversalCase(DpSize(411.dp, 914.dp), false, LayoutMode.STACKED, FULL_ORDER),
+        TraversalCase(DpSize(915.dp, 412.dp), false, LayoutMode.THREE_COLUMN, FULL_ORDER),
+        TraversalCase(DpSize(1280.dp, 800.dp), false, LayoutMode.SIDE_PANEL, FULL_ORDER),
+        TraversalCase(DpSize(360.dp, 450.dp), true, LayoutMode.SCROLL, PAD_ORDER),
+    )
+
+private val TRAVERSAL_NAMES =
+    mapOf(
+        TITLE_TAG to "title",
+        SCORE_TAG to "Score",
+        BEST_TAG to "Best",
+        SIZE_CHIP_TAG to "size chip",
+        MORE_TAG to "More",
+        BOARD_TAG to "board",
+        UNDO_TAG to "Undo",
+        NEW_GAME_TAG to "New game",
+        STATUS_LINE_TAG to "status line",
+    )
+
+/** Onboarding done, the current version seen, Motion Off: no hint and no card. */
+private val SETTLED_SETTINGS =
+    Settings(
+        motion = MotionPreference.OFF,
+        onboardingDone = true,
+        lastSeenVersionCode = TEST_VERSION_CODE,
+    )
+
+/** Compose's test key for the next node in traversal order (`AccessibilityNodeInfo` extras). */
+private const val TRAVERSAL_BEFORE =
+    "android.view.accessibility.extra." + "EXTRA_DATA_TEST_TRAVERSALBEFORE_VAL"

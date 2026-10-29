@@ -24,9 +24,9 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.withKeyDown
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.clayboicardi.game2048.App
 import com.clayboicardi.game2048.MainActivity
 import com.clayboicardi.game2048.R
+import com.clayboicardi.game2048.about.WHATS_NEW_SHEET_TAG
 import com.clayboicardi.game2048.data.settings.MotionPreference
 import com.clayboicardi.game2048.data.settings.Settings
 import com.clayboicardi.game2048.engine.Direction
@@ -38,6 +38,7 @@ import com.clayboicardi.game2048.game.header.SIZE_CHIP_TAG
 import com.clayboicardi.game2048.game.overlay.GAME_OVER_CARD_TAG
 import com.clayboicardi.game2048.game.overlay.SIZE_SHEET_TAG
 import com.clayboicardi.game2048.game.overlay.WIN_CARD_TAG
+import com.clayboicardi.game2048.testing.TestApp
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Rule
@@ -134,12 +135,7 @@ class KeyboardInputTest {
                 var shown by mutableStateOf(mid)
                 compose.setContent {
                     key(shown) {
-                        App(
-                            gameViewModel = shown.vm,
-                            settings = shown.container.settingsRepository.state,
-                            animatorScale = shown.container.animatorScale,
-                            clock = shown.container.clock,
-                        )
+                        TestApp(shown.container, shown.vm)
                     }
                 }
                 mid.awaitReady(compose)
@@ -211,7 +207,7 @@ class KeyboardInputTest {
     fun ignoredWhileModalOpen() {
         GameScreenRig(tmp.newFolder(), GoldenFixtures.FIX_MID_4).use { rig ->
             compose.showGame(rig)
-            // The size sheet (M3 part 2) and the new-game dialog (part 1); What's new joins in M4.
+            // The size sheet and the new-game dialog; What's new is ignoredWhileWhatsNewOpen.
             // The size sheet: every game key, U, N and R included, is ignored behind it, and Back
             // on its window closes it again.
             compose.onNodeWithTag(SIZE_CHIP_TAG).performClick()
@@ -253,6 +249,31 @@ class KeyboardInputTest {
 
             assertThat(rig.saved()).isEqualTo(game)
             assertThat(rig.vm.board.value.moveId).isEqualTo(moveId)
+            compose.onAllNodes(isDialog()).assertCountEquals(1)
+        }
+    }
+
+    /** F16-AC6 */
+    @Test
+    fun ignoredWhileWhatsNewOpen() {
+        // The What's new sheet, F16-AC6's modal of M4: a version seen before this one.
+        val settings =
+            Settings(lastBoardSize = 4, onboardingDone = true, lastSeenVersionCode = SEEN_BEFORE)
+        GameScreenRig(tmp.newFolder(), GoldenFixtures.FIX_MID_4, settings).use { rig ->
+            compose.showGame(rig)
+            compose.awaitTag(WHATS_NEW_SHEET_TAG)
+            val game = rig.saved()
+            val moveId = rig.vm.board.value.moveId
+
+            // Sent to the Game content itself, behind the sheet: its handlers must ignore them.
+            for (key in listOf(Key.W, Key.DirectionLeft, Key.U, Key.N)) {
+                compose.onNodeWithTag(BOARD).performKeyInput { pressKey(key) }
+                compose.waitForIdle()
+            }
+
+            assertThat(rig.saved()).isEqualTo(game)
+            assertThat(rig.vm.board.value.moveId).isEqualTo(moveId)
+            compose.onNodeWithTag(WHATS_NEW_SHEET_TAG).assertExists()
             compose.onAllNodes(isDialog()).assertCountEquals(1)
         }
     }
@@ -348,12 +369,7 @@ class KeyboardInputTest {
                 var shown by mutableStateOf(winRig)
                 compose.setContent {
                     key(shown) {
-                        App(
-                            gameViewModel = shown.vm,
-                            settings = shown.container.settingsRepository.state,
-                            animatorScale = shown.container.animatorScale,
-                            clock = shown.container.clock,
-                        )
+                        TestApp(shown.container, shown.vm)
                     }
                 }
                 for ((rig, card) in listOf(winRig to WIN_CARD_TAG, overRig to GAME_OVER_CARD_TAG)) {

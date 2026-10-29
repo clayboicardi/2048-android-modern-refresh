@@ -4,15 +4,18 @@ import android.view.KeyEvent
 import androidx.activity.ComponentDialog
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation3.runtime.NavKey
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.clayboicardi.game2048.about.ABOUT_LIST_TAG
 import com.clayboicardi.game2048.data.AppJson
 import com.clayboicardi.game2048.data.DataStoreFiles
 import com.clayboicardi.game2048.data.game.GameDocument
@@ -83,6 +86,9 @@ class BackOnRootTest {
             assertShown(GameKey)
 
             openFromMenu(AboutKey)
+            compose
+                .onNodeWithTag(ABOUT_LIST_TAG)
+                .performScrollToNode(hasTestTag(ABOUT_LICENSES_TAG))
             compose.onNodeWithTag(ABOUT_LICENSES_TAG).performClick()
             compose.waitForIdle()
             assertShown(LicensesKey)
@@ -173,6 +179,9 @@ class BackOnRootTest {
     fun backStackSurvivesRecreation() {
         launch().use { scenario ->
             openFromMenu(AboutKey)
+            compose
+                .onNodeWithTag(ABOUT_LIST_TAG)
+                .performScrollToNode(hasTestTag(ABOUT_LICENSES_TAG))
             compose.onNodeWithTag(ABOUT_LICENSES_TAG).performClick()
             compose.waitForIdle()
             assertShown(LicensesKey)

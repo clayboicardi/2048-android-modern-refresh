@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.clayboicardi.game2048.R
 import com.clayboicardi.game2048.game.board.TileLabels
 import com.clayboicardi.game2048.ui.theme.GameDimens
+import com.clayboicardi.game2048.ui.theme.GameFonts
 import com.clayboicardi.game2048.ui.theme.LocalTilePalette
 import com.clayboicardi.game2048.ui.theme.LocalTileSkin
 import com.clayboicardi.game2048.ui.theme.TilePalette
@@ -53,7 +54,9 @@ fun MiniTile(exp: Int, size: Dp, modifier: Modifier = Modifier) {
             .semantics { contentDescription = description }
             .drawWithCache {
                 val radius = CornerRadius(tileRadius(size, skin).toPx())
-                val style = GameNumeralStyle.copy(fontSize = label.fontSizeDp.dp.toSp())
+                val style =
+                    GameFonts.tile(skin, label.text.length)
+                        .copy(fontSize = label.fontSizeDp.dp.toSp())
                 val text = measurer.measure(label.text, style, softWrap = false, maxLines = 1)
                 val textTopLeft =
                     Offset(

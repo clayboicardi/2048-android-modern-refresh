@@ -1,7 +1,9 @@
 package com.clayboicardi.game2048.ui.theme
 
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,6 +69,11 @@ object GameDimens {
 
     /** Undo, New game, More and card buttons: `ButtonDefaults.MediumContainerHeight` (56 dp). */
     val ControlHeight: Dp = ButtonDefaults.MediumContainerHeight
+    /**
+     * More in the size chip's header row of STACKED and SCROLL (D-249): the small icon-button
+     * container (40 dp) inside the 48 dp minimum interactive size, so the row stays 48 dp.
+     */
+    val HeaderMoreSize: DpSize = IconButtonDefaults.smallContainerSize()
     /** The board-size chip's leading and trailing icons (DESIGN_SYSTEM.md §7.3). */
     val SizeChipIcon: Dp = 18.dp
 
@@ -80,6 +87,12 @@ object GameDimens {
     // TalkBack direction pad and status line (D-082).
     val PadButton: Dp = 64.dp
     val PadGap: Dp = 8.dp
+    /** The pad buttons' icons (DESIGN_SYSTEM.md §6.6, §8.1). */
+    val PadIcon: Dp = 32.dp
+    /**
+     * The New game column beside the pad in STACKED and SCROLL (DESIGN_SYSTEM.md §5.5 E, D-249).
+     */
+    val PadControlsWidth: Dp = 104.dp
     /** Two lines of `bodyMedium`. */
     val StatusLineMinHeight: Dp = 40.dp
 
@@ -112,8 +125,21 @@ object GameDimens {
     /** `panel = clamp(PanelFraction · W, PanelMin, PanelMax)`. */
     const val PanelFraction: Float = 0.32f
 
+    /** The THREE_COLUMN stats rail's title: `autoSize` 32..40 sp (DESIGN_SYSTEM.md §5.4). */
+    val RailTitleMax: TextUnit = 40.sp
+
     /** Settings, Stats, How to play, About and Licenses columns. */
     val ContentMaxWidth: Dp = 640.dp
+
+    // Sub-screens (DESIGN_SYSTEM.md §6.9–§6.13).
+    /** The Statistics empty state's `MiniBoardGlyph`. */
+    val StatsEmptyGlyph: Dp = 96.dp
+    /** The About header's app icon (its two adaptive layers). */
+    val AboutIcon: Dp = 72.dp
+    /** The About header's "2048" in the title instance. */
+    val AboutTitle: TextUnit = 40.sp
+    /** How to play's merge illustration arrow (`ic_pad_right`). */
+    val HowToPlayArrow: Dp = 24.dp
 
     // Overlay cards (D-200): never wider than board − 16 dp; height budget board − 16 dp.
     val OverlayCardMinWidth: Dp = 264.dp

@@ -1,35 +1,65 @@
 package com.clayboicardi.game2048.motion
 
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.clayboicardi.game2048.data.game.SavedGame
+import com.clayboicardi.game2048.data.platform.MonotonicClock
 import com.clayboicardi.game2048.data.settings.MotionPreference
+import com.clayboicardi.game2048.data.settings.PaletteId
+import com.clayboicardi.game2048.data.settings.Settings
+import com.clayboicardi.game2048.data.settings.ThemeMode
+import com.clayboicardi.game2048.di.AppContainer
+import com.clayboicardi.game2048.di.gameViewModelFactory
 import com.clayboicardi.game2048.engine.Direction
 import com.clayboicardi.game2048.fixtures.GameFixture
 import com.clayboicardi.game2048.fixtures.GoldenFixtures
 import com.clayboicardi.game2048.fixtures.MotionFixtures
+import com.clayboicardi.game2048.game.GameViewModel
 import com.clayboicardi.game2048.game.OverlayEntry
 import com.clayboicardi.game2048.game.OverlayUi
 import com.clayboicardi.game2048.game.board.BoardPresenter
 import com.clayboicardi.game2048.game.board.BoardUi
 import com.clayboicardi.game2048.game.board.TileKind
+import com.clayboicardi.game2048.game.motion.MotionProbe
 import com.clayboicardi.game2048.game.motion.MotionSnapshot
 import com.clayboicardi.game2048.game.motion.ProbeOverlayKind
 import com.clayboicardi.game2048.game.motion.delayedSpec
+import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
+import com.clayboicardi.game2048.testing.FakeHapticFeedback
+import com.clayboicardi.game2048.testing.FixedSeedSource
+import com.clayboicardi.game2048.testing.TEST_VERSION_CODE
+import com.clayboicardi.game2048.testing.seedGame
+import com.clayboicardi.game2048.testing.seedSettings
+import com.clayboicardi.game2048.testing.testAppViewModel
 import com.clayboicardi.game2048.ui.theme.GameMotion
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.google.common.truth.Truth.assertWithMessage
+import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowLooper
 
 /**
  * Restore, recreation and the one-shot presentations (MOTION_SPEC.md §3.14, §9.9; D-047,
  * ARCHITECTURE.md §4.11): a restored board is static on its first frame, and the presentation
  * reports of a live move change the ViewModel's values without touching what the composition shows.
- * The board cases are M3 part 1; the card cases come with `OverlayController` in part 2.
+ * A cold start whose settings and game load land in one frame shows the saved appearance without a
+ * crossfade (D-251, D-255).
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -141,6 +171,131 @@ class RestoreNoMotionTest {
             .isEqualTo(OverlayEntry.Restored)
         h.assertWinCardEntry()
         h.assertWinButtonsGate()
+    }
+
+    /** AC-RESTORE-1 */
+    @Test
+    fun savedAppearanceIsNotCrossfadedWhenLoadsLandInOneFrame() {
+        // A cold start (MOTION_SPEC.md §3.14; D-251, D-255): the first composition shows the
+        // defaults (Classic) before DataStore has read anything; the settings (Neon, Full) and the
+        // game then become ready before the next frame. That frame shows Neon at once: no
+        // crossfade starts and nothing runs. A later palette change crossfades (the gate opened).
+        val compose = rule.compose
+        val dir = rule.folder.newFolder()
+        seedNeonAndDie(dir)
+        val gate = CountDownLatch(1)
+        val rig = heldColdStart(dir, gate)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { rig.Content() }
+        compose.mainClock.advanceTimeByFrame()
+        assertWithMessage("before the loads: settings loaded")
+            .that(rig.container.settingsRepository.loaded.value)
+            .isFalse()
+        assertWithMessage("before the loads: palette")
+            .that(rig.appVm.appearance.value.palette)
+            .isEqualTo(PaletteId.CLASSIC)
+
+        gate.countDown()
+        // No frame runs while the loads finish (autoAdvance is off): both land in one frame.
+        compose.waitUntil(LOAD_TIMEOUT_MS) {
+            ShadowLooper.idleMainLooper()
+            rig.vm.ready.value
+        }
+        Snapshot.sendApplyNotifications()
+        assertWithMessage("loaded: palette")
+            .that(rig.appVm.appearance.value.palette)
+            .isEqualTo(PaletteId.NEON)
+        repeat(SETTLE_FRAMES) { frame ->
+            compose.mainClock.advanceTimeByFrame()
+            assertNoCrossfade(rig.probe, "frame $frame")
+        }
+        assertWithMessage("board loaded").that(rig.probe.boardLoaded).isTrue()
+
+        rig.container.settingsRepository.update { it.copy(palette = PaletteId.CLASSIC) }
+        ShadowLooper.idleMainLooper()
+        Snapshot.sendApplyNotifications()
+        repeat(MAX_ORIGIN_FRAMES) {
+            if (rig.probe.paletteOriginMs == null) compose.mainClock.advanceTimeByFrame()
+        }
+        assertWithMessage("a later palette change: crossfade origin")
+            .that(rig.probe.paletteOriginMs)
+            .isNotNull()
+        // The crossfade ends before the content is disposed.
+        repeat(SETTLE_FRAMES) { compose.mainClock.advanceTimeByFrame() }
+    }
+
+    /** An earlier process wrote Neon (light, Full) and `FIX_MID_4` into [dir], then died. */
+    private fun seedNeonAndDie(dir: File) {
+        val scope = CoroutineScope(SupervisorJob())
+        runBlocking {
+            val dead =
+                AppContainer(
+                    files = { name -> File(dir, name) },
+                    versionCode = TEST_VERSION_CODE,
+                    applicationScope = scope,
+                    animatorScale = FakeAnimatorScaleSource(),
+                )
+            dead.seedSettings(
+                Settings(
+                    themeMode = ThemeMode.LIGHT,
+                    palette = PaletteId.NEON,
+                    motion = FULL,
+                    lastBoardSize = GoldenFixtures.FIX_MID_4.state.size.n,
+                    lastSeenVersionCode = TEST_VERSION_CODE,
+                    onboardingDone = true,
+                ),
+            )
+            dead.seedGame(GoldenFixtures.FIX_MID_4)
+            checkNotNull(scope.coroutineContext[Job]).cancelAndJoin()
+        }
+    }
+
+    /**
+     * The next process over [dir]: its container's one I/O thread waits for [gate], so nothing is
+     * read until the test opens it; the ViewModels exist, nothing is composed yet.
+     */
+    private fun heldColdStart(dir: File, gate: CountDownLatch): Rig {
+        val compose = rule.compose
+        val executor = Executors.newSingleThreadExecutor()
+        executor.execute { gate.await() }
+        val scope = CoroutineScope(SupervisorJob())
+        val container =
+            AppContainer(
+                files = { name -> File(dir, name) },
+                versionCode = TEST_VERSION_CODE,
+                applicationScope = scope,
+                ioDispatcher = executor.asCoroutineDispatcher(),
+                clock = MonotonicClock { compose.mainClock.currentTime },
+                seedSource = FixedSeedSource(SEED),
+                animatorScale = FakeAnimatorScaleSource(),
+            )
+        val store = ViewModelStore()
+        rule.onClose {
+            gate.countDown()
+            store.clear()
+            scope.cancel()
+            executor.shutdownNow()
+        }
+        return Rig(
+            probe = MotionProbe(),
+            haptics = FakeHapticFeedback { compose.mainClock.currentTime },
+            vm =
+                ViewModelProvider(store, container.gameViewModelFactory())[
+                    GameViewModel::class.java],
+            appVm = testAppViewModel(container, store),
+            container = container,
+            counts = RecompositionCounts(),
+            host = RecreationHost(),
+        )
+    }
+
+    /** On this frame the palette fraction is 1, no crossfade has started and nothing runs. */
+    private fun assertNoCrossfade(probe: MotionProbe, label: String) {
+        val snapshot = probe.snapshot()
+        val chrome = checkNotNull(snapshot.chrome) { "$label: no chrome readers" }
+        assertWithMessage("$label: palette fraction").that(chrome.paletteFraction).isEqualTo(1f)
+        assertWithMessage("$label: crossfade origin").that(probe.paletteOriginMs).isNull()
+        assertWithMessage("$label: running").that(snapshot.isAnyRunning).isFalse()
     }
 
     /**
@@ -315,6 +470,14 @@ class RestoreNoMotionTest {
 
     private companion object {
         val FULL = MotionPreference.FULL
+
+        /** A bound on the real-thread DataStore loads, not a timing under test. */
+        const val LOAD_TIMEOUT_MS = 10_000L
+
+        /** Frames checked after the loads; 30 frames (480 ms) also outlast a crossfade (299). */
+        const val SETTLE_FRAMES = 30
+        const val MAX_ORIGIN_FRAMES = 3
+        const val SEED = 0x2048L
         const val REVEAL_MS = 80L
         const val SPAWN_FRAME_MS = 96L
         const val TILE_BUDGET_END_MS = 432L

@@ -1,7 +1,12 @@
 package com.clayboicardi.game2048.motion
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.toAndroidRectF
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -12,6 +17,7 @@ import com.clayboicardi.game2048.data.settings.MotionPreference
 import com.clayboicardi.game2048.fixtures.GameFixture
 import com.clayboicardi.game2048.fixtures.GoldenFixtures
 import com.clayboicardi.game2048.game.CONTROLS_TAG
+import com.clayboicardi.game2048.game.MORE_TAG
 import com.clayboicardi.game2048.menuItemTag
 import com.clayboicardi.game2048.screenTag
 import com.clayboicardi.game2048.ui.theme.GameMotion
@@ -31,9 +37,9 @@ import org.robolectric.annotation.GraphicsMode
  * and settles by 256; under Off only Settings is composed from the next frame on. The offset is the
  * Settings root's x in the root (layout and layer transforms included); its alpha is read from
  * pixels. At t = 0 the main window above the controls bar (header and board, which an opaque
- * Settings would cover) equals the frame before the push: the controls bar itself is left out,
- * because the More button's state changes as the menu closes. At 256 the whole main window equals
- * the settled frame.
+ * Settings would cover) equals the frame before the push, with More's bounds blanked in both
+ * frames: More sits in the header (D-249) and its state changes as the menu closes. At 256 the
+ * whole main window equals the settled frame.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -92,7 +98,8 @@ class NavTransitionsTest {
         val shiftPx = with(h.rule.density) { GameMotion.Nav.SHIFT_DP.dp.roundToPx() }
         h.openMenu(SettingsKey)
         val controlsTop = h.rule.onNodeWithTag(CONTROLS_TAG).fetchSemanticsNode().boundsInRoot.top
-        val before = aboveControls(h.capture(FilmRegion.ROOT, downscale = false), controlsTop)
+        val more = h.rule.onNodeWithTag(MORE_TAG).fetchSemanticsNode().boundsInRoot
+        val before = aboveControls(h.capture(FilmRegion.ROOT, downscale = false), controlsTop, more)
 
         h.commitNavigation { h.rule.onNodeWithTag(menuItemTag(SettingsKey)).performClick() }
 
@@ -100,7 +107,7 @@ class NavTransitionsTest {
             .that(settingsX(h))
             .isWithin(PX_TOL)
             .of(sign * shiftPx.toFloat())
-        val t0 = aboveControls(h.capture(FilmRegion.ROOT, downscale = false), controlsTop)
+        val t0 = aboveControls(h.capture(FilmRegion.ROOT, downscale = false), controlsTop, more)
         assertSameFrame(
             h,
             "t = 0: Settings at alpha 0 over an unchanged Game",
@@ -145,9 +152,17 @@ class NavTransitionsTest {
         assertWithMessage(what).that(same).isTrue()
     }
 
-    /** The rows of [frame] above [top] (px): the header and the board. */
-    private fun aboveControls(frame: Bitmap, top: Float): Bitmap =
-        Bitmap.createBitmap(frame, 0, 0, frame.width, top.toInt())
+    /**
+     * The rows of [frame] above [top] (px), the header and the board, with [blank] (More's bounds
+     * in the root) painted over in one flat colour.
+     */
+    private fun aboveControls(frame: Bitmap, top: Float, blank: Rect): Bitmap {
+        val rows =
+            Bitmap.createBitmap(frame, 0, 0, frame.width, top.toInt())
+                .copy(Bitmap.Config.ARGB_8888, true)
+        Canvas(rows).drawRect(blank.toAndroidRectF(), Paint().apply { color = Color.MAGENTA })
+        return rows
+    }
 
     /** The Settings root's left edge in the root, in px (slide and layer transforms included). */
     private fun settingsX(h: MotionHarness): Float {

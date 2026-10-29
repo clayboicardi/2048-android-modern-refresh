@@ -24,24 +24,26 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.clayboicardi.game2048.R
+import com.clayboicardi.game2048.game.header.ScoreFit
+import com.clayboicardi.game2048.game.header.scoreLines
 import com.clayboicardi.game2048.ui.theme.GameDimens
+import com.clayboicardi.game2048.ui.theme.GameFonts
+import com.clayboicardi.game2048.ui.theme.LocalTileSkin
 
 /**
  * A Score or Best chip (DESIGN_SYSTEM.md §7.2; D-064, D-084): the `surfaceContainerHigh` container
  * in `shapes.large`, at least `ScoreChipMinWidth` × `ScoreChipMinHeight`, padded 12 × 8 dp, with
- * [label] above [value], centred. It is one accessibility node spoken as `a11y_chip_value`
- * ([spokenLabel] in sentence case, then [spokenValue] in Latin digits), with no live region.
+ * [label] above [value], centred. Its width comes from [modifier]: content-sized up to the fit's
+ * `chipSlot` in INLINE, the slot in OWN_ROW, the full width in STACKED (`GameHeader`). It is one
+ * accessibility node spoken as `a11y_chip_value` ([spokenLabel] in sentence case, then
+ * [spokenValue] in Latin digits), with no live region.
  *
  * [container] gives the container colour at draw time, so the BEST chip's crossfade to
  * `tertiaryContainer` (MOTION_SPEC.md §3.6) recomposes nothing. [overlay] (the "+N" floats of the
@@ -105,10 +107,11 @@ fun ScoreValueText(
     color: ColorProducer,
     modifier: Modifier = Modifier,
 ) {
+    val skin = LocalTileSkin.current
     BasicText(
         text = text,
         modifier = modifier,
-        style = ScoreNumeralStyle.copy(fontSize = fontSize),
+        style = GameFonts.score(skin).copy(fontSize = fontSize),
         softWrap = false,
         maxLines = 1,
         color = color,
@@ -116,26 +119,77 @@ fun ScoreValueText(
 }
 
 /**
- * The one size of a [digits]-digit Score or Best value (DESIGN_SYSTEM.md §7.2; D-084): the largest
- * of `ScoreValueMin..ScoreValueMax` in `ScoreValueStep` steps whose width in the score numerals is
- * at most [valueWidth] (INLINE: `ScoreChipMinWidth` − the chip's 2 × 12 dp padding), or
- * `ScoreValueMin`. `tnum` gives every digit one advance, so the width depends only on [digits]. It
- * is measured once per digit count, width, density and font scale.
+ * A Score or Best value without an odometer (DESIGN_SYSTEM.md §7.2; D-084): [text] cut into the
+ * `scoreLines` of [fit] (one line unless a STACKED value wraps between digits), one
+ * [ScoreValueText] per line at [fontSize], in [ScoreValueLines]. Every digit is shown; nothing is
+ * ellipsized or abbreviated.
  */
 @Composable
-fun rememberScoreValueSize(
-    digits: Int,
-    valueWidth: Dp = GameDimens.ScoreChipMinWidth - GameDimens.Space12 * 2,
-): TextUnit {
+fun ScoreValue(
+    text: String,
+    fit: ScoreFit,
+    fontSize: TextUnit,
+    color: ColorProducer,
+    modifier: Modifier = Modifier,
+) {
+    val lines = scoreLines(text, fit.digitsPerLine)
+    if (lines.size == 1) {
+        ScoreValueText(text = text, fontSize = fontSize, color = color, modifier = modifier)
+    } else {
+        ScoreValueLines(modifier) {
+            for (line in lines) ScoreValueText(text = line, fontSize = fontSize, color = color)
+        }
+    }
+}
+
+/**
+ * The lines of a wrapped value (DESIGN_SYSTEM.md §7.2): each child is one line, centred, top to
+ * bottom with no extra spacing; the first baseline is the last line's, so the "+N" float anchors to
+ * it.
+ */
+@Composable
+fun ScoreValueLines(modifier: Modifier = Modifier, lines: @Composable () -> Unit) {
+    Layout(content = lines, modifier = modifier) { measurables, constraints ->
+        val placeables = measurables.map {
+            it.measure(constraints.copy(minWidth = 0, minHeight = 0))
+        }
+        val width = (placeables.maxOfOrNull { it.width } ?: 0).coerceAtLeast(constraints.minWidth)
+        val height = placeables.sumOf { it.height }.coerceAtLeast(constraints.minHeight)
+        val lastTop = height - (placeables.lastOrNull()?.height ?: 0)
+        val lastBaseline = placeables.lastOrNull()?.get(FirstBaseline) ?: AlignmentLine.Unspecified
+        val baselines: Map<AlignmentLine, Int> =
+            if (lastBaseline == AlignmentLine.Unspecified) emptyMap()
+            else mapOf(FirstBaseline to lastTop + lastBaseline)
+        layout(width, height, baselines) {
+            var y = 0
+            for (p in placeables) {
+                p.place((width - p.width) / 2, y)
+                y += p.height
+            }
+        }
+    }
+}
+
+/**
+ * The one size of a [digits]-digit Score or Best value in [fit] (DESIGN_SYSTEM.md §7.2; D-084): the
+ * largest of `ScoreValueMin..ScoreValueMax` in `ScoreValueStep` steps whose width in the score
+ * numerals is at most `fit.valueWidth`, or `ScoreValueMin`, which is also the size of a value that
+ * wraps (`digits > fit.digitsPerLine`). `tnum` gives every digit one advance, so the width depends
+ * only on [digits]. It is measured once per digit count, fit, density and font scale.
+ */
+@Composable
+fun rememberScoreValueSize(digits: Int, fit: ScoreFit): TextUnit {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(digits, valueWidth, density, measurer) {
+    val skin = LocalTileSkin.current
+    return remember(digits, fit, density, measurer, skin) {
+        if (digits > fit.digitsPerLine) return@remember GameDimens.ScoreValueMin
         val text = "0".repeat(digits.coerceAtLeast(1))
-        val maxPx = with(density) { valueWidth.roundToPx() }
+        val maxPx = with(density) { fit.valueWidth.dp.roundToPx() }
         val step = GameDimens.ScoreValueStep.value
         var size = GameDimens.ScoreValueMax.value
         while (size > GameDimens.ScoreValueMin.value) {
-            val style = ScoreNumeralStyle.copy(fontSize = size.sp)
+            val style = GameFonts.score(skin).copy(fontSize = size.sp)
             if (measurer.measure(text, style, softWrap = false, maxLines = 1).size.width <= maxPx) {
                 break
             }
@@ -146,30 +200,24 @@ fun rememberScoreValueSize(
 }
 
 /**
- * The score numerals until M4's Google Sans Flex subset (D-076 fallback): `FontFamily.Default`,
- * bold, tabular lining figures, laid out left to right in every locale (D-104, DESIGN_SYSTEM.md
- * §3.7).
+ * The width in dp of one digit of the score numerals at `ScoreValueMin` (14 sp) at the current
+ * density and font scale: `scoreFit`'s `advance14` (DESIGN_SYSTEM.md §7.2), so Android 14+
+ * non-linear font scaling applies.
  */
-val ScoreNumeralStyle: TextStyle =
-    TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontFeatureSettings = "tnum, lnum",
-        textDirection = TextDirection.Ltr,
-    )
+@Composable
+fun rememberScoreAdvance14(): Float {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val skin = LocalTileSkin.current
+    return remember(density, measurer, skin) {
+        val style = GameFonts.score(skin).copy(fontSize = GameDimens.ScoreValueMin)
+        val ten = measurer.measure(ADVANCE_SAMPLE, style, softWrap = false, maxLines = 1)
+        ten.size.width / density.density / ADVANCE_SAMPLE.length
+    }
+}
 
-/**
- * The "+N", title and mini-tile numerals until M4 (D-076 fallback): `FontFamily.Default`, bold,
- * `tnum`, laid out left to right in every locale (D-104, DESIGN_SYSTEM.md §3.7): in an RTL
- * paragraph the leading "+" of "+N", a neutral, would be drawn after the digits.
- */
-val GameNumeralStyle: TextStyle =
-    TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontFeatureSettings = "tnum",
-        textDirection = TextDirection.Ltr,
-    )
+/** Ten digits: their width over ten is one `tnum` advance, without one digit's side bearings. */
+private const val ADVANCE_SAMPLE = "0000000000"
 
 /** Fills [shape] behind the content with [color], read at draw time; nothing is clipped. */
 private fun Modifier.containerBehind(shape: Shape, color: ColorProducer): Modifier = drawWithCache {
@@ -220,8 +268,9 @@ private fun BaselineOverlay(value: @Composable () -> Unit, overlay: @Composable 
 private fun rememberScoreLineHeight(): Int {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(density, measurer) {
-        val style = ScoreNumeralStyle.copy(fontSize = GameDimens.ScoreValueMax)
+    val skin = LocalTileSkin.current
+    return remember(density, measurer, skin) {
+        val style = GameFonts.score(skin).copy(fontSize = GameDimens.ScoreValueMax)
         measurer.measure("0", style, softWrap = false, maxLines = 1).size.height
     }
 }

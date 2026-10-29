@@ -757,7 +757,9 @@ This covers cold start after the splash (D-112), `ActivityScenario.recreate()`, 
   - Every resolved color is `lerp(old, new, fraction)`: `TilePalette` roles and the M3 `ColorScheme` roles.
   - Tile and board colors are read in draw, so they invalidate draw only. Chrome colors necessarily recompose M3 consumers for those ~19 frames. This is the one documented exception to the recomposition budget (§7.2).
   - System-bar icon appearance switches at once at the start.
-- **Reduced and Off:** new colors on F0 (`DESIGN_SYSTEM.md` §5.8).
+- **Reduced and Off:** new colors on F0 (`DESIGN_SYSTEM.md` §5.8). M3 components that animate their own colours through the `MotionScheme` (the `TopAppBar` container) follow D-184's level scheme: one frame later under Off, the expressive effects spring under Reduced (D-251).
+- **Also lerped** under Full: `TileSkin.titleColor` and `tileOutline` (a missing outline is the other at alpha 0). The skin's geometry and numerals switch on F0. A crossfade interrupted by another change starts from the colours shown, frozen at that frame (D-251).
+- **No crossfade on restore** (§3.14): `App()` passes Motion Off to `GameTheme` until `GameViewModel.ready` and until a composition has shown the loaded appearance (`AppearanceUi.loaded`), so a saved appearance applied as the settings load never crossfades from the defaults, also when the settings and the game land in one frame (D-251, D-255).
 
 ### 3.16 Layout changes in a live composition
 
@@ -771,7 +773,8 @@ Bounds animate again for the next change that keeps the new arrangement.
 - **Full** (within one arrangement):
   - Board, panel and rails use `Modifier.animateBounds(lookaheadScope, boundsTransform = { _, _ -> GameMotion.overlaySpatial(Rect.VisibilityThreshold) })` (`DESIGN_SYSTEM.md` §5.8). A 300 px change settles in 399 ms.
   - The hint card exits with `shrinkVertically(overlaySpatial) + fadeOut(fastEffects)`.
-  - The direction pad enters and exits with `fadeIn/fadeOut(fastEffects)`. When its appearance switches the arrangement, the new arrangement composes it already visible, with no fade.
+  - The direction pad enters with `fadeIn(fastEffects)`; when it hides, the bottom region switches back to the controls bar on F0, because it holds either the pad row or the bar and a fading pad would draw over the returning bar (D-252). When its appearance switches the arrangement, the new arrangement composes it already visible, with no fade.
+  - A change of the motion level itself (Off until the game is ready and the loaded appearance has been shown on a cold start, D-251, D-255, or a system animator-scale change) composes the arrangement's chrome anew, statically, from its presented values, like an arrangement switch (D-252).
   - Tile labels are measured at the lookahead (target) tile size and drawn scaled by `currentTilePx / targetTilePx` while the bounds animate. That means at most one text measurement per (exponent, target size), and no text layout during the animation frames.
 - **Reduced and Off:** bounds snap; hint and pad appear and disappear on F0. An arrangement switch is static at every level, as above.
 
@@ -1132,11 +1135,11 @@ class MotionHarness private constructor(val rule: ComposeContentTestRule, val pr
 val LocalMotionProbe = staticCompositionLocalOf<MotionProbe?> { null }
 ```
 
-Components register value readers in a `DisposableEffect` only when the probe is non-null, so the production cost is a null check at composition. Tests read `probe.snapshot()`.
+Components register value readers in a `DisposableEffect` only when the probe is non-null, so the production cost is a null check at composition. Tests read `probe.snapshot()`. The readers are `registerTiles`, `registerBoard`, `registerFloats`, `registerHeader`, `registerEffects`, `registerOverlay`, `registerPalette`, `registerUndoIcon` and `registerRunning`; each returns a `ProbeRegistration` that the registering `onDispose` unregisters.
 
 | Field | Content |
 |---|---|
-| `originMs`, `nudgeOriginMs`, `overlayActionOriginMs`, `overlayOriginMs`, `paletteOriginMs`, `navOriginMs` | Latest `MoveTimeline` origin. First frame of the latest nudge or Reduced outline pulse (from the `animateTo` block's `startTimeNanos`). Ft of the latest card action (§3.12). O of the current overlay (§3.11, §3.13). First frame of the latest palette crossfade (§3.15). First frame of the latest `NavDisplay` transition (§3.17) |
+| `originMs`, `nudgeOriginMs`, `overlayActionOriginMs`, `overlayOriginMs`, `paletteOriginMs`, `navOriginMs` | Latest `MoveTimeline` origin. First frame of the latest nudge or Reduced outline pulse (from the `animateTo` block's `startTimeNanos`). Ft of the latest card action (§3.12). O of the current overlay (§3.11, §3.13). First frame of the latest palette crossfade (§3.15; a `withFrameNanos` launched undispatched beside the crossfade's first frame, because `animateTo`'s block has no `startTimeNanos`, D-251). First frame of the latest `NavDisplay` transition (§3.17) |
 | `boardLoaded`, `isAnyRunning` | First board composed; any registered `Animatable.isRunning` or alive particle |
 | `tiles` | `id`, `exp`, `kind` (the `TileUi` kind), `outgoing: Boolean` (true for a previous epoch's tile drawn by `OutgoingTilesLayer`, D-182), `x`/`y` (cells), `scale`, `alpha`, `sheen`, `glowBoost` |
 | `boardNudgeDp`, `outlinePulseAlpha`, `boardSaturation`, `boardFrameRate` | Board-level values |
@@ -1144,7 +1147,7 @@ Components register value readers in a `DisposableEffect` only when the probe is
 | `displayedScore`, `displayedBest`, `bestChip` | Odometer values; label key, container fraction, star scale/rotation/alpha, sparkles alive |
 | `ring`, `confettiAlive`, `scrimAlpha` | Ring `scale`/`strokeDp`/`alpha`; alive particle count; the scrim's alpha, also while no card is composed (`null` without a scrim, D-242) |
 | `overlay` | `kind` (WIN/OVER), `scrimAlpha`, `cardAlpha`, `cardScale`, `buttonAlphas`, `interactive` (`OverlayController.interactive`, D-200; buttons are always composed enabled), `badgeMorph`, `badgeScale`, `badgeRotationDeg` |
-| `paletteFraction`, `undoIconRotationDeg` | Theme crossfade fraction; undo icon |
+| `paletteFraction`, `undoIconRotationDeg` | Theme crossfade fraction; undo icon. Reported together as one `ProbeChrome`, but read from two readers (D-248): `registerPalette` (registered by `GameTheme`, M4.2) for the fraction and `registerUndoIcon` (registered by `GameControls`) for the rotation, so AC-THEME-1 needs no file of another work package. Each kind's most recently registered live reader answers; the chrome entry is `null` while neither is registered, and a missing half reads as its rest value (`paletteFraction` 1, rotation 0) |
 
 ### 8.3 Golden filmstrip (D-147; `DESIGN_SYSTEM.md` §10.4 rows 37–41)
 
@@ -1247,6 +1250,28 @@ Paths are under `app/src/test/kotlin/com/clayboicardi/game2048/`. All classes ar
 | `FIX_WIN_PRE_4` | 4 | `10,10,0,0, 1,0,0,0, 0,0,2,0, 0,0,0,1` | `PLAYING`, score 18000, best 24680, `moveCount` 900, `rngState 0x2048` | LEFT: 2048 at index 0, becameWon; rows 2 and 3 slide 2 and 3 cells; spawn exp 1 at index 3 |
 | `FIX_OVER_PRE_4` | 4 | `1,2,1,2, 2,3,2,1, 4,5,6,7, 0,1,2,3` | `PLAYING`, score 3012, best 24680, `rngState 0x2048` | LEFT: only row 3 moves (→ `1,2,3,0`); spawn exp 1 at index 15; becameOver; deflate origin (3,3), mMax 6, step 30 ms |
 | `FIX_WON_NO_MOVES_4` | 4 | `11,1,2,1, 1,2,1,2, 2,1,2,1, 1,2,1,2` | `WON`, last spawn index 15 | Keep going → `OVER` at once (D-036) |
+
+**Values the table leaves open, and the added fixtures** (as built in `MotionFixtures.kt`; recorded here so the table and the code agree). Every fixture is made by `fixtureGame(…)` (`DESIGN_SYSTEM.md` §10.3) with `undos` 0, `elapsedMs` 0, `seed` 0x2048 and, where no `rngState` is listed, the `rngState` of `Game.newGame(size, 0x2048)`. A fixture that a test undoes has a move count that is a multiple of 32 (`Game.SNAPSHOT_INTERVAL`), so the undo restores it exactly instead of replaying the synthetic history, which does not replay (D-216).
+
+| Fixture | Values chosen in code |
+|---|---|
+| `FIX_LONG_SLIDE_8` | 32 moves; score 0, best 0 |
+| `FIX_INVALID_4` | score 0, best 0 (the table's 10 moves) |
+| `FIX_NEW_BEST_4` | 32 moves, so an undo after LEFT restores it (AC-SCORE-5); seeded with `NEW_BEST_RECORDS` (best 100 on sizes 4–7). `newBestGame(n)` is the same board, score and best on an n×n board (n = 4…7): AC-SCORE-5's "separate runs" in one composition |
+| `FIX_OVER_PRE_4` | 32 moves |
+| `FIX_WON_NO_MOVES_4` | score 20480, best 24680, 992 moves. The table's "last spawn index 15" is not a `SavedGame` field, and no winning move leaves this board with that spawn (the 2048 at index 0 can only have merged in row 0 or column 0, which are full), so no assertion reads Keep going into `OVER`'s deflate origin here; `verifyWonNoMoves()` checks that no move is left and that Keep going gives `OVER` |
+
+| Added fixture | N | Cells | Other fields | Action → expected outcome | Used by |
+|---|---|---|---|---|---|
+| `FIX_WIN_PRE_UNDO_4` | 4 | as `FIX_WIN_PRE_4` | `FIX_WIN_PRE_4`'s fields at **896** moves | LEFT as `FIX_WIN_PRE_4` (spawn exp 1 at index 3, becameWon); its undo restores board, score and status | AC-WIN-8 (900 moves would undo through the synthetic history) |
+| `FIX_OVER_MERGE_4` | 4 | `1,2,1,2, 2,3,2,1, 4,5,6,7, 2,2,4,2` | `PLAYING`, score 3012, best 24680, 32 moves, `rngState 0x2048` | LEFT merges the two 4s of row 3 (+8), spawn exp 1 at index 15, becameOver; UP is invalid | FEATURES.md F14-AC4, F14-AC9 (the losing move with one merge) |
+| `FIX_FLASH_4` | 4 | `7,7,0,0, 7,7,0,0, 7,7,0,0`, then 4 × 0 | `PLAYING`, score 4000, best 100000, 32 moves, `rngState 0x2048` | LEFT makes three 256s (three flashes); UP then merges the top two into a 512 within the same 1000 ms | AC-MOVE-10 (the flash limiter) |
+| `FIX_POP_CAP_3` | 3 | `10,10,0, 0,0,0, 0,0,0` | `KEEP_PLAYING` (`keepGoingAtMove` 10, as 1024 is past the 3×3 target), score 50000, best 100000, 32 moves, `rngState 0x2048` | LEFT merges the two 1024s into a 2048 | AC-MOVE-12 (the pop cap on a large 3×3 tile) |
+| `FIX_CHAIN_8` | 8 | row 0 = `4,3,2,1,1,0,0,0`, the rest 0 | `PLAYING`, score 1000, best 100000, 32 moves, `rngState 0x2048` (its three spawns stay out of row 0) | LEFT, RIGHT, LEFT, RIGHT score +4, +8, +16, +32 (`CHAIN_MOVES`) | AC-SCORE-3 (four merging moves with distinct deltas) |
+| `FIX_SLIDE_4` | 4 | as `FIX_INVALID_4` | `PLAYING`, score 0, best 0, 32 moves, `rngState 0x2048` | RIGHT slides both tiles with no merge (`MoveHaptic.NONE`); its undo restores it | the no-merge cases of `HapticsMapTest`, `MotionOffTest` and `FinalFrameEqualsStaticTest` |
+| `pairGame(n, exp, score, best)` | n | two `exp` tiles at indices 0 and 1, the rest 0 | `PLAYING`, score `score`, `bestAtStart` `best`, 32 moves, `rngState 0x2048` | LEFT merges them | `HapticsMapTest` and `MotionOffTest` (one per board size) |
+
+`ENGINE_SPAWN_CHECK` lists `FIX_FILM` LEFT, `FIX_POP_TIERS_4` LEFT, `FIX_LONG_SLIDE_8` RIGHT, `FIX_NEW_BEST_4` LEFT, `FIX_WIN_PRE_4` LEFT, `FIX_WIN_PRE_UNDO_4` LEFT, `FIX_OVER_PRE_4` LEFT and `FIX_OVER_MERGE_4` LEFT; each motion test calls `verify()` on the checks of the actions it plays.
 
 ---
 
@@ -1399,13 +1424,13 @@ Times below are relative to Ft, the exit origin (§3.12; `MotionHarness.tapCardB
 
   Given `FIX_WIN_PRE_4` (Full), when LEFT commits, then `vm.overlay.value` has entry `Restored` at t = 0, and AC-WIN-4 and AC-WIN-5 still hold (the card composes at 688 and becomes interactive at 880). This case needs `OverlayController`, so the method gains it in M3 part 2; the `FIX_FILM` case passes from M3 part 1.
 - **AC-THEME-1** Given the Settings screen (Full), when Palette changes Classic → Neon, then `paletteFraction` is 0 on F1, 0.5402 at t = 64 and 0.9402 at t = 160, and nothing is running at t = 320. (Reduced/Off) Then the fraction is 1 on F0.
-- **AC-LAYOUT-1** Given the first-launch hint (Full), when "Got it" is tapped, then the board bounds change continuously (strictly increasing height on each frame from 16 to 304) and are final at t = 416. (Reduced/Off) Then the board is at its final bounds on F0.
-- **AC-LAYOUT-2** (`LayoutMotionTest.arrangementSwitchRendersSettledBoard`, with F18-AC13; §3.16, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED with the COMPACT header and, with Robolectric's zero insets, a 258 dp board) and LEFT committed, when touch exploration turns on at t = 48 (mid-slide, before the reveal, the spawn, the "+N" and the `SegmentTick` due at 80), so the pad shows and the arrangement becomes SCROLL (a 298 dp board), then:
-  - the board node measures 258 dp on every frame before the switch and 298 dp from the first frame that draws SCROLL; no frame shows another size;
+- **AC-LAYOUT-1** Given the first-launch hint (Full), when "Got it" is tapped, then the board bounds change continuously (the height rises on each frame from 16 until it first enters the `overlaySpatial` spring's overshoot band, first peak at 269 ms and 1.52 %, and stays within that band after it) and are final at t = 416, frames counted from the AC's origin F1 (D-252). (Reduced/Off) Then the board is at its final bounds on F0.
+- **AC-LAYOUT-2** (`LayoutMotionTest.arrangementSwitchRendersSettledBoard`, with F18-AC13; §3.16, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED with the COMPACT header and, with Robolectric's zero insets, a board of about 255 dp, 258 dp with the nominal chrome; D-251) and LEFT committed, when touch exploration turns on at t = 48 (mid-slide, before the reveal, the spawn, the "+N" and the `SegmentTick` due at 80), so the pad shows and the arrangement becomes SCROLL (a board of about 295 dp, 298 dp with the nominal chrome), then:
+  - the board node measures the STACKED board on every frame before the switch and the SCROLL board from the first frame that draws SCROLL, each `resolveGameLayout`'s over the measured chrome; no frame shows another size;
   - on that frame every probe tile is `Static` at its engine cell with scale 1 and alpha 1, `displayedScore == vm.header.value.score`, and nothing is running; no "+N" float exists on it or on any later frame;
   - `vm.board.value.moveId`, the move log and `probe.originMs` are unchanged, and through t = 1,000 the recorded haptics are exactly the move's one `SegmentTick`, at t = 80: the screen scope's `HapticsController` keeps it and `MoveTimeline` keeps the origin (§2.4, §3.16).
-  - Given then touch exploration off again with nothing running, the first frame that draws STACKED has the 258 dp board, with no intermediate size.
-- **AC-LAYOUT-3** (`LayoutMotionTest.arrangementSwitchAfterPresentedMoveReplaysNothing`, with F18-AC14; §3.16, D-047, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED, 258 dp board with zero insets), LEFT committed and run to t = 1,000, so the move was presented and has settled (nothing running, `vm.board.value` is `BoardPresenter.settled` of the move's board, `vm.header.value.lastDelta == 0`, and the haptics fake holds exactly the one `SegmentTick` at t = 80), when touch exploration turns on (the arrangement becomes SCROLL, 298 dp board) and, 1,000 ms after that switch with nothing running, turns off again (STACKED, 258 dp board), then after each switch, on every frame from the first frame that draws the new arrangement through 1,000 ms later:
+  - Given then touch exploration off again with nothing running, the first frame that draws STACKED has the STACKED board again (about 255 dp, 258 dp with the nominal chrome), with no intermediate size.
+- **AC-LAYOUT-3** (`LayoutMotionTest.arrangementSwitchAfterPresentedMoveReplaysNothing`, with F18-AC14; §3.16, D-047, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED, with zero insets a board of about 255 dp, 258 dp with the nominal chrome; D-251), LEFT committed and run to t = 1,000, so the move was presented and has settled (nothing running, `vm.board.value` is `BoardPresenter.settled` of the move's board, `vm.header.value.lastDelta == 0`, and the haptics fake holds exactly the one `SegmentTick` at t = 80), when touch exploration turns on (the arrangement becomes SCROLL, a board of about 295 dp, 298 dp nominal) and, 1,000 ms after that switch with nothing running, turns off again (STACKED, about 255 dp), then after each switch, on every frame from the first frame that draws the new arrangement through 1,000 ms later:
   - every probe tile is `Static` at its engine cell with scale 1 and alpha 1, and no tile is `outgoing`;
   - `floats` is empty and `displayedScore == vm.header.value.score`;
   - `isAnyRunning` is false: the new arrangement's `BoardAnimator` launches nothing;

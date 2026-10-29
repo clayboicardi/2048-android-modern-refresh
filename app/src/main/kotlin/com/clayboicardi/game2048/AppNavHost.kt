@@ -6,7 +6,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavEntryDecorator
@@ -17,15 +19,20 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
 import com.clayboicardi.game2048.about.AboutScreen
+import com.clayboicardi.game2048.about.AboutViewModel
 import com.clayboicardi.game2048.about.HowToPlayScreen
 import com.clayboicardi.game2048.about.LicensesScreen
-import com.clayboicardi.game2048.data.platform.MonotonicClock
-import com.clayboicardi.game2048.data.settings.Settings
+import com.clayboicardi.game2048.di.AppContainer
+import com.clayboicardi.game2048.di.aboutViewModelFactory
+import com.clayboicardi.game2048.di.settingsViewModelFactory
+import com.clayboicardi.game2048.di.statsViewModelFactory
 import com.clayboicardi.game2048.game.GameScreen
 import com.clayboicardi.game2048.game.GameViewModel
 import com.clayboicardi.game2048.game.motion.LocalMotionProbe
 import com.clayboicardi.game2048.settings.SettingsScreen
+import com.clayboicardi.game2048.settings.SettingsViewModel
 import com.clayboicardi.game2048.stats.StatsScreen
+import com.clayboicardi.game2048.stats.StatsViewModel
 import com.clayboicardi.game2048.ui.theme.LocalEffectiveMotion
 import com.clayboicardi.game2048.ui.theme.MotionLevel
 import com.clayboicardi.game2048.ui.theme.rememberGameNavTransitions
@@ -40,9 +47,10 @@ import com.clayboicardi.game2048.ui.theme.rememberGameNavTransitions
  * `LocalMotionProbe` is non-null it writes `MotionProbe.navOriginMs` on the first frame after the
  * back stack's top changes, the transition's play-time-0 frame.
  *
- * M3 form of §7.1 (D-236): until M4.1 creates `AppViewModel`, the host takes [settings]
- * (`SettingsRepository.state`'s current value, which `GameScreen` reads) and [clock] (the
- * container's `MonotonicClock`) in its place.
+ * The M4 form of §7.1 (D-248): the host takes [container] besides the two activity-scoped
+ * ViewModels. The Game entry gets the container's `MonotonicClock`; each sub-screen entry makes its
+ * entry-scoped ViewModel with `viewModel(factory = container.…ViewModelFactory())` (§4.7), which
+ * the ViewModel-store decorator clears when the entry leaves the back stack.
  *
  * Back on the Game root is never intercepted (D-054, D-094): `NavDisplay` enables its back handler
  * only while a previous entry exists, and nothing here registers another. A sub-screen's back arrow
@@ -53,8 +61,8 @@ import com.clayboicardi.game2048.ui.theme.rememberGameNavTransitions
 @Composable
 fun AppNavHost(
     gameViewModel: GameViewModel,
-    settings: Settings,
-    clock: MonotonicClock,
+    appViewModel: AppViewModel,
+    container: AppContainer,
     modifier: Modifier = Modifier,
 ) {
     val backStack = rememberNavBackStack(NavKeysConfiguration, GameKey)
@@ -79,20 +87,28 @@ fun AppNavHost(
                 entry<GameKey>(clazzContentKey = ::navContentKey) {
                     GameScreen(
                         gameViewModel,
-                        settings,
-                        clock,
+                        appViewModel,
+                        container.clock,
                         onNavigate = actions.navigate,
                         modifier = Modifier.testTag(screenTag(GameKey)),
                     )
                 }
                 entry<StatsKey>(clazzContentKey = ::navContentKey) {
+                    @Suppress("ComposeViewModelInjection") // in its NavEntry's own store (§4.7)
+                    val stats: StatsViewModel =
+                        viewModel(factory = container.statsViewModelFactory())
                     StatsScreen(
+                        viewModel = stats,
                         onBack = { actions.up(StatsKey) },
                         modifier = Modifier.testTag(screenTag(StatsKey)),
                     )
                 }
                 entry<SettingsKey>(clazzContentKey = ::navContentKey) {
+                    @Suppress("ComposeViewModelInjection") // in its NavEntry's own store (§4.7)
+                    val settings: SettingsViewModel =
+                        viewModel(factory = container.settingsViewModelFactory())
                     SettingsScreen(
+                        viewModel = settings,
                         onBack = { actions.up(SettingsKey) },
                         modifier = Modifier.testTag(screenTag(SettingsKey)),
                     )
@@ -104,14 +120,22 @@ fun AppNavHost(
                     )
                 }
                 entry<AboutKey>(clazzContentKey = ::navContentKey) {
+                    @Suppress("ComposeViewModelInjection") // in its NavEntry's own store (§4.7)
+                    val about: AboutViewModel =
+                        viewModel(factory = container.aboutViewModelFactory(LocalResources.current))
                     AboutScreen(
+                        viewModel = about,
                         onBack = { actions.up(AboutKey) },
                         onOpenLicenses = { actions.navigate(LicensesKey) },
                         modifier = Modifier.testTag(screenTag(AboutKey)),
                     )
                 }
                 entry<LicensesKey>(clazzContentKey = ::navContentKey) {
+                    @Suppress("ComposeViewModelInjection") // in its NavEntry's own store (§4.7)
+                    val about: AboutViewModel =
+                        viewModel(factory = container.aboutViewModelFactory(LocalResources.current))
                     LicensesScreen(
+                        viewModel = about,
                         onBack = { actions.up(LicensesKey) },
                         modifier = Modifier.testTag(screenTag(LicensesKey)),
                     )

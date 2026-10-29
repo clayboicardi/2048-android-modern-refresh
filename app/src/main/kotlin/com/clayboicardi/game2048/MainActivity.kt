@@ -11,18 +11,23 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.clayboicardi.game2048.di.appViewModelFactory
 import com.clayboicardi.game2048.di.gameViewModelFactory
 import com.clayboicardi.game2048.game.GameViewModel
+import com.clayboicardi.game2048.ui.components.ImmersiveMode
 
 /**
  * The single activity (D-023, ARCHITECTURE.md §4.12). The splash is installed before
  * `super.onCreate` and kept until the activity-scoped `GameViewModel` is ready, for at most 1,000
- * ms (D-112). It lists the game keys in the system keyboard-shortcuts helper (D-203).
+ * ms (D-112). It lists the game keys in the system keyboard-shortcuts helper (D-203) and re-applies
+ * Immersive mode whenever the window regains focus (D-093, F19-AC4): after the share chooser, a
+ * system dialog or a multi-window focus change. `App()` applies it when the setting changes.
  */
 class MainActivity : ComponentActivity() {
     private val container
         get() = (application as Game2048Application).container
 
+    private val appViewModel: AppViewModel by viewModels { container.appViewModelFactory() }
     private val gameViewModel: GameViewModel by viewModels { container.gameViewModelFactory() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,12 +36,16 @@ class MainActivity : ComponentActivity() {
         val gate = SplashGate(timeoutMs = 1_000, uptimeMs = SystemClock::uptimeMillis)
         splash.setKeepOnScreenCondition { gate.keep(ready = gameViewModel.ready.value) }
         enableEdgeToEdge()
-        setContent {
-            App(
-                gameViewModel = gameViewModel,
-                settings = container.settingsRepository.state,
-                animatorScale = container.animatorScale,
-                clock = container.clock,
+        setContent { App(appViewModel, gameViewModel, container) }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            ImmersiveMode.apply(
+                window,
+                appViewModel.appearance.value.immersive,
+                container.systemBars,
             )
         }
     }

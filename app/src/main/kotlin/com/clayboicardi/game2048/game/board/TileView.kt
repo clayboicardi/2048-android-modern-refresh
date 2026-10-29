@@ -7,6 +7,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.dropShadow
@@ -47,16 +48,20 @@ internal fun TileView(
     modifier: Modifier = Modifier,
 ) {
     val anim = remember(animator, id) { animator.anim(id) }
-    val glow = remember(style, exp) { style.palette.glow(exp) }
+    // Whether the palette has a glow for exp; its values are read in draw (a theme crossfade
+    // changes them, MOTION_SPEC.md §3.15), so this read is not observed.
+    val glowing = remember(style, exp) { Snapshot.withoutReadObservation { hasGlow(style, exp) } }
     val counter = LocalRecompositionCounter.current
     SideEffect { counter?.onTile(id) }
     Box(
         modifier
             .tilePlacement(anim, geometry)
-            .then(if (glow != null) Modifier.tileGlow(glow, anim, geometry, style) else Modifier)
+            .then(if (glowing) Modifier.tileGlow(exp, anim, geometry, style) else Modifier)
             .tileFace(exp, anim, geometry, style),
     )
 }
+
+private fun hasGlow(style: TileStyle, exp: Int): Boolean = style.palette.glow(exp) != null
 
 /**
  * The tile's size (measure), position (placement) and scale (its own scale times the game-over
@@ -90,7 +95,8 @@ internal fun Modifier.tileSize(geometry: State<BoardGeometry>): Modifier = layou
 
 /**
  * The tile's fill, high-contrast outline, cached label and merge sheen (DESIGN_SYSTEM.md §2.7,
- * §3.3, §4.6; D-187). The label is looked up once per size; every frame only draws.
+ * §3.3, §4.6; D-187). The label is looked up once per size; every frame only draws, reading the
+ * fill and ink in draw so a theme crossfade invalidates draw only (MOTION_SPEC.md §3.15).
  */
 private fun Modifier.tileFace(
     exp: Int,
@@ -100,10 +106,8 @@ private fun Modifier.tileFace(
 ): Modifier = drawWithCache {
     val g = geometry.value
     val side = size.width
-    val text = style.textCache.text(exp, g.tilePx, density, style.skin.id)
+    val text = style.textCache.text(exp, g.tilePx, density, style.skin)
     val textTopLeft = Offset(text.topLeftX(side), text.topLeftY(side))
-    val fill = style.palette.fill(exp)
-    val ink = style.palette.ink(exp)
     val radius = CornerRadius(g.tileRadiusPx)
     val outline = style.skin.tileOutline
     val outlineWidth = GameDimens.HcOutlineWidth.toPx()
@@ -113,6 +117,8 @@ private fun Modifier.tileFace(
     val outlineRadius = CornerRadius((g.tileRadiusPx - inset).coerceAtLeast(0f))
     onDrawBehind {
         val saturation = style.effects.saturation.value
+        val fill = style.palette.fill(exp)
+        val ink = style.palette.ink(exp)
         drawRoundRect(fill.desaturate(saturation), cornerRadius = radius)
         if (outline != null) {
             drawRoundRect(
@@ -132,14 +138,16 @@ private fun Modifier.tileFace(
 /**
  * The tile glow (DESIGN_SYSTEM.md §4.6, D-078): the outer `dropShadow` at the palette's alpha plus
  * the merge pulse's boost, and the inner highlight, both desaturated with the tile at game over.
+ * The palette's glow is read in the blocks, so a theme crossfade changes it without recomposition.
  */
 private fun Modifier.tileGlow(
-    glow: Glow,
+    exp: Int,
     anim: TileAnim,
     geometry: State<BoardGeometry>,
     style: TileStyle,
 ): Modifier =
     dropShadow(style.shape) {
+            val glow = style.palette.glow(exp) ?: NoGlow
             val tile = geometry.value.tilePx
             radius = glow.radiusFraction * tile
             spread = glow.spreadFraction * tile
@@ -147,12 +155,27 @@ private fun Modifier.tileGlow(
             alpha = (glow.alpha + anim.glowBoost.value).coerceAtMost(1f)
         }
         .innerShadow(style.shape) {
+            val glow = style.palette.glow(exp) ?: NoGlow
             val tile = geometry.value.tilePx
             radius = glow.innerRadiusDp * density + glow.innerRadiusFraction * tile
             offset = Offset(0f, glow.innerOffsetYFraction * tile)
             color = glow.innerColor.desaturate(style.effects.saturation.value)
             alpha = glow.innerAlpha
         }
+
+/** No glow: both shadows at alpha 0. */
+private val NoGlow =
+    Glow(
+        color = Color.Transparent,
+        alpha = 0f,
+        radiusFraction = 0f,
+        spreadFraction = 0f,
+        innerColor = Color.Transparent,
+        innerAlpha = 0f,
+        innerRadiusDp = 0f,
+        innerRadiusFraction = 0f,
+        innerOffsetYFraction = 0f,
+    )
 
 /**
  * Arithmetic desaturation, equal to `ColorMatrix.setToSaturation(s)` (MOTION_SPEC.md §7.3): no

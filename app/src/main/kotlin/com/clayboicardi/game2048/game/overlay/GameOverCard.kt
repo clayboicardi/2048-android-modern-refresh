@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,6 +24,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.clayboicardi.game2048.R
 import com.clayboicardi.game2048.game.GameSummary
 import com.clayboicardi.game2048.game.OverlayUi
+import com.clayboicardi.game2048.game.header.scoreLines
 import com.clayboicardi.game2048.ui.components.GameButton
 import com.clayboicardi.game2048.ui.components.GameButtonIcon
 import com.clayboicardi.game2048.ui.components.GameButtonStyle
@@ -41,11 +43,15 @@ import com.clayboicardi.game2048.ui.components.GameIconButton
 import com.clayboicardi.game2048.ui.components.GameIconButtonStyle
 import com.clayboicardi.game2048.ui.components.MiniTile
 import com.clayboicardi.game2048.ui.components.ScoreChipLabel
-import com.clayboicardi.game2048.ui.components.ScoreNumeralStyle
+import com.clayboicardi.game2048.ui.components.ScoreValueLines
 import com.clayboicardi.game2048.ui.components.ScoreValueText
 import com.clayboicardi.game2048.ui.components.formatCount
 import com.clayboicardi.game2048.ui.components.formatElapsed
+import com.clayboicardi.game2048.ui.components.rememberGameButtonMinWidth
 import com.clayboicardi.game2048.ui.theme.GameDimens
+import com.clayboicardi.game2048.ui.theme.GameFonts
+import com.clayboicardi.game2048.ui.theme.GameTextStyles
+import com.clayboicardi.game2048.ui.theme.LocalTileSkin
 
 /**
  * The game-over card (D-008, D-081, D-200; DESIGN_SYSTEM.md §6.4, §6.4a, §7.3): "Game over", the
@@ -100,7 +106,6 @@ internal fun GameOverCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium,
-                maxLines = if (compact) 2 else Int.MAX_VALUE,
             )
             Spacer(Modifier.height(if (compact) GameDimens.Space16 else GameDimens.Space24))
             if (compact) {
@@ -128,50 +133,99 @@ private fun RegularStats(summary: GameSummary) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(GameDimens.Space8),
         ) {
-            StatBox(stringResource(R.string.best_label)) {
+            StatBox(stringResource(R.string.best_label), Modifier.weight(1f)) {
                 FittedValue(
                     summary.best.toString(),
                     GameDimens.CardScoreValueCompactMax,
                     { primary },
                 )
             }
-            StatBox(stringResource(R.string.best_tile)) {
+            StatBox(stringResource(R.string.best_tile), Modifier.weight(1f)) {
                 MiniTile(summary.bestTileExp, GameDimens.MiniTileMedium)
             }
         }
     }
 }
 
-/** Compact (DESIGN_SYSTEM.md §6.4a): three equal boxes, SCORE, BEST and BEST TILE. */
+/**
+ * Compact (DESIGN_SYSTEM.md §6.4a): three equal boxes, SCORE, BEST and BEST TILE, in one row; in a
+ * column of full-width boxes when a third of the row cannot hold a label's longest word on a line
+ * (a large font scale on a small board, D-252), so no label is cut.
+ */
 @Composable
 private fun CompactStats(summary: GameSummary) {
     val primary = MaterialTheme.colorScheme.onSurface
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(GameDimens.Space8),
-    ) {
-        StatBox(stringResource(R.string.score_label)) {
-            FittedValue(summary.score.toString(), GameDimens.CardScoreValueCompactMax, { primary })
-        }
-        StatBox(stringResource(R.string.best_label)) {
-            FittedValue(summary.best.toString(), GameDimens.CardScoreValueCompactMax, { primary })
-        }
-        StatBox(stringResource(R.string.best_tile)) {
-            MiniTile(summary.bestTileExp, GameDimens.MiniTileSmall)
+    val labels =
+        listOf(
+            stringResource(R.string.score_label),
+            stringResource(R.string.best_label),
+            stringResource(R.string.best_tile),
+        )
+    val boxes: List<@Composable (Modifier) -> Unit> =
+        listOf(
+            { modifier ->
+                StatBox(labels[0], modifier) {
+                    FittedValue(
+                        summary.score.toString(),
+                        GameDimens.CardScoreValueCompactMax,
+                        { primary },
+                    )
+                }
+            },
+            { modifier ->
+                StatBox(labels[1], modifier) {
+                    FittedValue(
+                        summary.best.toString(),
+                        GameDimens.CardScoreValueCompactMax,
+                        { primary },
+                    )
+                }
+            },
+            { modifier ->
+                StatBox(labels[2], modifier) {
+                    MiniTile(summary.bestTileExp, GameDimens.MiniTileSmall)
+                }
+            },
+        )
+    val measurer = rememberTextMeasurer()
+    val locale = LocalConfiguration.current.locales[0]
+    val style = GameTextStyles.chipLabel
+    val density = LocalDensity.current
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val gaps = with(density) { (GameDimens.Space8 * 2).roundToPx() }
+        val padding = with(density) { (GameDimens.Space8 * 2).roundToPx() }
+        val third = (constraints.maxWidth - gaps) / labels.size - padding
+        val stacked =
+            remember(labels, third, style, density, measurer, locale) {
+                labels.any { label ->
+                    label.uppercase(locale).split(' ').any { word ->
+                        measurer.measure(word, style, maxLines = 1).size.width > third
+                    }
+                }
+            }
+        if (stacked) {
+            Column(verticalArrangement = Arrangement.spacedBy(GameDimens.Space8)) {
+                for (box in boxes) box(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(GameDimens.Space8)) {
+                for (box in boxes) box(Modifier.weight(1f))
+            }
         }
     }
 }
 
 /**
  * A `surfaceContainerHighest` box in `shapes.large` (16 dp), at least `CardStatBoxMinHeight` tall,
- * weight 1: its [label] (`ScoreChipLabel`, upper-cased, `onSurfaceVariant`) above [value].
+ * sized by [modifier] (weight 1 in a row): its [label] (`ScoreChipLabel`, upper-cased,
+ * `onSurfaceVariant`) above [value].
  */
 @Composable
-private fun RowScope.StatBox(label: String, value: @Composable () -> Unit) {
+private fun StatBox(label: String, modifier: Modifier = Modifier, value: @Composable () -> Unit) {
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
     Column(
         modifier =
-            Modifier.weight(1f)
+            modifier
                 .heightIn(min = GameDimens.CardStatBoxMinHeight)
                 .background(
                     MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -189,28 +243,67 @@ private fun RowScope.StatBox(label: String, value: @Composable () -> Unit) {
 /**
  * [text] in the score numerals (game numerals, Latin digits) at the largest size of
  * `ScoreValueMin..`[max] in `ScoreValueStep` steps that fits the width it is given
- * (DESIGN_SYSTEM.md §6.4, §6.4a, §7.2), else `ScoreValueMin`.
+ * (DESIGN_SYSTEM.md §6.4, §6.4a, §7.2). A value that does not fit even at `ScoreValueMin` wraps
+ * between digits at that size, in the `scoreLines` of the digits a line holds, so no digit is ever
+ * cut off (D-084).
  */
 @Composable
 private fun FittedValue(text: String, max: TextUnit, color: ColorProducer) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
+    val skin = LocalTileSkin.current
     BoxWithConstraints(contentAlignment = Alignment.Center) {
         val widthPx = constraints.maxWidth
-        val size =
-            remember(text, max, widthPx, density, measurer) {
-                var sp = max.value
-                while (sp > GameDimens.ScoreValueMin.value) {
-                    val style = ScoreNumeralStyle.copy(fontSize = sp.sp)
-                    val width = measurer.measure(text, style, softWrap = false, maxLines = 1).size
-                    if (width.width <= widthPx) break
-                    sp -= GameDimens.ScoreValueStep.value
+        val fitted =
+            remember(text, max, widthPx, density, measurer, skin) {
+                fitValue(text, max, widthPx) { line, sp ->
+                    val style = GameFonts.score(skin).copy(fontSize = sp.sp)
+                    measurer.measure(line, style, softWrap = false, maxLines = 1).size.width
                 }
-                sp.sp
             }
-        ScoreValueText(text, size, color)
+        if (fitted.lines.size == 1) {
+            ScoreValueText(text, fitted.size, color)
+        } else {
+            // One node that speaks the whole value, as the one-line value does (D-084).
+            ScoreValueLines(
+                Modifier.semantics(mergeDescendants = true) { contentDescription = text },
+            ) {
+                for (line in fitted.lines) ScoreValueText(line, fitted.size, color)
+            }
+        }
     }
 }
+
+/** A fitted value: its one size and its lines (one, unless it wraps at `ScoreValueMin`). */
+private class FittedText(val size: TextUnit, val lines: List<String>)
+
+/**
+ * The [FittedText] of [text] in [widthPx], where [width] measures a line at a size in sp: the
+ * largest size from [max] down to `ScoreValueMin` that fits on one line, or `ScoreValueMin` with
+ * the digits cut into lines of as many `tnum` advances as fit.
+ */
+private inline fun fitValue(
+    text: String,
+    max: TextUnit,
+    widthPx: Int,
+    width: (String, Float) -> Int,
+): FittedText {
+    val min = GameDimens.ScoreValueMin.value
+    var sp = max.value
+    while (sp > min && width(text, sp) > widthPx) sp -= GameDimens.ScoreValueStep.value
+    sp = sp.coerceAtLeast(min)
+    val lines =
+        if (sp > min || width(text, min) <= widthPx) {
+            listOf(text)
+        } else {
+            val advance = width(ADVANCE_SAMPLE, min) / ADVANCE_SAMPLE.length.toFloat()
+            scoreLines(text, (widthPx / advance).toInt().coerceAtLeast(1))
+        }
+    return FittedText(sp.sp, lines)
+}
+
+/** Ten digits: their width over ten is one `tnum` advance, without one digit's side bearings. */
+private const val ADVANCE_SAMPLE = "0000000000"
 
 /** "1,024 moves · 12:41 · No undo" (DESIGN_SYSTEM.md §6.4; prose numbers, D-103). */
 @Composable
@@ -294,7 +387,12 @@ private fun RegularOverButtons(
     }
 }
 
-/** Compact (DESIGN_SYSTEM.md §6.4a): one 56 dp row of New game, Undo and Share. */
+/**
+ * The Compact card's buttons (DESIGN_SYSTEM.md §6.4a): New game (`Button`, weight 1), Undo
+ * (`FilledTonalIconButton`, `ic_undo`) and Share (`OutlinedIconButton`, `ic_share`) in one 56 dp
+ * row; when that row leaves New game too narrow for a word of its label (a large font scale on a
+ * small board), New game takes a row of its own above Undo and Share (D-252).
+ */
 @Composable
 private fun CompactOverButtons(
     interactive: Boolean,
@@ -304,22 +402,22 @@ private fun CompactOverButtons(
     focus: FocusRequester,
 ) {
     val button = DpSize(GameDimens.ControlHeight, GameDimens.ControlHeight)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(GameDimens.Space8),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    val newGameText = stringResource(R.string.new_game)
+    val newGameMin = rememberGameButtonMinWidth(newGameText)
+    val newGame: @Composable (Modifier) -> Unit = { modifier ->
         GameButton(
             onClick = actions.onNewGame,
-            text = stringResource(R.string.new_game),
+            text = newGameText,
             style = GameButtonStyle.FILLED,
             modifier =
-                Modifier.weight(1f)
+                modifier
                     .layerAlpha { visuals.button(NEW_GAME) }
                     .cardTag(CARD_NEW_GAME_TAG, measuring)
                     .cardFocus(focus, measuring),
             interactive = interactive,
         )
+    }
+    val icons: @Composable () -> Unit = {
         GameIconButton(
             onClick = actions.onUndo,
             icon = R.drawable.ic_undo,
@@ -340,6 +438,30 @@ private fun CompactOverButtons(
             interactive = interactive,
             containerSize = button,
         )
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val others =
+            with(LocalDensity.current) { (button.width * 2 + GameDimens.Space8 * 2).roundToPx() }
+        if (constraints.maxWidth - others >= newGameMin) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(GameDimens.Space8),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                newGame(Modifier.weight(1f))
+                icons()
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(GameDimens.Space8)) {
+                newGame(Modifier.fillMaxWidth())
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement =
+                        Arrangement.spacedBy(GameDimens.Space8, Alignment.CenterHorizontally),
+                ) {
+                    icons()
+                }
+            }
+        }
     }
 }
 

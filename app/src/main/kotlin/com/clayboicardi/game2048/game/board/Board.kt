@@ -33,6 +33,7 @@ import androidx.compose.ui.FrameRateCategory
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -65,6 +66,7 @@ import com.clayboicardi.game2048.game.motion.LocalMoveTimeline
 import com.clayboicardi.game2048.game.motion.MotionProbe
 import com.clayboicardi.game2048.game.motion.ProbeBoard
 import com.clayboicardi.game2048.ui.components.focusRing
+import com.clayboicardi.game2048.ui.theme.GameDimens
 import com.clayboicardi.game2048.ui.theme.GameMotion
 import com.clayboicardi.game2048.ui.theme.InvalidMoveMotion
 import com.clayboicardi.game2048.ui.theme.LocalEffectiveMotion
@@ -72,6 +74,8 @@ import com.clayboicardi.game2048.ui.theme.LocalTilePalette
 import com.clayboicardi.game2048.ui.theme.LocalTileSkin
 import com.clayboicardi.game2048.ui.theme.MotionLevel
 import com.clayboicardi.game2048.ui.theme.MotionPlan
+import com.clayboicardi.game2048.ui.theme.NEON_WELL_ALPHA
+import com.clayboicardi.game2048.ui.theme.NeonWellColor
 import com.clayboicardi.game2048.ui.theme.NewGameMotion
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -171,7 +175,8 @@ fun BoardView(
     LaunchedEffect(board.moveId) {
         val origin = withFrameNanos { it }
         timeline.publish(board.moveId, origin)
-        probe?.originMs = origin / NANOS_PER_MS
+        // A re-published moveId keeps its first origin (an arrangement switch, D-047).
+        probe?.originMs = timeline.latestOriginNanos / NANOS_PER_MS
         onPresented(board.moveId)
     }
     LaunchedEffect(board.epoch) {
@@ -274,10 +279,24 @@ private fun BoardFrame(
         remember(palette, skin, textCache, effects, geometry) {
             TileStyle(palette, skin, textCache, effects, GeometryShape(geometry, board = false))
         }
+    val wellShape = remember(geometry) { GeometryShape(geometry, board = true) }
     Box(
-        modifier.measureGeometry(geometry, n, skin, density).drawBehind {
-            drawBoardCells(geometry.value, palette, skin)
-        },
+        modifier
+            .measureGeometry(geometry, n, skin, density)
+            .drawBehind { drawBoardCells(geometry.value, palette, skin) }
+            .then(
+                // Neon's inset well (DESIGN_SYSTEM.md §4.5, §4.7 step 1): an inner shadow in the
+                // board shape, over the board and its empty cells, under the tiles.
+                if (skin.boardInsetWell) {
+                    Modifier.innerShadow(wellShape) {
+                        radius = GameDimens.BoardWellRadius.toPx()
+                        color = NeonWellColor
+                        alpha = NEON_WELL_ALPHA
+                    }
+                } else {
+                    Modifier
+                },
+            ),
     ) {
         CellSemanticsLayer(board.cells, n, geometry, Modifier.matchParentSize())
         if (outgoing.isNotEmpty()) {
