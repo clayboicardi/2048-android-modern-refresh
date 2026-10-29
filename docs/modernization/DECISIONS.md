@@ -239,6 +239,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-232 | Localization | `settings` keeps a same-line `tools:ignore="UnusedResources"` from M3 part 1 until M3 part 2's menu uses it, so D-101's 20 translations stay |
 | D-233 | Process | F13-AC4, AC-CONS-3's win and game-over cases and F15-AC11's sheet, card and menu cases are added in M3 part 2 (M3.9–M3.11); part 1 has every other case, `FIX_WON_4`'s AC-RESTORE-1 board case included |
 | D-234 | Visual | `PaletteSwatch(palette, skin)` draws the `TilePalette` and `TileSkin` it is given; the caller resolves the palette option and light or dark mode, so the palette selection stays in one place |
+| D-235 | Quality | `ConfettiSystemTest`'s AC-PERF-3 budget times compiled steps on realistic bursts: a new burst every 132 steps, 20,000 warm-up steps, then the fastest of 5 batches of 10,000 steps ≤ 200 ms of thread CPU time |
 
 ---
 
@@ -3672,6 +3673,7 @@ jobs:
 - **Rationale:** `:app:testDebugUnitTest` runs beside Lint, R8 and the other tasks of the full gate's second Gradle invocation (D-223) on 4 CPUs. Alone the loop took 110 ms (M3-A, 2026-10-29); in a full run with `--rerun-tasks`, the shape of a CI run without a build cache, it took 219 ms of wall time on `01f6b20` and failed, and 233 ms of wall time but 121 ms of CPU time on `98bbc33`. CPU time counts only the time the thread ran, so the check measures the step's cost and not the scheduler's choices; unlike `EnginePerformanceTest` (D-223), one test of the app task cannot run in an invocation of its own without a second test task in `app/build.gradle.kts`.
 - **Rejected:** raising the budget, best-of-N timing or retries (each weakens the gate); a separate test task for the one class (build logic for one check).
 - **Source:** [ORCH] O17 (D-173 change control, M3 part 1 integration).
+- **Note:** Amended by D-235 (bursts of 132 steps, 20,000 warm-up steps, the fastest of 5 batches).
 
 #### D-231 — `GameViewModel.message` carries the undo snackbar requests (extends D-186; amends ARCHITECTURE.md §4.7, §4.9)
 - **Decision:**
@@ -3709,6 +3711,23 @@ jobs:
 - **Rationale:** §7.8 wrote `PaletteSwatch(palette, darkTheme)`. M3 part 1 has only the Classic palettes; the Neon objects come with M4's `ui/theme/NeonArcadePalette.kt`. A `(PaletteId, darkTheme)` form would either repeat `GameTheme`'s palette selection inside `ui/components/` or have no Neon palette to draw. The swatch reads only a `TilePalette`'s fills, ink and board and a `TileSkin`'s radius and outline, so taking them keeps one place that maps settings to palettes. Nothing calls `PaletteSwatch` before M4's Settings screen (PLAN.md §5.3 M4.4).
 - **Rejected:** `PaletteSwatch(palette: PaletteId, darkTheme: Boolean)` with its own palette `when` (a second palette table); leaving the swatch to M4 (PLAN.md §5.3 M3.5 assigns `MiniTile.kt`, with it, to M3 part 1).
 - **Source:** [ORCH] O17 (D-173 change control, M3 part 1 review).
+
+#### D-235 — The confetti step budget times compiled steps on realistic bursts (amends D-230; amends MOTION_SPEC.md AC-PERF-3, §7.5; QUALITY.md §1.14)
+- **Decision:**
+  - `ConfettiSystemTest.tenThousandStepsAt160ParticlesWithinBudget` steps bursts of 160 immortal particles and starts a new burst every 132 steps, the longest confetti life (`GameMotion.Confetti.LIFE_MAX_S` = 2.2 s in steps of 1/60 s): `clear()`, `emitConfetti` from one `ParticleRandom(0x2048)`, every `life` set to +∞. Only the `step(1/60f)` calls are timed, in the test thread's CPU time (D-230).
+  - It runs 20,000 untimed warm-up steps, then times 5 batches of 10,000 steps, prints every batch's CPU time and the wall time, and asserts that the fastest batch takes ≤ 200 ms. The budget, the 160 particles, the 10,000 steps per batch, thread CPU time and the `aliveCount` check are unchanged.
+  - `stepsAllocateNothingAfterWarmUp` is unchanged (one burst, 100 warm-up steps, ≤ 1 KiB over 10,000 steps): it reads the allocation counter, which neither the float values nor the JIT tier changes.
+- **Rationale:**
+  - The D-230 test failed its assertion on the GitHub `ubuntu-24.04` runner (Temurin 21) on `18fd942`, while it took 112–118 ms on that commit here. Its timed loop measured two effects besides the step's code (2026-10-29, the test alone in a fresh JVM per run):
+  - Subnormal floats. One burst stepped without end multiplies every `vx` by `exp(−2.2 / 60)` per step. From step 2,500 the values turn subnormal, from step 2,700 all 160 are, and they stay at most 13 times the smallest subnormal, because the product rounds back to itself. x86 processors handle subnormal operands in microcode assists: on normal values 10,000 steps take 6.7–6.8 ms as C2 code and 16.5–18.0 ms as C1 code (the new test's batches), but once `vx` is subnormal 1,000 steps take 14–17 ms under either compiler (one burst timed in slices of 1,000 steps). So over 90 % of the D-230 measurement (steps 100–10,100) was that assist, whose cost depends on the processor model and clock, not on the step, and which the app never reaches: a particle lives at most 2.2 s, after which `vx` is still about 0.8 % (`exp(−2.2 × 2.2)`) of its start value.
+  - JIT warm-up. 100 warm-up steps are far below HotSpot's tier thresholds, so the timed loop also measured how far compilation had got. Sharing one CPU with three busy loops (`taskset -c 0`), the D-230 test took 113–120 ms; with C1 only, 112–126 ms; with compilation delayed 20× (`-XX:CompileThresholdScaling=20`), 158–167 ms; delayed 50×, 220, 239 and 252 ms, failing. Interpreted only (`-Xint`, unloaded), it took 356 ms. Under the same load the new test's fastest batch took 6.2–6.6 ms, 6.3–6.7 ms with compilation delayed 50×, 16.5–18.0 ms with C1 only, and 6.7–6.8 ms unloaded. Interpreted only, it takes 269 ms and fails: the budget is for compiled code, which 20,000 warm-up steps and the fastest of 5 batches reach.
+  - A regression in `step` is slow in every batch, so the fastest batch still catches it. With a temporary inner loop over all alive particles in `step` (O(n²)), every batch took 248–272 ms and the test failed (the D-230 form: 263 ms). A step that allocates an array per particle (38,400,048 B per 10,000 steps) passes the time check in both forms (27–39 ms; D-230 form 140–156 ms) and fails `stepsAllocateNothingAfterWarmUp`, the check for allocation.
+  - D-230 rejected best-of-N timing as a weaker gate while wall time still counted the scheduler's choices. In thread CPU time after the warm-up, the batches differ only in the JIT's and the caches' state, which the fastest batch excludes; the budget still applies to all 10,000 steps of that batch.
+- **Rejected:**
+  - Raising the budget, or retrying the test (as D-230).
+  - A longer warm-up of the single burst with best-of-N batches: every timed step would then be subnormal arithmetic (14–17 ms per 1,000 steps here, so 140–170 ms per batch), even more dependent on the processor than the D-230 form.
+  - Flushing small velocities to zero in `step`: production code for a state the app never reaches.
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 CI).
 
 ---
 

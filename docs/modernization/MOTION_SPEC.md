@@ -1012,7 +1012,7 @@ fun Color.desaturate(s: Float): Color {
 | Event | Budget |
 |---|---|
 | Move (16 tiles + up to 16 ghosts on 4×4; up to 128 nodes on 8×8) | No layout or text measurement on animation frames; only placement, layer and draw |
-| Confetti | ≤ 160 particles. `step` ≤ 0.15 ms and draw ≤ 1.0 ms on device. JVM gate: 10,000 steps of 160 particles ≤ 200 ms of the thread's CPU time in total (D-230), and ≤ 1 KiB allocated over those steps after warm-up |
+| Confetti | ≤ 160 particles. `step` ≤ 0.15 ms and draw ≤ 1.0 ms on device. JVM gate: after 20,000 warm-up steps, the fastest of 5 batches of 10,000 steps of 160 particles takes ≤ 200 ms of the thread's CPU time, with a new burst every 132 steps (D-230, D-235); 10,000 steps allocate ≤ 1 KiB after warm-up |
 | Game over | Desaturation is arithmetic per tile in draw; the ripple is ≤ N² layer-scale animations |
 | Theme crossfade | ≤ 19 frames of chrome recomposition |
 
@@ -1472,8 +1472,8 @@ Times below are relative to Ft, the exit origin (§3.12; `MotionHarness.tapCardB
 - **AC-PERF-1** (`TileRecompositionTest.noTileRecompositionDuringSlide`, with F13-AC12; D-150) Given `FIX_FILM`, when LEFT commits, then every tile key composes at most once on F0 and 0 times from F1 to t = 432.
 - **AC-PERF-2** (`BoardRecompositionBudgetTest`) Then `BoardView` recomposes ≤ 2 times and `GameScreen` 0 times from F0 to t = 448.
 - **AC-PERF-3** (`ConfettiSystemTest`) Given seed 0x2048 and 160 particles:
-  - 10,000 `step(1/60f)` calls take ≤ 200 ms of the calling thread's CPU time in total (D-230);
-  - they allocate ≤ 1 KiB after 100 warm-up steps;
+  - after 20,000 untimed warm-up steps, the fastest of 5 batches of 10,000 `step(1/60f)` calls takes ≤ 200 ms of the calling thread's CPU time; a new burst of 160 immortal particles starts every 132 steps, the longest confetti life, outside the timing (D-230, D-235);
+  - 10,000 calls on one burst allocate ≤ 1 KiB after 100 warm-up steps;
   - a particle with v = (500, −1000) dp/s stepped 30 × 1/60 s ends at x = 148.86 ± 0.5 dp, y = −135.22 ± 0.5 dp, vy = 203.02 ± 0.5 dp/s (the discrete scheme of §3.11; the closed form is −142.26).
 - **AC-PERF-4** (`ConfettiSystemTest`) Given the same seed twice, then the particle arrays are bit-identical after 120 steps.
 - **AC-GOLD-1** (`MotionFilmstripTest.mergeAndSpawnFilmstrip`, with F13-AC8) The five filmstrip goldens (rows 37–41, D-204) match exactly in verify mode, and their content matches §8.3 when Read.

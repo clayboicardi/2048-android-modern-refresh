@@ -669,7 +669,7 @@ Notes:
 | Engine | 100,000 accepted 8×8 moves ≤ 2 s | `EnginePerformanceTest` | Time in the test output |
 | Tile recompositions during a slide | 0 | `TileRecompositionTest` | — |
 | Board / screen recompositions per move | ≤ 2 / 0 | `BoardRecompositionBudgetTest` (`MOTION_SPEC.md` §7.2) | — |
-| Confetti step | 10,000 steps of 160 particles ≤ 200 ms of thread CPU time (D-230), ≤ 1 KiB allocated | `ConfettiSystemTest` | — |
+| Confetti step | Fastest of 5 batches of 10,000 steps of 160 particles ≤ 200 ms of thread CPU time, after 20,000 warm-up steps (D-230, D-235); ≤ 1 KiB allocated | `ConfettiSystemTest` | Every batch's CPU time and the wall time in the test output |
 | Device frame budgets | P95 ≤ 6 ms, P99 overrun ≤ 0 | Not gated (D-150, D-153) | `MOTION_SPEC.md` §7.6 recipe, optional |
 
 A budget is never raised to make a change pass. Raising one needs an execution-time D-173 entry with the measurement.
