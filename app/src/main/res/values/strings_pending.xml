@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Temporary, M3–M4 only: English strings awaiting their M5 translations (L10N_STORE_LEGAL.md §1.4). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="MissingTranslation"><!-- reason: translated in M5 (D-162); check-metadata.sh asserts this file is gone from M5 on -->
+
+    <!-- region M3-shared (integrator): keys that several M3 work packages reference: begin -->
+    <!-- Accessibility action on the board and spoken label of the direction-pad button. Direction is the physical screen direction in every locale (the board never mirrors). -->
+    <string name="move_up">Move up</string>
+    <!-- Accessibility action on the board and spoken label of the direction-pad button. Direction is the physical screen direction in every locale (the board never mirrors). -->
+    <string name="move_down">Move down</string>
+    <!-- Accessibility action on the board and spoken label of the direction-pad button. Direction is the physical screen direction in every locale (the board never mirrors). -->
+    <string name="move_left">Move left</string>
+    <!-- Accessibility action on the board and spoken label of the direction-pad button. Direction is the physical screen direction in every locale (the board never mirrors). -->
+    <string name="move_right">Move right</string>
+    <!-- Button and accessibility action that takes back the last move. Verb (button). Glossary term "Undo (button)". Must differ from "Cancel" where the language allows; see the glossary note for fr/it. -->
+    <string name="undo">Undo</string>
+    <!-- Button and accessibility action that starts a new game. Glossary term. -->
+    <string name="new_game">New game</string>
+    <!-- region M3-shared (integrator): end -->
+
+    <!-- region M3-B: begin -->
+    <!-- Spoken description of the whole board, e.g. "Game board, 4 by 4. 13 tiles. Highest tile 1024." Arguments: %1$s = N (used twice); %2$s = the `a11y_tiles` sentence; %3$s = highest value -->
+    <string name="a11y_board_description">Game board, %1$s by %1$s. %2$s Highest tile %3$s.</string>
+    <!-- Spoken description of the board while the saved game is still loading (empty cells). Arguments: %1$s = N (used twice) -->
+    <string name="a11y_board_loading">Game board, %1$s by %1$s. Loading.</string>
+    <!-- A full sentence counting tiles on the board. Quantity = tile count (≥ 2 in practice). Arguments: %1$s = count from `formatCount` -->
+    <plurals name="a11y_tiles">
+        <item quantity="one">%1$s tile.</item>
+        <item quantity="other">%1$s tiles.</item>
+    </plurals>
+    <!-- Spoken label of one occupied cell. Rows count from the top, columns from the left, in every locale. Arguments: %1$s = row (1-based); %2$s = column; %3$s = full tile value, Latin digits -->
+    <string name="a11y_cell_tile">Row %1$s, column %2$s, %3$s</string>
+    <!-- Spoken label of one empty cell. Arguments: %1$s = row; %2$s = column -->
+    <string name="a11y_cell_empty">Row %1$s, column %2$s, empty</string>
+    <!-- region M3-B: end -->
+
+    <!-- region M3-C: begin -->
+    <!-- region M3-C: end -->
+
+    <!-- region M3-D1: begin -->
+    <!-- Dismiss button of every dialog. Never means "undo". -->
+    <string name="cancel">Cancel</string>
+    <!-- Label above the current score in the header chip. Code upper-cases it with the current locale; write sentence case. Keep ≤ 10 characters if possible. -->
+    <string name="score_label">Score</string>
+    <!-- Label above the best score for this board size. Code upper-cases it. Noun or adjective that means "best score / record". ≤ 10 characters. -->
+    <string name="best_label">Best</string>
+    <!-- Replaces "Best" on the chip once this game beats the previous best. Code upper-cases it. ≤ 12 characters. -->
+    <string name="new_best_label">New best</string>
+    <!-- Spoken text of a score chip, e.g. "Score 10220". Reorder or add punctuation if your language needs it. Arguments: %1$s = chip label in sentence case ("Score"); %2$s = value, Latin digits -->
+    <string name="a11y_chip_value">%1$s %2$s</string>
+    <!-- Spoken label of the board-size chip, e.g. "Board size 4×4". Arguments: %1$s = size label built in code, e.g. "4×4" (Latin digits, U+00D7) -->
+    <string name="board_size_cd">Board size %1$s</string>
+    <!-- Spoken action of the board-size chip: "Double-tap to change board size". -->
+    <string name="board_size_change">Change board size</string>
+    <!-- Snackbar when a game's first undo happens; it stops appearing once a finished game has used undo. "Best without undo" is the statistic name (glossary); write it exactly as in `stats_best_no_undo`, capitalized as a name if your language allows. -->
+    <string name="undo_hint_no_undo_best">Undo used. This game no longer counts for Best without undo.</string>
+    <!-- Snackbar when an undo key is pressed at move 0 (at most once every 2 seconds). No final period. -->
+    <string name="nothing_to_undo">Nothing to undo</string>
+    <!-- Dialog title shown only when a game is in progress. Buttons are `new_game` and `cancel`. -->
+    <string name="new_game_confirm_title">Start a new game?</string>
+    <!-- Spoken label of a mini tile that shows the best tile, e.g. "Best tile, 2048". Arguments: %1$s = full decimal value, Latin digits -->
+    <string name="a11y_best_tile">Best tile, %1$s</string>
+    <!-- region M3-D1: end -->
+
+    <!-- region M3-D2: begin -->
+    <!-- region M3-D2: end -->
+
+    <!-- region M3-D3: begin -->
+    <!-- region M3-D3: end -->
+
+</resources>

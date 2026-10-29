@@ -258,6 +258,7 @@ object GameMotion {
         const val SPARKLE_SIZE_DP = 6f
         const val SPARKLE_SPEED_MIN_DP_S = 120f
         const val SPARKLE_SPEED_MAX_DP_S = 220f
+        const val SPARKLE_JITTER_DEG = 10f
         const val SPARKLE_LIFE_MS = 600
         const val SPARKLE_FADE_MS = 250
     }
@@ -358,6 +359,8 @@ object GameMotion {
 }
 ```
 
+The M3 part 1 contracts append `object GameMotion.Input` (`KEY_REPEAT_MIN_INTERVAL_MS = 120L`, D-053; `NOTHING_TO_UNDO_MIN_INTERVAL_MS = 2000L`, D-186) and `GameMotion.plan(level)` with `MotionPlan` to this listing (D-222). `NewBest.SPARKLE_JITTER_DEG` is the ±10° direction jitter of §3.6, named at the M3 part 1 integration so the particle engine carries no literal.
+
 ---
 
 ## 2. Motion level, animator scale and timing infrastructure
@@ -424,7 +427,7 @@ Consequence under Reduced: a sheet appears without sliding, and it still hides w
 | # | Rule |
 |---|---|
 | T1 | **No raw `delay()` for anything visible** (D-183). A delay that precedes an animation is part of its spec: `tween(…, delayMillis = d)`, `snap(delayMillis = d)` or `delayedSpec(spec, d)`. Compose scales all three by `MotionDurationScale`, starts them on the same frame as the slides, and jumps them to the end at scale 0. A delay before a spring uses the app-local `delayedSpec(spec, delayMs)` in `game/motion/DelayedSpec.kt`: it wraps a `FiniteAnimationSpec`, holds the initial value and velocity for `delayMs`, then plays the wrapped spec with play time − delay; its duration is delay + the wrapped duration. animation-core's own `delayed` spec function is Kotlin-internal (its bytecode looks public) and must not be used. |
-| T2 | **State flips at an offset** (score display update, "+N" creation, new-best start, overlay composition, card-button interactivity (D-200), confetti emission, haptics) use `MoveTimeline.awaitOffset(moveId, ms)` (§2.4). It waits on the frame clock, so the flip lands on the first frame ⌈X⌉ at or after origin + X·scale, never between frames. Two mechanisms follow, and §3 names the one each element uses: **(A) spec-delayed** animations are launched at the origin with the delay inside the spec, so at frame t their play time is exactly t − X. **(B) flip-started** elements appear on frame ⌈X⌉ at their initial values, and any animation they start has play time 0 on the *following* frame (⌈X⌉ + 16 ms on the test grid). Haptics, the interactivity flip and confetti emission act on ⌈X⌉ itself. §9 includes this lag. |
+| T2 | **State flips at an offset** (score display update, "+N" creation, new-best start, overlay composition, card-button interactivity (D-200), confetti emission, haptics) use `MoveTimeline.awaitOffset(moveId, ms)` (§2.4). It waits on the frame clock, so the flip lands on the first frame ⌈X⌉ at or after origin + X·scale, never between frames. Two mechanisms follow, and §3 names the one each element uses: **(A) spec-delayed** animations are launched at the origin with the delay inside the spec, so at frame t their play time is exactly t − X. **(B) flip-started** elements appear on frame ⌈X⌉ at their initial values, and any animation they start has play time 0 on the *following* frame (⌈X⌉ + 16 ms on the test grid). A (B) flip that is drawn writes its state inside the due frame's callback, through `awaitOffset(moveId, ms) { … }`, because a frame resumes the coroutines it woke only after it has recomposed, so a write after `awaitOffset` returns would be drawn one frame late (D-224). Haptics, the interactivity flip and confetti emission act on ⌈X⌉ itself. §9 includes this lag. |
 | T3 | **Custom frame loops** (confetti, sparkles) read `coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f` on every frame. They integrate with `dt = min((frameNanos − lastNanos) / 1e9 / scale, MAX_DT_S)`, and end at once, drawing nothing, when the scale is 0 or `LocalEffectiveMotion` is `OFF`. |
 | T4 | **Rate limits are real time.** The 400 ms Reject limit, the flash limiter and the auto-repeat limit (D-053) use `MonotonicClock` (D-022) and are never multiplied by the animator scale. |
 | T5 | **Off never launches an animation.** Initial values equal end values (§3 tables), and no effect coroutine starts. Everything that Full schedules with `awaitOffset` is derived directly from state in the F0 composition instead: overlays and their interactive buttons, the displayed score, the NEW BEST style. Only haptics still go through the timeline (§6). The whole screen is in its end state on F0. |
@@ -443,6 +446,9 @@ class MoveTimeline {
     /** Suspends until the first frame >= origin(moveId) + ms × scale. Returns false if a newer moveId was
      *  published first (the caller then drops its work, see §4). Returns at once when the scale is 0. */
     suspend fun awaitOffset(moveId: Long, ms: Int): Boolean
+    /** Same, and runs onDue inside the due frame's callback, before that frame recomposes, so a (B) flip is
+     *  drawn on frame ⌈X⌉ itself (T2, D-224). onDue runs only when it returns true. */
+    suspend fun awaitOffset(moveId: Long, ms: Int, onDue: () -> Unit): Boolean
     /** Same, but the offset is never scaled (T6). */
     suspend fun awaitRealTime(moveId: Long, ms: Int): Boolean
     val latestOriginNanos: Long
@@ -840,7 +846,7 @@ On F0 of board change k+1, in this order:
 
 | ID | Invariant |
 |---|---|
-| I1 | **No tile overlap during moves.** On every frame of a `Moved` change, any two drawn tiles with alpha ≥ 0.05 have disjoint rectangles. Moved, Static, Ghost and Merged tiles use their unscaled rects; Spawned tiles are scaled about the cell centre. The only allowed overlap is inside one merge group (a merged tile and its two ghosts). Pop overflow is bounded by §3.3's cap and is not counted |
+| I1 | **No tile overlap during moves.** On every frame of a `Moved` change, any two drawn tiles with alpha ≥ 0.05 have disjoint rectangles. Moved, Static, Ghost and Merged tiles use their unscaled rects; Spawned tiles are scaled about the cell centre. The allowed overlaps are inside one merge group (a merged tile and its two ghosts) and between a merged tile and a Moved or Ghost tile of the same change that is still sliding towards its own cell: the reveal at +80 precedes the slide's end, and the merged tile is drawn above sliders (I7, D-225). Pop overflow is bounded by §3.3's cap and is not counted |
 | I2 | **Visual order equals model order.** Along the move axis, the order of tiles in any row or column never changes during a slide (all tiles share one spring and one start frame) |
 | I3 | **The final frame equals the engine state.** After a change has settled (§9 settle bounds), every tile's `pos` equals its engine cell exactly. The rendered board bitmap equals the bitmap of the same state rendered from `BoardEvent.Restored` |
 | I4 | **No stale content.** On F0 of change k+1, nothing created by change k−1 or earlier is drawn, except the effects listed as "keep running" in §4.2 |
@@ -922,7 +928,7 @@ Both mappings were verified 2026-10-28 (class files). So the "API 24–29 fallba
 | 4 | ≥ 1 merge | `SegmentTick` | `SEGMENT_TICK` (26) | `CONTEXT_CLICK` (6) | `CONTEXT_CLICK` (6) | 80 ms | +0 | — |
 | 5 | Accepted move, no merge | none | | | | | | |
 | separate | Game over | `Reject` | `REJECT` (17) | `REJECT` (17) | `LONG_PRESS` (0) | 300 ms (frame 304); Ft after Keep going → `OVER` (§3.12) | +0 | once per entry into `OVER` (D-185) |
-| separate | Invalid move | `Reject` | 17 | 17 | none (D-185) | on the nudge's start frame | same | ≤ 1 per 400 ms real time |
+| separate | Invalid move | `Reject` | 17 | 17 | none (D-185) | on the nudge's start frame, its first animation frame (`nudgeOriginMs`; D-224) | same | ≤ 1 per 400 ms real time |
 | separate | Settings switch turned on | `ToggleOn` | `TOGGLE_ON` (21) | `CONTEXT_CLICK` (6) | `CONTEXT_CLICK` (6) | on toggle | same | — |
 | separate | Settings switch turned off | `ToggleOff` | `TOGGLE_OFF` (22) | `CLOCK_TICK` (4) | `CLOCK_TICK` (4) | on toggle | same | — |
 | — | Undo, New game, other buttons, Blocked outcomes | none | | | | | | |
@@ -1006,7 +1012,7 @@ fun Color.desaturate(s: Float): Color {
 | Event | Budget |
 |---|---|
 | Move (16 tiles + up to 16 ghosts on 4×4; up to 128 nodes on 8×8) | No layout or text measurement on animation frames; only placement, layer and draw |
-| Confetti | ≤ 160 particles. `step` ≤ 0.15 ms and draw ≤ 1.0 ms on device. JVM gate: 10,000 steps of 160 particles ≤ 200 ms total, and ≤ 1 KiB allocated over those steps after warm-up |
+| Confetti | ≤ 160 particles. `step` ≤ 0.15 ms and draw ≤ 1.0 ms on device. JVM gate: 10,000 steps of 160 particles ≤ 200 ms of the thread's CPU time in total (D-230), and ≤ 1 KiB allocated over those steps after warm-up |
 | Game over | Desaturation is arithmetic per tile in draw; the ripple is ≤ N² layer-scale animations |
 | Theme crossfade | ≤ 19 frames of chrome recomposition |
 
@@ -1096,9 +1102,11 @@ class MotionHarness private constructor(val rule: ComposeContentTestRule, val pr
     }
     /** Disposes the whole content and composes it again over the same vm, container, probe and haptics fake, which is
      *  what ActivityScenario.recreate() does to the activity-scoped GameViewModel (ARCHITECTURE.md §4.11, §3.14).
-     *  Uses compose-ui-test's StateRestorationTester.emulateSaveAndRestore() (launch sets content through it), so
-     *  rememberSaveable state survives. Returns on R0, the first frame of the new content; the probe then reads the
-     *  new composition. autoAdvance stays false; any frames the restoration needs are advanced one at a time. */
+     *  It saves the content's rememberSaveable state through a SaveableStateRegistry of its own, disposes the content and
+     *  composes it again restoring that state, advancing one frame per step (StateRestorationTester's
+     *  emulateSavedInstanceStateRestore() waits for idle between dispose and restore, which never composes while
+     *  autoAdvance is false; D-229). Returns on R0, the first frame of the new content; the probe then reads the new
+     *  composition. autoAdvance stays false. */
     fun recreate()
     companion object {
         fun launch(rule: ComposeContentTestRule, fixture: GameFixture, motion: MotionPreference,
@@ -1258,7 +1266,7 @@ Unless stated otherwise: Robolectric SDK 36, Pixel7 qualifiers, Classic light, M
 - **AC-MOVE-4** Then at t = 80 the spawn has alpha 0. At t = 96 it has alpha 0.0537 and scale 0.6054.
 - **AC-MOVE-5** Then at t = 192 ghosts have alpha 1; at t = 208 ghosts have alpha 0.
 - **AC-MOVE-6** Then at t = 288 every non-ghost tile's position equals its engine cell exactly.
-- **AC-MOVE-7** Then at t = 432 nothing is running and `boardFrameRate == Default`. At t = 16 it was `High`.
+- **AC-MOVE-7** Then at t = 432 no board animation is running (every tile at its end values) and `boardFrameRate == Default`. At t = 16 it was `High`. The move's "+N" float still runs until t = 752 (§3.4), so `isAnyRunning` is not checked here (D-229).
 - **AC-MOVE-8** Given `FIX_POP_TIERS_4`, when LEFT commits, then at t = 128 (48 ms into the pops) the merged tiles' scales are 1.1039 (64), 1.1385 (512), 1.1732 (1024) and 1.2078 (4096).
 - **AC-MOVE-9** Then at t = 80:
   - the 512, 1024 and 4096 tiles have sheen 0.35; the 64 has 0;
@@ -1308,11 +1316,11 @@ Unless stated otherwise: Robolectric SDK 36, Pixel7 qualifiers, Classic light, M
 
 ### 9.5 New game, undo, size switch (`NewGameCascadeTest`, `UndoCrossfadeTest`, `SizeSwitchTest`)
 
-- **AC-NEW-1** Given `FIX_MID_4` (14 tiles), when New game is confirmed, then:
+- **AC-NEW-1** Given `FIX_MID_4` (13 tiles, so `step` = 15 and `T_in` = 195), when New game is confirmed, then:
   - outgoing tile i (reported by `MotionProbe` with `outgoing = true`) begins shrinking on the first frame ≥ 15·i ms (its scale is < 1 one frame later);
   - every tile of the new `BoardUi` has kind `Static` (D-182);
-  - incoming tile 0 has alpha 0 at t = 208 and > 0 at t = 224;
-  - incoming tile 1 has alpha 0 at t = 256 and > 0 at t = 272;
+  - incoming tile 0 has alpha 0 at t = 192 and > 0 at t = 208;
+  - incoming tile 1 has alpha 0 at t = 240 and > 0 at t = 256;
   - nothing is running at t = 624.
 - **AC-NEW-2** Then `displayedScore == 0` on F1, and the final frame equals the static render (I3).
 - **AC-UNDO-1** Given `FIX_FILM` after LEFT has settled, when Undo commits, then:
@@ -1460,11 +1468,11 @@ Times below are relative to Ft, the exit origin (§3.12; `MotionHarness.tapCardB
   - all three are applied to successive states (D-052);
   - on each later commit's F1, every persisting tile starts exactly at its previous target;
   - a spawn whose alpha was 0 at the later commit has scale 1 and alpha 1 on that F1.
-- **AC-CONS-3** (`FinalFrameEqualsStaticTest`) For move, merge, win, game over, undo, new game and size switch: after the event's settle bound, the root bitmap equals the bitmap after `presenter.reemitStatic()` (a test-only call that re-emits the current state as `BoardEvent.Restored`).
+- **AC-CONS-3** (`FinalFrameEqualsStaticTest`) For move, merge, win, game over, undo, new game and size switch: after the event's settle bound, the root bitmap equals `MotionHarness.staticRender()`: the content composed anew after the settle bound, which draws the ViewModel's settled state as `BoardEvent.Restored` (D-229).
 - **AC-PERF-1** (`TileRecompositionTest.noTileRecompositionDuringSlide`, with F13-AC12; D-150) Given `FIX_FILM`, when LEFT commits, then every tile key composes at most once on F0 and 0 times from F1 to t = 432.
 - **AC-PERF-2** (`BoardRecompositionBudgetTest`) Then `BoardView` recomposes ≤ 2 times and `GameScreen` 0 times from F0 to t = 448.
 - **AC-PERF-3** (`ConfettiSystemTest`) Given seed 0x2048 and 160 particles:
-  - 10,000 `step(1/60f)` calls take ≤ 200 ms in total;
+  - 10,000 `step(1/60f)` calls take ≤ 200 ms of the calling thread's CPU time in total (D-230);
   - they allocate ≤ 1 KiB after 100 warm-up steps;
   - a particle with v = (500, −1000) dp/s stepped 30 × 1/60 s ends at x = 148.86 ± 0.5 dp, y = −135.22 ± 0.5 dp, vy = 203.02 ± 0.5 dp/s (the discrete scheme of §3.11; the closed form is −142.26).
 - **AC-PERF-4** (`ConfettiSystemTest`) Given the same seed twice, then the particle arrays are bit-identical after 120 steps.

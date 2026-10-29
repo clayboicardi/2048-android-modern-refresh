@@ -6,6 +6,7 @@ import com.clayboicardi.game2048.data.platform.SeedSource
 import com.clayboicardi.game2048.data.records.Records
 import com.clayboicardi.game2048.data.settings.Settings
 import com.clayboicardi.game2048.di.AppContainer
+import com.clayboicardi.game2048.ui.theme.AnimatorScaleSource
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -19,7 +20,8 @@ const val TEST_VERSION_CODE = 30000
 
 /**
  * The container of every JVM test (ARCHITECTURE.md §4.2, QUALITY.md §1.6): real DataStores over
- * files in [folder] (a fresh `TemporaryFolder` per test), [clock] and [seedSource], and one
+ * files in [folder] (a fresh `TemporaryFolder` per test), [clock], [seedSource] and [animatorScale]
+ * (a `FakeAnimatorScaleSource` at scale 1 unless a test passes another), and one
  * `StandardTestDispatcher` on this test's scheduler as the I/O and main dispatcher. Use it with
  * `MainDispatcherRule` so `viewModelScope` shares the scheduler.
  *
@@ -31,6 +33,7 @@ fun TestScope.testAppContainer(
     folder: File,
     clock: FakeClock = FakeClock(),
     seedSource: SeedSource = FixedSeedSource(0x2048),
+    animatorScale: AnimatorScaleSource = FakeAnimatorScaleSource(),
 ): AppContainer {
     val dispatcher = StandardTestDispatcher(testScheduler)
     val job = SupervisorJob(backgroundScope.coroutineContext[Job])
@@ -42,6 +45,7 @@ fun TestScope.testAppContainer(
         mainDispatcher = dispatcher,
         clock = clock,
         seedSource = seedSource,
+        animatorScale = animatorScale,
     )
 }
 

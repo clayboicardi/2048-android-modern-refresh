@@ -1,21 +1,59 @@
 package com.clayboicardi.game2048
 
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.datastore.core.DataStore
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.clayboicardi.game2048.data.game.GameDocument
 import com.clayboicardi.game2048.data.game.GameDocumentMapper
+import com.clayboicardi.game2048.data.game.GameRepository
+import com.clayboicardi.game2048.data.game.SavedGame
+import com.clayboicardi.game2048.data.settings.Settings
+import com.clayboicardi.game2048.di.AppContainer
 import com.clayboicardi.game2048.di.gameViewModelFactory
+import com.clayboicardi.game2048.fixtures.GoldenFixtures
 import com.clayboicardi.game2048.game.GameViewModel
+import com.clayboicardi.game2048.game.NEW_GAME_TAG
+import com.clayboicardi.game2048.game.UNDO_TAG
 import com.clayboicardi.game2048.game.board.BoardEvent
 import com.clayboicardi.game2048.game.board.TileKind
+import com.clayboicardi.game2048.game.header.BEST_TAG
+import com.clayboicardi.game2048.game.header.SCORE_TAG
+import com.clayboicardi.game2048.game.motion.LocalMotionProbe
+import com.clayboicardi.game2048.game.motion.MotionProbe
+import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
+import com.clayboicardi.game2048.testing.FakeClock
+import com.clayboicardi.game2048.testing.FixedSeedSource
+import com.clayboicardi.game2048.testing.TEST_VERSION_CODE
+import com.clayboicardi.game2048.testing.seedGame
+import com.clayboicardi.game2048.testing.seedSettings
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.shadows.ShadowLooper
 
@@ -23,6 +61,7 @@ import org.robolectric.shadows.ShadowLooper
 @RunWith(AndroidJUnit4::class)
 class SplashGateTest {
     @get:Rule val compose = createEmptyComposeRule()
+    @get:Rule val tmp = TemporaryFolder()
 
     /** F07-AC12 */
     @Test
@@ -75,6 +114,131 @@ class SplashGateTest {
         }
     }
 
+    /** F07-AC13 */
+    @Test
+    fun lateLoadRendersStaticTiles() {
+        val fixture = GoldenFixtures.FIX_MID_4
+        val gate = CompletableDeferred<Unit>()
+        val (container, store) = containerWith(fixture)
+        val vm = ViewModelProvider(store, gatedFactory(container, gate))[GameViewModel::class.java]
+        val probe = MotionProbe()
+        try {
+            ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+                scenario.onActivity {
+                    it.setContent {
+                        CompositionLocalProvider(LocalMotionProbe provides probe) {
+                            App(
+                                vm,
+                                container.settingsRepository.state,
+                                container.animatorScale,
+                                container.clock,
+                            )
+                        }
+                    }
+                }
+                compose.waitForIdle()
+                for (step in 1..LOADING_STEPS) {
+                    compose.mainClock.advanceTimeBy(LOADING_STEP_MS)
+                    ShadowLooper.idleMainLooper()
+                    assertLoading(vm, probe, "at ${step * LOADING_STEP_MS} ms")
+                }
+
+                gate.complete(Unit)
+                compose.waitUntil(timeoutMillis = LOAD_TIMEOUT_MS) {
+                    ShadowLooper.idleMainLooper()
+                    vm.ready.value
+                }
+                compose.waitForIdle()
+
+                val board = vm.board.value
+                val cells = fixture.state.board
+                assertThat(board.cells).isEqualTo(List(cells.cellCount) { cells[it] })
+                assertThat(board.tiles.map { it.kind }.toSet()).containsExactly(TileKind.Static)
+                val drawn = probe.snapshot().tiles
+                assertThat(drawn).hasSize(board.cells.count { it != 0 })
+                assertThat(drawn.map { it.kind }.toSet()).containsExactly(TileKind.Static)
+                assertThat(drawn.none { it.outgoing }).isTrue()
+                compose
+                    .onNodeWithTag(SCORE_TAG)
+                    .assert(hasContentDescription("Score ${fixture.state.score}"))
+                compose.onNodeWithTag(UNDO_TAG).assertIsEnabled()
+                compose.onNodeWithTag(NEW_GAME_TAG).assertIsEnabled()
+            }
+        } finally {
+            store.clear()
+            container.applicationScope.cancel()
+        }
+    }
+
+    /**
+     * A container over a new folder holding [fixture], and a `ViewModelStore` for its ViewModel.
+     */
+    private fun containerWith(fixture: SavedGame): Pair<AppContainer, ViewModelStore> {
+        val folder = tmp.newFolder()
+        val container =
+            AppContainer(
+                files = { name -> File(folder, name) },
+                versionCode = TEST_VERSION_CODE,
+                clock = FakeClock(),
+                seedSource = FixedSeedSource(SEED),
+                animatorScale = FakeAnimatorScaleSource(),
+            )
+        runBlocking {
+            container.seedSettings(
+                Settings(onboardingDone = true, lastSeenVersionCode = TEST_VERSION_CODE),
+            )
+            container.seedGame(fixture)
+        }
+        return container to ViewModelStore()
+    }
+
+    /**
+     * A `GameViewModel` over [container] whose game store's first read waits for [gate]: the load
+     * outlasts the splash's 1,000 ms cap (D-112).
+     */
+    private fun gatedFactory(container: AppContainer, gate: CompletableDeferred<Unit>) =
+        viewModelFactory {
+            initializer {
+                val games =
+                    GameRepository(
+                        { size -> FirstReadGate(container.gameStore(size), gate) },
+                        container.applicationScope,
+                    )
+                GameViewModel(
+                    games,
+                    container.recordsRepository,
+                    container.settingsRepository,
+                    container.clock,
+                    container.seedSource,
+                )
+            }
+        }
+
+    /** DESIGN_SYSTEM.md §6.1 Loading: empty cells, "–" chips, Undo and New game disabled. */
+    private fun assertLoading(vm: GameViewModel, probe: MotionProbe, at: String) {
+        assertWithMessage("ready $at").that(vm.ready.value).isFalse()
+        assertWithMessage("board tiles $at").that(vm.board.value.tiles).isEmpty()
+        assertWithMessage("drawn tiles $at").that(probe.snapshot().tiles).isEmpty()
+        compose.onNodeWithTag(SCORE_TAG).assert(hasText(LOADING, substring = true))
+        compose.onNodeWithTag(BEST_TAG).assert(hasText(LOADING, substring = true))
+        compose.onNodeWithTag(UNDO_TAG).assertIsNotEnabled()
+        compose.onNodeWithTag(NEW_GAME_TAG).assertIsNotEnabled()
+    }
+
+    /** Delegates to [delegate], except that the first read of [data] waits for [gate]. */
+    private class FirstReadGate<T>(
+        private val delegate: DataStore<T>,
+        gate: CompletableDeferred<Unit>,
+    ) : DataStore<T> {
+        override val data: Flow<T> = flow {
+            gate.await()
+            emitAll(delegate.data)
+        }
+
+        override suspend fun updateData(transform: suspend (t: T) -> T): T =
+            delegate.updateData(transform)
+    }
+
     private companion object {
         /** Written once in M2.4 (QUALITY.md §1.5); never edited. */
         const val FIXTURE = "/fixtures/v1/game-4.json"
@@ -84,5 +248,14 @@ class SplashGateTest {
 
         /** A bound on the real-thread DataStore load, not a timing under test. */
         const val LOAD_TIMEOUT_MS = 10_000L
+
+        const val SEED = 0x2048L
+
+        /** Five checks 300 ms apart: the loading frame holds until 1,500 ms. */
+        const val LOADING_STEPS = 5
+        const val LOADING_STEP_MS = 300L
+
+        /** What the chips show while loading (DESIGN_SYSTEM.md §6.1). */
+        const val LOADING = "\u2013"
     }
 }

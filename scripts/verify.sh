@@ -47,9 +47,11 @@ case "$level" in
     ./gradlew "${EXTRA[@]}" --continue spotlessCheck :core:engine:test || fail=1
     ;;
   full)
+    # The engine tests run alone first, so the 2 s budget of EnginePerformanceTest (D-150) is not
+    # measured against the app's parallel tasks; the second invocation still runs after a failure (D-223).
+    ./gradlew "${EXTRA[@]}" --continue :core:engine:test :core:engine:koverVerify || fail=1
     ./gradlew "${EXTRA[@]}" --continue \
       spotlessCheck detektMain detektTest \
-      :core:engine:test :core:engine:koverVerify \
       :app:testDebugUnitTest -Proborazzi.test.verify=true \
       :app:lintDebug :app:assembleDebug :app:assembleRelease || fail=1
     for s in check-test-counts check-apk check-licenses check-metadata; do

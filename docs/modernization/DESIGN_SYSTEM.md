@@ -1102,7 +1102,7 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 
 | Component | Composable | Spec |
 |---|---|---|
-| Title | `GameTitle` | §3.5. `semantics { heading() }`. Its text is the non-translatable `app_name` "2048" |
+| Title | `GameTitle` | §3.5. `semantics { heading() }`. Its text is the game numeral 2048 built in code (`Long.toString()`, Latin digits), which reads "2048" in every locale and build; the debug `app_name` is "2048 Debug" (D-110, D-226) |
 | Score chip | `ScoreChip(kind = SCORE)` | §7.2 |
 | Best chip | `ScoreChip(kind = BEST)` | §7.2. Shows `max(records[size].bestScore, score)`, updated live (D-043) |
 | Board-size chip | `SizeChip` | §7.3. Opens §6.7 |
@@ -1606,7 +1606,7 @@ TalkBack announces snackbars politely by default. No snackbar is used for the wi
 
 ### 7.7 Focus ring (D-053, D-084)
 
-- `Modifier.focusRing(shape: Shape)` draws, while focused, a 2 dp `primary` stroke **outside** the element. There is a 2 dp gap, and the outset shape's corner radius is the element's radius + 2 + 1 dp.
+- `Modifier.focusRing(shape: Shape)` draws, while focused in keyboard input mode (`InputMode.Keyboard`, D-227), a 2 dp `primary` stroke **outside** the element. There is a 2 dp gap, and the outset shape's corner radius is the element's radius + 2 + 1 dp.
 - The ring therefore sits on the background (`primary` on `background` ≥ 6.28:1, §2.9) and never on the board or a tile.
 - Applied by every `ui/components` wrapper and to the board (`shape` = board shape). M3 state layers alone are below 3:1.
 - The board requests focus when Game appears (D-053).
@@ -1619,7 +1619,8 @@ TalkBack announces snackbars politely by default. No snackbar is used for the wi
   - semantics `contentDescription` = the full decimal value.
 - **`MiniBoardGlyph(n, size)`** draws an N×N grid with its own geometry, not §4.2's: `gapPx = max(1, round(0.10 × sizePx / n))`, with no dp floor, and cells of `(sizePx − (n + 1) · gapPx) / n`. The cells are drawn in `palette.fill(1)` on the board colour (not `palette.empty`), so they stay legible at 32 dp. It is decorative (`contentDescription = null`).
   - Test: `ui/components/MiniTileTest.glyphCellsLegibleAt32dp` asserts that for N = 8 at 420 dpi every cell is ≥ 9 px.
-- **`PaletteSwatch(palette, darkTheme)`** is a row of 4 `MiniTile`s (2, 8, 128, 2048) at 24 dp, 4 dp apart, on that palette's board color with 4 dp padding. In the Palette dialog each option previews its own palette in the current light or dark mode.
+- **`PaletteSwatch(palette, skin)`** is a row of 4 `MiniTile`s (2, 8, 128, 2048) at 24 dp, 4 dp apart, on that palette's board color with 4 dp padding. It draws the `TilePalette` and `TileSkin` it is given, which the caller resolves from the palette option and the current light or dark mode, so in the Palette dialog each option previews its own palette in that mode (D-234). It is decorative (no semantics).
+  - Tests: `MiniTileTest.miniTileDrawsLabelAndBestTileDescription`, `miniTileDrawsHighContrastOutline` and `paletteSwatchShowsFourTilesWithoutSemantics`.
 
 ### 7.9 Material 3 API allow and deny list (verified 2026-10-28 from class files)
 

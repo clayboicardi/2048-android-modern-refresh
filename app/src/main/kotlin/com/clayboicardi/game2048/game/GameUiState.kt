@@ -45,6 +45,11 @@ data class HeaderUi(
     val newBestMoveId: Long = -1,
     /** = the current `SavedGame.newBestAnnounced`: the static NEW BEST style (§4.11). */
     val newBestAnnounced: Boolean = false,
+    /**
+     * `state.seed xor state.moveCount.toLong()` of the state this header accompanies: the seed of
+     * the new-best sparkles' `ParticleRandom` (MOTION_SPEC.md §3.6, D-222).
+     */
+    val particleSeed: Long = 0,
 )
 
 /** How a card enters (ARCHITECTURE.md §4.11, D-047). */

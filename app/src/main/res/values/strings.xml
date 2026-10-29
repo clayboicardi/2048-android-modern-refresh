@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <string name="app_name" translatable="false">2048</string>
-    <string name="settings">Settings</string>
+    <string name="settings" tools:ignore="UnusedResources">Settings</string><!-- reason: D-232, until M3 part 2's game menu (M3-D3) uses it; it keeps its 20 legacy translations (D-101) -->
 
 </resources>

@@ -1,5 +1,6 @@
 package com.clayboicardi.game2048.game
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clayboicardi.game2048.data.game.GameRepository
@@ -7,6 +8,7 @@ import com.clayboicardi.game2048.data.game.SavedGame
 import com.clayboicardi.game2048.data.platform.MonotonicClock
 import com.clayboicardi.game2048.data.platform.SeedSource
 import com.clayboicardi.game2048.data.records.MAX_PENDING_FINALIZATIONS
+import com.clayboicardi.game2048.data.records.RecordsMath
 import com.clayboicardi.game2048.data.records.RecordsRepository
 import com.clayboicardi.game2048.data.records.countsWhenReplaced
 import com.clayboicardi.game2048.data.records.toFinalization
@@ -25,6 +27,7 @@ import com.clayboicardi.game2048.game.board.BoardPresenter
 import com.clayboicardi.game2048.game.board.BoardUi
 import com.clayboicardi.game2048.game.board.kind
 import com.clayboicardi.game2048.game.feedback.HapticsMap
+import com.clayboicardi.game2048.ui.theme.GameMotion
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,7 +44,7 @@ import kotlinx.coroutines.launch
  * Only the load at start and the load of a size switch suspend, in `viewModelScope`, and only
  * inside the repositories' reads. Every change of the current game submits one save (D-043).
  */
-@Suppress("TooManyFunctions") // the 11 commands and reports of §4.7 plus the §4.8–§4.9 steps
+@Suppress("TooManyFunctions") // §4.7's 11 commands and reports, the §4.8–§4.9 steps, D-186
 class GameViewModel(
     private val games: GameRepository,
     private val records: RecordsRepository,
@@ -62,6 +65,11 @@ class GameViewModel(
     private var hint = false
 
     private var nudgeId = 0L
+
+    private var messageId = 0L
+
+    /** The `clock` time of the last "Nothing to undo" (D-186); `null` before the first. */
+    private var nothingToUndoAtMs: Long? = null
 
     private val _ready = MutableStateFlow(false)
 
@@ -87,6 +95,14 @@ class GameViewModel(
     /** Invalid moves only (D-035); never changes `board`. */
     val nudge: StateFlow<Nudge?> = _nudge.asStateFlow()
 
+    private val _message = MutableStateFlow<GameMessage?>(null)
+
+    /**
+     * The undo snackbars (D-186): every request has a new `id`, and the screen shows each id once.
+     * Nothing is persisted.
+     */
+    val message: StateFlow<GameMessage?> = _message.asStateFlow()
+
     init {
         viewModelScope.launch { load() }
     }
@@ -106,17 +122,29 @@ class GameViewModel(
     }
 
     /**
-     * §4.9 Undo, also from a card (D-199): an `Undo` epoch, overlay `None`, one save. A no-op at
-     * `moveCount == 0`; the screen shows `nothing_to_undo` (M3).
+     * §4.9 Undo, also from a card (D-199): an `Undo` epoch, overlay `None`, one save. At `moveCount
+     * == 0` nothing changes and [message] asks for `nothing_to_undo`, at most once per
+     * `NOTHING_TO_UNDO_MIN_INTERVAL_MS` of [clock] time (only keys reach it: the button is disabled
+     * there). The undo that takes `undoCount` from 0 to 1 while no finalized game has used undo
+     * (`RecordsMath.aggregate(records).totalUndos == 0`) asks for `undo_hint_no_undo_best` (D-186).
      */
     fun onUndo() {
         val game = current?.takeIf { acceptsInput() } ?: return
+        if (game.state.moveCount == 0) nothingToUndo() else undo(game)
+    }
+
+    /** §4.9 Undo of [game], which has at least one move. */
+    private fun undo(game: SavedGame) {
         val undone = engineOrCorrupt(game) { Game.undo(game.state) } ?: return
         val next = commitState(game, undone)
         emitEpoch(next, BoardEvent.Undo)
         _overlay.value = OverlayUi.None
         games.save(next)
         publishUi()
+        val firstUndo = game.state.undoCount == 0 && next.state.undoCount == 1
+        if (firstUndo && RecordsMath.aggregate(records.state.value).totalUndos == 0L) {
+            post(GameMessageKind.UNDO_USED)
+        }
     }
 
     /**
@@ -269,6 +297,7 @@ class GameViewModel(
                 epoch = moved.epoch,
                 newBestMoveId = if (newBest) moved.moveId else _header.value.newBestMoveId,
                 newBestAnnounced = next.newBestAnnounced,
+                particleSeed = particleSeed(next.state),
             )
         val entry = OverlayEntry.Animated(moved.moveId)
         if (outcome.becameWon) {
@@ -333,6 +362,7 @@ class GameViewModel(
                 newBestMoveId =
                     if (event == BoardEvent.Undo) _header.value.newBestMoveId else NO_NEW_BEST,
                 newBestAnnounced = game.newBestAnnounced,
+                particleSeed = particleSeed(game.state),
             )
     }
 
@@ -354,6 +384,20 @@ class GameViewModel(
         }
 
     private fun acceptsInput(): Boolean = _ready.value && !busy
+
+    /** D-186: "Nothing to undo", at most once per `NOTHING_TO_UNDO_MIN_INTERVAL_MS`. */
+    private fun nothingToUndo() {
+        val now = clock.nowMs()
+        val last = nothingToUndoAtMs
+        if (last == null || now - last >= GameMotion.Input.NOTHING_TO_UNDO_MIN_INTERVAL_MS) {
+            nothingToUndoAtMs = now
+            post(GameMessageKind.NOTHING_TO_UNDO)
+        }
+    }
+
+    private fun post(kind: GameMessageKind) {
+        _message.value = GameMessage(++messageId, kind)
+    }
 
     private fun publishUi() {
         val state = current?.state ?: return
@@ -441,6 +485,18 @@ class GameViewModel(
     }
 }
 
+/** A snackbar request of the Game screen (D-186): the screen shows each [id] once. */
+@Immutable data class GameMessage(val id: Long, val kind: GameMessageKind)
+
+/** What a [GameMessage] says (D-186; DESIGN_SYSTEM.md §7.6). */
+enum class GameMessageKind {
+    /** `undo_hint_no_undo_best`: the game's first undo, until a finalized game used undo. */
+    UNDO_USED,
+
+    /** `nothing_to_undo`: an undo key at `moveCount == 0`. */
+    NOTHING_TO_UNDO,
+}
+
 /** The empty board frame shown until ready (ARCHITECTURE.md §4.12): no tiles, no epoch. */
 private fun emptyBoard(size: BoardSize): BoardUi =
     BoardUi(
@@ -452,6 +508,9 @@ private fun emptyBoard(size: BoardSize): BoardUi =
         scoreDelta = 0,
         event = BoardEvent.Restored,
     )
+
+/** The seed of the particles a state's effects emit (MOTION_SPEC.md §3.6, §3.11; D-222). */
+private fun particleSeed(state: GameState): Long = state.seed xor state.moveCount.toLong()
 
 /** The exponent produced by each merge, in the engine's processing order. */
 private fun MoveOutcome.Moved.mergedExps() =

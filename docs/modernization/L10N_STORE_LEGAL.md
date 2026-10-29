@@ -177,7 +177,7 @@ After M0, `values/strings.xml` holds exactly `app_name` (non-translatable) and `
 
 Rules:
 1. **Complete.** These are all the string resources of v1.0. A key is added only when code uses it, and it is added to this table in the same commit. From M5 on, a new key is added together with its 20 translations.
-2. **Used.** Every key is referenced from main code in the commit that adds it, because Lint `UnusedResources` is fatal (D-142). A key whose last call site goes away is deleted from every locale in the same commit.
+2. **Used.** Every key is referenced from main code in the commit that adds it, because Lint `UnusedResources` is fatal (D-142). A key whose last call site goes away is deleted from every locale in the same commit. The one exception is `settings` between M3 part 1, which removes the M0 placeholder, and M3 part 2, whose game menu uses it again (D-232).
 3. **No fragment concatenation** (D-103). Sentences come from format strings. The two allowed joins: the TalkBack status line joins whole sentences with one space (`FEATURES.md` F17), and the size label `"$n×$n"` is built in code.
 4. **Arguments** are positional strings `%1$s`, `%2$s` … filled with pre-formatted text (§1.10). `%d` is never used.
 5. **English apostrophes** are escaped as `\'`.
@@ -471,7 +471,7 @@ Rules:
    ```
 
    Lint 32.4.1 honors `tools:ignore` on `<resources>`: 0 errors with it and 158 without it (verified, §0.3 item 15). If a later Lint stops honoring it, put `tools:ignore="MissingTranslation"` on each element of this file instead, each with the same same-line reason comment.
-2. Nothing else is suppressed. `ExtraTranslation`, `MissingQuantity`, `UnusedQuantity`, `UnusedResources` and the `StringFormat*` checks stay errors throughout.
+2. Nothing else is suppressed. `ExtraTranslation`, `MissingQuantity`, `UnusedQuantity`, `UnusedResources` and the `StringFormat*` checks stay errors throughout. The one exception is D-232's same-line `tools:ignore="UnusedResources"` on `settings` in `values/strings.xml`, from the M3 part 1 commit until the M3 part 2 commit removes it.
 3. M0–M2 add no string beyond the migrated `settings`.
 4. In M5, the commit that adds the 20 translations also moves every entry of `strings_pending.xml` into `strings.xml` (in §1.3 order) and deletes `strings_pending.xml`. The same commit adds `check_strings_final` to `check-metadata.sh` (`QUALITY.md` §1.16, D-190), which fails while the file exists. From then on, a string arrives with all 20 translations in the same commit.
 

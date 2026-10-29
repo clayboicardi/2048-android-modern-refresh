@@ -357,7 +357,7 @@ In verify mode a mismatch fails the test and writes `<name>_actual.png` and `<na
 
 ```text
 Screenshots (all inspected):
-- game_mid-4x4_classic-dark.png (new): Classic dark board, 14 tiles 2…2048, score 10220, best 24680; nothing clipped.
+- game_mid-4x4_classic-dark.png (new): Classic dark board, 13 tiles 2…1024, score 10220, best 24680; nothing clipped.
 - settings_classic-light_de.png (changed): "Wischempfindlichkeit" now wraps to two lines; switches aligned.
 - launch_placeholder.png (deleted): replaced by game_new-4x4_classic-light.png.
 ```
@@ -419,8 +419,8 @@ Complements: `RecreateNoReplayTest` (Robolectric `ActivityScenario.recreate()` a
 
 | Check | Where | Rule |
 |---|---|---|
-| ATF (D-085, D-204) | `atfRule(compose)` from `testing/Accessibility.kt` (below), applied with `RuleChain.outerRule(compose).around(atfRule(compose))` in every screen-level screenshot class (`GameScreenshotTest`, `ScreensScreenshotTest`, `LocaleScreenshotTest`, `LayoutScreenshotTest`) and in `PlaceholderScreenshotTest` from M0. It therefore runs on every `game_*`, `layout_*`, `settings_*`, `stats_*`, `howtoplay_*`, `about_*`, `licenses_*`, `sheet_*` and `dialog_*` golden; only `motion_*` (`MotionFilmstripTest`) is exempt | `AccessibilityCheckPreset.LATEST`, `CheckLevel.Error`, after every test. The rule captures no images of its own (verified). The opt-in it needs is D-174 |
-| Touch targets (D-084, D-205) | `assertTouchTargets()` called after every screen-level capture, in the same classes | A gate, like ATF: every clickable's touch bounds ≥ 48 × 48 dp, and no two clickables' touch bounds overlap (V6). ATF's size-only check is vacuous under Compose's 48 dp touch-bounds expansion |
+| ATF (D-085, D-204) | `atfRule(compose)` from `testing/Accessibility.kt` (below), applied with `RuleChain.outerRule(compose).around(atfRule(compose))` in every screen-level screenshot class (`GameScreenshotTest`, `ScreensScreenshotTest`, `LocaleScreenshotTest`, `LayoutScreenshotTest`) and in `PlaceholderScreenshotTest` from M0. The rule checks the main window's root after the test, so a `dialog_*` or `sheet_*` test also calls `onNode(isDialog()).assertAccessible()` while that window is open, with the same options. ATF therefore runs on every `game_*`, `layout_*`, `settings_*`, `stats_*`, `howtoplay_*`, `about_*`, `licenses_*`, `sheet_*` and `dialog_*` golden; only `motion_*` (`MotionFilmstripTest`) is exempt | `AccessibilityCheckPreset.LATEST`, `CheckLevel.Error`, after every test and on each open dialog or sheet window. The rule captures no images of its own (verified). The opt-in it needs is D-174. Seeded once in M3 part 1: a 20 dp unlabeled clickable in the new-game dialog fails `assertAccessible()` with `SpeakableTextPresentCheck`, which the after-test check alone never saw |
+| Touch targets (D-084, D-205) | `assertTouchTargets()` called after every screen-level capture, in the same classes; for a dialog or sheet golden, `assertDialogTouchTargets()` while its window is open, and `assertTouchTargets()` once it is closed | A gate, like ATF: every clickable's touch bounds ≥ 48 × 48 dp, and no two clickables' touch bounds overlap (V6), each window in its own coordinates. ATF's size-only check is vacuous under Compose's 48 dp touch-bounds expansion |
 | Semantics | `BoardSemanticsTest`, `TalkBackModeTest` | D-080–D-082, D-202: `CollectionInfo(N, N)`, cell labels, custom actions, live regions, status lines, direction pad |
 | Contrast and CVD | `PaletteContrastTest` (JVM) | `DESIGN_SYSTEM.md` §2.13 with the unquantized contrast and CVD ΔE method (D-205): the D-083 ink floors for exponents 1–17, the ΔE gates, every quoted contrast ratio, the chrome pairs of §2.9, HC ink rule |
 | Font scale 2.0 | `GameScreenTest.chromeTextNotTruncatedAtFontScale2` + goldens 27–28 | No text node reports `hasVisualOverflow` (`FEATURES.md` F17-AC15) |
@@ -428,7 +428,7 @@ Complements: `RecreateNoReplayTest` (Robolectric `ActivityScenario.recreate()` a
 | Focus | `KeyboardInputTest` | Board focus on entry; Tab order; visible focus ring (D-053, D-084) |
 
 ```kotlin
-// app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt (verified in the scratch build)
+// app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt (verified in the scratch build); window helpers added in M3 part 1
 // The only opt-in in the test source set (D-174): every Roborazzi ATF API is
 // @ExperimentalRoborazziApi in 1.77.0.
 @file:OptIn(ExperimentalRoborazziApi::class)
@@ -436,7 +436,11 @@ Complements: `RecreateNoReplayTest` (Robolectric `ActivityScenario.recreate()` a
 package com.clayboicardi.game2048.testing
 
 import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
@@ -445,25 +449,34 @@ import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RoborazziATFAccessibilityCheckOptions
 import com.github.takahirom.roborazzi.RoborazziATFAccessibilityChecker
 import com.github.takahirom.roborazzi.RoborazziRule
+import com.github.takahirom.roborazzi.checkRoboAccessibility
 import com.google.android.apps.common.testing.accessibility.framework.AccessibilityCheckPreset
 
-/** D-085: ATF after every test, LATEST preset, Error level. */
+/** D-085: ATF after every test, LATEST preset, Error level, on the main window. */
 fun atfRule(compose: ComposeTestRule): RoborazziRule =
     RoborazziRule(
         composeRule = compose,
         captureRoot = compose.onRoot(),
         options =
             RoborazziRule.Options(
-                roborazziAccessibilityOptions =
-                    RoborazziATFAccessibilityCheckOptions(
-                        checker =
-                            RoborazziATFAccessibilityChecker(
-                                preset = AccessibilityCheckPreset.LATEST,
-                            ),
-                        failureLevel = RoborazziATFAccessibilityChecker.CheckLevel.Error,
-                    ),
+                roborazziAccessibilityOptions = atfOptions(),
                 accessibilityCheckStrategy = AccessibilityCheckAfterTestStrategy(),
             ),
+    )
+
+/**
+ * D-085 on the window of this node while it is open, with [atfRule]'s preset and level: a dialog or
+ * a sheet (`onNode(isDialog())`), which the after-test check on the main window never sees.
+ */
+fun SemanticsNodeInteraction.assertAccessible() {
+    checkRoboAccessibility(atfOptions())
+}
+
+/** The LATEST preset at the Error level (D-085). */
+private fun atfOptions() =
+    RoborazziATFAccessibilityCheckOptions(
+        checker = RoborazziATFAccessibilityChecker(preset = AccessibilityCheckPreset.LATEST),
+        failureLevel = RoborazziATFAccessibilityChecker.CheckLevel.Error,
     )
 
 /**
@@ -472,14 +485,29 @@ fun atfRule(compose: ComposeTestRule): RoborazziRule =
  * failure that matters). Nested clickables (one an ancestor of the other) are exempt.
  */
 fun ComposeTestRule.assertTouchTargets() {
+    touchTargets(hasClickAction())
+}
+
+/**
+ * [assertTouchTargets] for the clickables of the open dialog or sheet window (`isDialog()`), in
+ * that window's coordinates, while the main window's are left to [assertTouchTargets].
+ */
+fun ComposeTestRule.assertDialogTouchTargets() {
+    val checked = touchTargets(hasClickAction() and hasAnyAncestor(isDialog()))
+    check(checked > 0) { "No clickable in an open dialog window" }
+}
+
+/** Checks the clickables that [matcher] selects; returns how many there were. */
+private fun ComposeTestRule.touchTargets(matcher: SemanticsMatcher): Int {
     val minPx = with(density) { 48.dp.toPx() } - 0.5f
-    val nodes = onAllNodes(hasClickAction(), useUnmergedTree = true).fetchSemanticsNodes()
+    val nodes = onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes()
     val tooSmall =
         nodes
             .filter { it.touchBoundsInRoot.width < minPx || it.touchBoundsInRoot.height < minPx }
             .map { "too small: ${it.id} ${it.touchBoundsInRoot}" }
     val problems = tooSmall + overlaps(nodes)
     check(problems.isEmpty()) { "Touch-target violations: " + problems.joinToString() }
+    return nodes.size
 }
 
 private fun overlaps(nodes: List<SemanticsNode>): List<String> = nodes.flatMapIndexed { i, a ->
@@ -504,6 +532,17 @@ private val compose = createComposeRule()
 fun midGameLight() {
     compose.setContent { /* GameTheme + GameScreen over FIX_MID_4 */ }
     compose.onRoot().captureGolden("game_mid-4x4_classic-light")
+    compose.assertTouchTargets()
+}
+
+@Test
+fun newGameDialog() {
+    // … open the dialog …
+    val dialog = compose.onNode(isDialog())
+    dialog.captureGolden("dialog_newgame_classic-light")
+    dialog.assertAccessible()            // ATF on the dialog's window
+    compose.assertDialogTouchTargets()   // its clickables, in its coordinates
+    // … close it; the main window's checks follow …
     compose.assertTouchTargets()
 }
 ```
@@ -630,7 +669,7 @@ Notes:
 | Engine | 100,000 accepted 8×8 moves ≤ 2 s | `EnginePerformanceTest` | Time in the test output |
 | Tile recompositions during a slide | 0 | `TileRecompositionTest` | — |
 | Board / screen recompositions per move | ≤ 2 / 0 | `BoardRecompositionBudgetTest` (`MOTION_SPEC.md` §7.2) | — |
-| Confetti step | 10,000 steps of 160 particles ≤ 200 ms, ≤ 1 KiB allocated | `ConfettiSystemTest` | — |
+| Confetti step | 10,000 steps of 160 particles ≤ 200 ms of thread CPU time (D-230), ≤ 1 KiB allocated | `ConfettiSystemTest` | — |
 | Device frame budgets | P95 ≤ 6 ms, P99 overrun ≤ 0 | Not gated (D-150, D-153) | `MOTION_SPEC.md` §7.6 recipe, optional |
 
 A budget is never raised to make a change pass. Raising one needs an execution-time D-173 entry with the measurement.
@@ -1279,11 +1318,11 @@ The snippets are part of `ARCHITECTURE.md` §2.6 and §2.7 (D-176); they are add
 
 ### 3.1 Levels and listing
 
-D-140's command list is unchanged; it is the `full` level, the only push gate. `quick`, `--record` and `full --record` are local conveniences around it and never replace `full` before a push (D-178).
+D-140's command list is unchanged; it is the `full` level, the only push gate. Since D-223 it runs in two Gradle invocations: the engine tests and their Kover check alone first, then every other task. `quick`, `--record` and `full --record` are local conveniences around it and never replace `full` before a push (D-178).
 
 | Invocation | Runs | Use |
 |---|---|---|
-| `./scripts/verify.sh` or `./scripts/verify.sh full` | `spotlessCheck detektMain detektTest :core:engine:test :core:engine:koverVerify :app:testDebugUnitTest -Proborazzi.test.verify=true :app:lintDebug :app:assembleDebug :app:assembleRelease` with `--continue`, then `check-test-counts`, `check-apk`, `check-licenses`, `check-metadata` | Before every push (D-163). CI runs exactly this |
+| `./scripts/verify.sh` or `./scripts/verify.sh full` | `:core:engine:test :core:engine:koverVerify` with `--continue` (D-223), then `spotlessCheck detektMain detektTest :app:testDebugUnitTest -Proborazzi.test.verify=true :app:lintDebug :app:assembleDebug :app:assembleRelease` with `--continue`, then `check-test-counts`, `check-apk`, `check-licenses`, `check-metadata` | Before every push (D-163). CI runs exactly this |
 | `./scripts/verify.sh quick` | `spotlessCheck :core:engine:test` | Inner loop while editing the engine; never a push gate |
 | `./scripts/verify.sh --record` | `:app:testDebugUnitTest --rerun -Proborazzi.test.record=true`, then `git status --porcelain --untracked-files=all -- app/src/test/screenshots` | After an intended UI change; then Read every listed PNG (§1.9) |
 | `./scripts/verify.sh full --record` | `--record`, then `full` | Record and gate in one call |
@@ -1354,9 +1393,11 @@ case "$level" in
     ./gradlew "${EXTRA[@]}" --continue spotlessCheck :core:engine:test || fail=1
     ;;
   full)
+    # The engine tests run alone first, so the 2 s budget of EnginePerformanceTest (D-150) is not
+    # measured against the app's parallel tasks; the second invocation still runs after a failure (D-223).
+    ./gradlew "${EXTRA[@]}" --continue :core:engine:test :core:engine:koverVerify || fail=1
     ./gradlew "${EXTRA[@]}" --continue \
       spotlessCheck detektMain detektTest \
-      :core:engine:test :core:engine:koverVerify \
       :app:testDebugUnitTest -Proborazzi.test.verify=true \
       :app:lintDebug :app:assembleDebug :app:assembleRelease || fail=1
     for s in check-test-counts check-apk check-licenses check-metadata; do

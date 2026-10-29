@@ -1658,7 +1658,7 @@ Factories live in `di/ViewModelFactories.kt` and use `viewModelFactory { initial
 
 `StatsViewModel` folds unfinalized finished games into what it displays (D-198). It combines `records.state` with `GameRepository.peek(n)` for n = 3..8 and displays `(3..8).fold(records) { r, n -> RecordsMath.displayed(r, peeked[n]) }` without persisting it (§4.9). For each size, that applies every entry of the saved game's `pendingFinalizations`, in list order, and then the saved game itself if it is `OVER`, all through the identity-guarded `finalize`. A game whose `gameId` is already finalized (an interrupted New game that has not been completed yet) therefore adds nothing, and each recovery entry not yet applied to `records.json` is shown once (D-044). Persisted finalization still happens only at New game and in D-044's recovery (§4.9), so nothing is counted twice, and undoing out of `OVER` removes the game from the display. Without the fold, a player who loses their first game would see an empty Statistics screen.
 
-`GameViewModel` exposes separate `StateFlow`s (board, header, overlay, nudge and the chrome-level `uiState`) so a score tick never recomposes the board (D-024):
+`GameViewModel` exposes separate `StateFlow`s (board, header, overlay, nudge, message and the chrome-level `uiState`) so a score tick never recomposes the board (D-024):
 
 ```kotlin
 @Immutable
@@ -1682,6 +1682,7 @@ data class HeaderUi(
     val epoch: Long = 0,                       // = that BoardUi's epoch; with event, tells a move from undo, new game and size switch (§4.11)
     val newBestMoveId: Long = -1,              // keys the once-per-game new-best moment (D-044)
     val newBestAnnounced: Boolean = false,     // = the current SavedGame.newBestAnnounced: the static NEW BEST style (§4.11)
+    val particleSeed: Long = 0,                // = state.seed xor state.moveCount of that state: the sparkles' seed (MOTION_SPEC.md §3.6, D-222)
 )
 
 @Immutable
@@ -1718,6 +1719,10 @@ data class GameSummary(
 
 @Immutable data class Nudge(val id: Long, val direction: Direction)
 
+@Immutable data class GameMessage(val id: Long, val kind: GameMessageKind)   // a snackbar request; the screen shows each id once (D-231)
+
+enum class GameMessageKind { UNDO_USED, NOTHING_TO_UNDO }   // undo_hint_no_undo_best, nothing_to_undo (D-186)
+
 class GameViewModel(/* … */) : ViewModel() {
     val ready: StateFlow<Boolean>
     val uiState: StateFlow<GameUiState>
@@ -1725,6 +1730,7 @@ class GameViewModel(/* … */) : ViewModel() {
     val header: StateFlow<HeaderUi>
     val overlay: StateFlow<OverlayUi>
     val nudge: StateFlow<Nudge?>               // invalid moves; never changes BoardUi
+    val message: StateFlow<GameMessage?>       // D-186 snackbars, decided in onUndo; null until the first (D-231)
 
     fun onMove(direction: Direction)
     fun onUndo()
@@ -1796,7 +1802,7 @@ sequenceDiagram
 | Action | ViewModel steps | `BoardEvent` | Persisted |
 |---|---|---|---|
 | Load at start | `settings.awaitLoaded()`, `records.awaitLoaded()`, `size = BoardSize.of(lastBoardSize)`, `start = restore(size)` (below: D-044 recovery R1/R2, or a fresh game when no file exists); `hint = !onboardingDone && start.state.moveCount == 0 && start.state.undoCount == 0` (a missing file yields `fresh`, so it counts as 0; D-201); `presenter.reset(start.state, Restored)`; overlay from the loaded status with `Restored` entry; `ready = true`; then `viewModelScope.launch { recoverOtherSizes(size) }` (below) | `Restored` | game when `restore` created or replaced one; records when R1 applied an entry |
-| Undo | `Game.undo(state) ?: return` (at `moveCount == 0`, U, Ctrl+Z and Backspace show `nothing_to_undo` at most once per 2 s; an `IllegalStateException`, a restored log that does not replay, replaces the game like a corrupt file, §9.1, D-214); `presenter.reset(state', Undo)` (cells whose exponent is unchanged keep their tile id, D-182); overlay `None`. When `undoCount` goes 0 → 1 while `RecordsMath.aggregate(records).totalUndos == 0`, the screen shows `undo_hint_no_undo_best` (D-186) | `Undo` | game |
+| Undo | `Game.undo(state) ?: return` (at `moveCount == 0`, where only U, Ctrl+Z and Backspace reach it, `message` gets `NOTHING_TO_UNDO` at most once per `NOTHING_TO_UNDO_MIN_INTERVAL_MS` = 2 s of `MonotonicClock` time and nothing else changes; an `IllegalStateException`, a restored log that does not replay, replaces the game like a corrupt file, §9.1, D-214); `presenter.reset(state', Undo)` (cells whose exponent is unchanged keep their tile id, D-182); overlay `None`. When `undoCount` goes 0 → 1 while `RecordsMath.aggregate(records).totalUndos == 0`, `message` gets `UNDO_USED`, and the screen shows `undo_hint_no_undo_best` (D-186, D-231) | `Undo` | game |
 | New game | `current = replaceWithFresh(current.copy(elapsedMs = playClock.elapsed(now)), size)` (the running play time is folded in first, so the finalization and its recovery entry count it, D-043; below: retry a failed records write; finalize the old game if `countsWhenReplaced`, a no-op when its `gameId` is already finalized; then a fresh game with `bestAtStart = records.best(size)` read **after** finalization, the next `gameId` and the carried `pendingFinalizations`; then save it; D-044, D-198); `presenter.reset(current.state, NewGame)` | `NewGame` | records, game |
 | Keep going | `Game.keepGoing(state)`; overlay `None`, or `GameOver(summary, Animated(moveId))` when the result is `OVER`. Entering `OVER` this way fires the game-over `Reject` on the card-exit origin; the Keep going tap itself is silent (D-185, MOTION_SPEC.md §3.12) | none (board unchanged) | game |
 | Size switch | Fold elapsed, `games.save(current)`, `settings.update { lastBoardSize = n }`, `busy = true`, then `restore(n)` in `viewModelScope`, `presenter.reset(loaded, SizeSwitched)`, `busy = false`. No confirmation and no finalization of the current game (D-007); `restore` only completes an interrupted New game of size n (R2) | `SizeSwitched` | game (both sizes), settings |
@@ -2130,7 +2136,7 @@ Epoch rules (D-182): an epoch `BoardUi` never contains `Ghost`, `Moved`, `Merged
 
 ```text
 AnimatedContent(targetState = boardSize)              // size switch fade (MOTION_SPEC.md §3.10, D-182)
-└── BoardView(board: BoardUi, onPresented: (Long) -> Unit, modifier)   // board: its arrangement scope's presented value (§4.11 item 2); inside CompositionLocalProvider(LocalLayoutDirection provides Ltr) (D-104)
+└── BoardView(board: BoardUi, nudge, status, canUndo, loading, clock, onMove, onUndo, onNewGame, onBoardKey, onPresented: (Long) -> Unit, modifier, focusRequester)   // D-222; board: its arrangement scope's presented value (§4.11 item 2); inside CompositionLocalProvider(LocalLayoutDirection provides Ltr) (D-104)
     └── Box(Modifier
             .size(boardSizeDp)
             .offset { nudgeOffset() }                  // invalid-move nudge, layout phase (D-064)
@@ -2154,11 +2160,16 @@ OverlayCard (win or game-over card)                    // topmost
 val anim = animator.anim(id)                   // created by animator.prepare(board) earlier in the same composition
 Box(
     modifier
-        .offset { geometry.value.cellTopLeft(anim.offset.value.x, anim.offset.value.y) }   // layout phase, IntOffset
-        .size(with(LocalDensity.current) { geometry.value.tilePx.toDp() })
-        .graphicsLayer {                                                    // layer-property phase
-            val s = anim.scale.value * effects.deflate(id)
-            scaleX = s; scaleY = s; alpha = anim.alpha.value
+        .layout { measurable, _ ->                                          // size: measure phase
+            val side = geometry.value.tilePx.roundToInt()
+            val placeable = measurable.measure(Constraints.fixed(side, side))
+            layout(side, side) {                                            // position: layout phase, IntOffset
+                val at = anim.offset.value
+                placeable.placeWithLayer(geometry.value.cellTopLeft(at.x, at.y)) {   // the placement's own layer:
+                    val s = anim.scale.value * effects.deflate(id)          // not Modifier.graphicsLayer, whose
+                    scaleX = s; scaleY = s; alpha = anim.alpha.value       // node is a semantics node (D-228)
+                }
+            }
         }
         .dropShadow(style.shape) { style.glow(exp, this, anim.glowBoost.value) }    // draw phase, no-op when exp has no glow
         .drawBehind {                                                       // fill, outline, cached text, then the
@@ -2241,7 +2252,7 @@ Under Off, initial values equal end values (positions at target, ghosts at alpha
      Here `moved = board.event as BoardEvent.Moved`; only `Moved` boards contain `Merged` and `Spawned` tiles.
    - `Static` (epoch events): snap everything to target; the epoch transition of §5.5 runs instead.
 4. **Board-level effects** keyed by the event (win ring, game-over desaturation, deflate ripple and scrim) are launched at the origin with their delays inside their specs, exactly as MOTION_SPEC.md §3.11 and §3.13 list them (D-064, D-183).
-5. **State flips at an offset** use `MoveTimeline` (mechanism B): the score display update, "+N" creation and the new-best start at 80 ms, confetti emission, overlay composition, card interactivity and haptics. Each calls `awaitOffset(moveId, ms)`, or `awaitRealTime(moveId, ms)` for Reduced and Off haptics, and drops its work when the call returns `false` because a newer change published first.
+5. **State flips at an offset** use `MoveTimeline` (mechanism B): the score display update, "+N" creation and the new-best start at 80 ms, confetti emission, overlay composition, card interactivity and haptics. Each calls `awaitOffset(moveId, ms)`, or `awaitRealTime(moveId, ms)` for Reduced and Off haptics, and drops its work when the call returns `false` because a newer change published first. A flip that is drawn passes its write as `awaitOffset(moveId, ms) { … }`, which runs it inside the due frame's callback, so that frame draws it (D-224).
 
 Why the trigger is separate from the work: if spawn and pop coroutines ran inside `LaunchedEffect(board.moveId)`, the next move would cancel them mid-way. D-062 requires effects to finish, so `LaunchedEffect` only calls `onCommit`, which launches into the `BoardView`'s longer-lived scope.
 
@@ -2319,7 +2330,7 @@ Per-frame values are read **only** in these places (D-025):
 | Value | Read in |
 |---|---|
 | Tile position | `Modifier.offset { }` (layout phase; votes the high frame-rate category on Android 15+ ARR devices, research/04 §4.2) |
-| Tile scale, alpha, deflate | `Modifier.graphicsLayer { }` |
+| Tile scale, alpha, deflate | the tile's `placeWithLayer { }` block (layer phase; not `Modifier.graphicsLayer`, whose node is a semantics node, D-228) |
 | Glow pulse | `Modifier.dropShadow(shape) { }` block |
 | Desaturation, merge sheen | the tile's own `drawBehind { }` (desaturation applied arithmetically to the tile colors; the sheen is tile-local, D-187) |
 | Nudge | board `offset { }` |
@@ -2371,7 +2382,7 @@ Ownership (D-185): priority is resolved once, in the ViewModel; the UI only sche
 | `MERGE` | `SegmentTick` | +80 | +0 |
 | `becameOver` (separate from the above) | `Reject` | +300 (frame 304) | +0 |
 | Keep going into `OVER` (D-036) | `Reject` | on the card-exit origin Ft (MOTION_SPEC.md §3.12) | on Ft |
-| Invalid move (`nudge`), API 30+ only | `Reject`, at most once per 400 ms of `MonotonicClock` time | at the nudge's start frame | same |
+| Invalid move (`nudge`), API 30+ only | `Reject`, at most once per 400 ms of `MonotonicClock` time | at the nudge's start frame, its first animation frame (D-224) | same |
 | Settings switches | `ToggleOn` / `ToggleOff` | on toggle | on toggle |
 
 Rules (D-185):
@@ -2394,8 +2405,8 @@ Rules (D-185):
 data class SwipeConfig(
     val timing: MoveTiming,          // DURING_SWIPE (default) or ON_RELEASE (D-050)
     val thresholdDp: Int,            // 40 / 24 / 12 (D-050)
-    val dominanceRatio: Float = 1.4f,
-    val flingDpPerSecond: Float = 600f,
+    val dominanceRatio: Float = GameDimens.SwipeDominanceRatio,     // 1.4 (D-050, D-222)
+    val flingDpPerSecond: Float = GameDimens.SwipeFlingDpPerSecond, // 600 dp/s
 )
 ```
 
@@ -2945,7 +2956,7 @@ Root package:
 | `input/DirectionPad.kt` | TalkBack pad (forced LTR) | M4 | D-082 |
 | `feedback/HapticsMap.kt` | Priority resolution (pure), used by `GameViewModel` | M2 | D-065, D-185 |
 | `feedback/HapticsController.kt` | Scheduling, interruption and rate limit over `HapticFeedback` (§5.9) | M3 p1 | D-065, D-066, D-185 |
-| `motion/MoveTimeline.kt` | `publish`, `awaitOffset`, `awaitRealTime`, `LocalMoveTimeline` (MOTION_SPEC.md §2.4) | M3 p1 | D-183 |
+| `motion/MoveTimeline.kt` | `publish`, `awaitOffset` (and its `onDue` form, D-224), `awaitRealTime`, `LocalMoveTimeline` (MOTION_SPEC.md §2.4) | M3 p1 | D-183, D-224 |
 | `motion/MotionProbe.kt` | Test hook `LocalMotionProbe` (null in production; MOTION_SPEC.md §8.2) | M3 p1 | D-150, D-182 |
 | `motion/DelayedSpec.kt` | `delayedSpec(spec, delayMs)` (§5.4) | M3 p1 | D-183 |
 | `motion/FlashLimiter.kt` | At most 3 sheen or glow pulses per rolling 1000 ms of real time | M3 p1 | D-063, D-183 |
@@ -3157,7 +3168,7 @@ The D-146 named suites all appear above.
 | `CLAUDE.md` | Root agent instructions for this repository | plan PR | D-177 |
 | `docs/modernization/README.md`, `DECISIONS.md`, `PLAN.md`, `ARCHITECTURE.md`, `FEATURES.md`, `DESIGN_SYSTEM.md`, `MOTION_SPEC.md`, `QUALITY.md`, `L10N_STORE_LEGAL.md`, `research/` | The planning set; `research/` is frozen evidence | plan PR | D-160, D-177 |
 | `core/engine/AGENTS.md` | `## Code Review Rules` → `### Game rules` (PLAN.md §5.0) | M0 | D-171, D-192 |
-| `scripts/verify.sh` | Exactly D-140, with the levels of D-178 | M0 | D-140, D-178 |
+| `scripts/verify.sh` | Exactly D-140, with the levels of D-178 and the engine-first invocation of D-223 | M0 | D-140, D-178, D-223 |
 | `scripts/check-apk.sh` | §8.6 | M0 | D-148, TC-2 |
 | `scripts/check-test-counts.sh`, `config/test-count-floor.txt` | Floors, `skipped == 0`, goldens ↔ Roborazzi results exactly (QUALITY.md §1.15 G1–G5: no results fails, orphans, results without a golden, non-`unchanged` results, unreadable results) | M0 | D-149, D-179 |
 | `scripts/check-licenses.sh`, `config/license-groups.txt` | Coverage; stale or malformed lines fail | M0 | D-122, D-179 |

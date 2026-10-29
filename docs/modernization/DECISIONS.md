@@ -226,6 +226,19 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-219 | Quality | F29-AC1 reads `dataExtractionRules` from the compiled merged manifest, because Robolectric's legacy `PackageParser` leaves `ApplicationInfo.dataExtractionRulesRes` at 0 |
 | D-220 | Quality | JVM tests settle the background-scoped `TestAppContainer` with `testScheduler.runCurrent()`; `kill()` runs it after the cancel |
 | D-221 | Quality | Tests count submitted saves through the `submissions` test hook of `ConflatedWriter` and the repositories, never file writes, which conflate within one action |
+| D-222 | Architecture | M3 part 1 contracts: `HeaderUi.particleSeed` carries the sparkles' seed; the key-repeat and "Nothing to undo" limits are `GameMotion.Input` constants and the swipe ratio and fling minimum `GameDimens` tokens; `BoardView` takes the inputs §5.4–§6.4 require |
+| D-223 | Quality | The full gate runs `:core:engine:test :core:engine:koverVerify` in its own Gradle invocation before every other task, so `EnginePerformanceTest`'s unchanged 2 s budget is not measured against the app's parallel tasks |
+| D-224 | Motion | A drawn mechanism-(B) flip (score display, "+N" creation, new-best label flip) is written inside the due frame's callback through `MoveTimeline.awaitOffset(moveId, ms, onDue)`, so it is drawn on frame ⌈X⌉; the invalid-move `Reject` fires on the nudge's first animation frame |
+| D-225 | Motion | Invariant I1 also allows a merged tile to overlap a Moved or Ghost tile of the same change that is still sliding to its cell (the +80 reveal precedes the slide's end) |
+| D-226 | Visual | The Game title is the game numeral 2048 built in code, not `app_name`, which reads "2048 Debug" in debug builds |
+| D-227 | Accessibility | The focus ring shows only in keyboard input mode; the board still takes focus when Game appears |
+| D-228 | Architecture | Tiles set scale and alpha in their own placement layer (`placeWithLayer`), because `Modifier.graphicsLayer` is a semantics node in ui 1.12.1; the nudge runs on `AnimationState` for its start frame |
+| D-229 | Quality | M3 part 1 test-spec corrections: AC-NEW-1 for `FIX_MID_4`'s 13 tiles, AC-MOVE-7's idle check is the board's, AC-CONS-3 and F07-AC27 use `MotionHarness.staticRender()`, `recreate()` restores through its own registry, and the sparkle jitter is a named token |
+| D-230 | Quality | `ConfettiSystemTest`'s AC-PERF-3 step budget (10,000 steps ≤ 200 ms) is measured in the test thread's CPU time, not wall time, so the full gate's parallel tasks do not count |
+| D-231 | Architecture | `GameViewModel.message: StateFlow<GameMessage?>` carries the D-186 snackbar requests; `onUndo` decides both triggers and the 2 s limit on `MonotonicClock`, and the screen shows each id once |
+| D-232 | Localization | `settings` keeps a same-line `tools:ignore="UnusedResources"` from M3 part 1 until M3 part 2's menu uses it, so D-101's 20 translations stay |
+| D-233 | Process | F13-AC4, AC-CONS-3's win and game-over cases and F15-AC11's sheet, card and menu cases are added in M3 part 2 (M3.9–M3.11); part 1 has every other case, `FIX_WON_4`'s AC-RESTORE-1 board case included |
+| D-234 | Visual | `PaletteSwatch(palette, skin)` draws the `TilePalette` and `TileSkin` it is given; the caller resolves the palette option and light or dark mode, so the palette selection stays in one place |
 
 ---
 
@@ -1968,6 +1981,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rejected:** dropping the legacy translations (it loses 20 shipped `settings` translations); keeping the hint strings (`UnusedResources` is fatal under D-142).
 - **Source:** [ORCH] O13 · [RESEARCH].
 - **Note:** Technical correction TC-3.
+- **Note:** Clarified by D-232.
 
 #### D-102 — Locale config and per-app language
 - **Decision:**
@@ -2305,7 +2319,7 @@ exit "$fail"
 - **Rationale:** research/06 §6 (`G-*` gates); one script means local == CI.
 - **Rejected:** CI-only gates that differ from local runs (they break D-163); separate CI steps with separate Gradle invocations.
 - **Source:** [ORCH] O16, O17.
-- **Note:** Extended by D-178, D-191.
+- **Note:** Extended by D-178, D-191. Amended by D-223 (two Gradle invocations inside the one script).
 
 #### D-141 — Formatting
 - **Decision:**
@@ -2339,7 +2353,7 @@ lint {
 - **Rationale:** research/06 §2.1; research/07 C22 (`MissingTranslation` is an error).
 - **Rejected:** a lint baseline (fresh code starts at zero findings, research/06 §2.1); informational `MissingTranslation`.
 - **Source:** [ORCH] O16.
-- **Note:** Clarified by D-208.
+- **Note:** Clarified by D-208, D-232.
 
 #### D-143 — Kotlin compiler strictness
 - **Decision:**
@@ -2857,6 +2871,7 @@ jobs:
   - The machine has 4 CPUs and about 15 GB of RAM, so parallel Gradle builds risk memory exhaustion (research/07 G19).
 - **Rejected:** a lock inside `verify.sh` (it couples CI to a local path).
 - **Source:** [ORCH] O16 · [RESEARCH] QUALITY.md §3.
+- **Note:** Amended by D-223.
 
 #### D-179 — Check-script additions, M0 set (extends D-148, D-149, D-152)
 - **Decision.** Every addition is stricter than the decisions, never weaker.
@@ -3032,6 +3047,7 @@ jobs:
   - On 360×640 the gap between the board and the controls is 24 dp, so the earlier placement rules could not both hold.
 - **Rejected:** showing it once per game; a persisted "hint seen" flag; covering the controls bar.
 - **Source:** [ORCH] orchestrator brief (undo-hint snackbars) · [RESEARCH] DESIGN_SYSTEM.md §5.4, §7.6.
+- **Note:** Extended by D-231.
 
 #### D-187 — Effect layers and the "+N" pill (amends D-025; clarifies D-064)
 - **Decision:**
@@ -3574,6 +3590,125 @@ jobs:
   - A test subclass of `GameRepository` that counts `save` (an `open` class, or an interface): it counts game saves only, while records and settings saves conflate in the same writer.
   - `UnconfinedTestDispatcher` for the writers, so that each submission is written before the next: it is experimental in kotlinx-coroutines-test 1.11.0 (D-215), and a second save during a write in flight would still conflate.
 - **Source:** [ORCH] O17 (D-173 change control, M2 review).
+
+
+#### D-222 — M3 part 1 contract shapes: the particle seed in `HeaderUi`, input limits in `GameMotion.Input`, `BoardView`'s parameters (clarifies D-053, D-064, D-186; amends ARCHITECTURE.md §4.7, §5.3, §6.1 and MOTION_SPEC.md §1.5)
+- **Decision:**
+  - `HeaderUi` gains `particleSeed: Long = 0`, set by `GameViewModel` on every header it emits to `state.seed xor state.moveCount.toLong()` of the state the header accompanies. `GameHeader` seeds the new-best sparkles' `ParticleRandom` with it, which is the seed MOTION_SPEC.md §3.6 prescribes. Presentation reports leave it unchanged, so `sameHeaderPresentation` is unaffected.
+  - The two input rate limits that are millisecond values but not motion tokens live in `ui/theme/GameMotion.kt` as `GameMotion.Input.KEY_REPEAT_MIN_INTERVAL_MS = 120L` (D-053) and `NOTHING_TO_UNDO_MIN_INTERVAL_MS = 2000L` (D-186), after the MOTION_SPEC.md §1.5 listing, which is otherwise copied verbatim. The swipe classifier's dominance ratio 1.4 and fling minimum 600 dp/s (D-050) are `GameDimens.SwipeDominanceRatio` and `SwipeFlingDpPerSecond`, the defaults of `SwipeConfig`.
+  - `BoardView` takes, besides `board`, `onPresented` and `modifier` (ARCHITECTURE.md §5.3): `nudge`, `status`, `canUndo`, `loading`, `clock` (the flash limiter), the three accessibility-action callbacks `onMove`, `onUndo`, `onNewGame`, `onBoardKey` (the focused board's key handler, ARCHITECTURE.md §6.3) and a `focusRequester`. Its side comes from the caller's `modifier`; it derives `BoardGeometry` from its measured size. No behavior changes.
+- **Rationale:**
+  - MOTION_SPEC.md §3.6 seeds the sparkles from the game state, but no UI flow carried the state's seed or move count; the header is the flow the new-best moment already reads (ARCHITECTURE.md §4.11 item 4), so the seed travels with it instead of a new flow or a ViewModel call from composition.
+  - AGENTS.md and PLAN.md §6.6 Q5 keep every millisecond and dp value in `ui/theme/` (D-217 limits the exception to the splash cap); ARCHITECTURE.md §6.1 and §6.3 wrote these as literals in sketches.
+  - The ARCHITECTURE.md §5.3 sketch omitted inputs that §5.4–§5.7, §6.3, §6.4 and D-080, D-084, D-112 require of the board: the nudge, the `OVER` end state, the Undo action's availability, the Loading description, the flash limiter's real-time clock, the actions and the board's focus and key handling.
+- **Rejected:** seeding the sparkles from `newBestMoveId` (not the MOTION_SPEC.md §3.6 seed); a `LocalMonotonicClock` composition local (an implicit dependency where one parameter suffices); literals with `@Suppress("MagicNumber")`.
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 contracts).
+
+#### D-223 — The full gate runs the engine tests in their own Gradle invocation first (amends D-140, D-178; amends QUALITY.md §3.1)
+- **Decision:**
+  - The `full` level of `scripts/verify.sh` runs `./gradlew --continue :core:engine:test :core:engine:koverVerify` first and D-140's other tasks (`spotlessCheck detektMain detektTest :app:testDebugUnitTest -Proborazzi.test.verify=true :app:lintDebug :app:assembleDebug :app:assembleRelease`) in a second `--continue` invocation, then the four check scripts. Both invocations take `VERIFY_GRADLE_ARGS`. A failure in the first still runs the second and the scripts, so one run still shows every failure.
+  - The task set, `EnginePerformanceTest`, its D-150 budget (100,000 accepted 8×8 moves in ≤ 2 s) and the Kover bounds are unchanged. It is still one script that CI runs exactly (D-151, D-163); `quick` and `--record` are unchanged. QUALITY.md §3.1 carries the new listing.
+- **Rationale:**
+  - With `org.gradle.parallel=true`, the single invocation ran `:core:engine:test` beside the app's Kotlin compilation, Lint and R8 on the 4-CPU machine (research/07 G19), and the single-threaded timed loop measured that contention. Two of the three full runs of the M3 part 1 contracts (2026-10-29, intermediate commits `47c0fe2` and `1e1b7d6`) failed `EnginePerformanceTest.hundredThousandMovesUnderTwoSeconds` at its budget assertion (3504 ms on `1e1b7d6`); the third, on `b795a4e`, passed at 1372 ms. Alone, the test took 1474 ms, and 831 ms as the new first invocation (`:core:engine:test --rerun :core:engine:koverVerify`). M3 adds many Robolectric classes to the parallel phase, so the failure would become frequent, and GitHub's standard Linux runner also has 4 CPUs.
+  - D-150 budgets the engine "on the CI JVM", not the engine competing with unrelated build tasks of the same build. Run first and alone, the test measures the same code against the same budget without that noise; with the configuration cache, the extra invocation costs a few seconds.
+- **Rejected:**
+  - Raising the budget, or retrying the test until it passes: both weaken D-150 and the gate.
+  - Timing the loop with thread CPU time instead of `System.nanoTime()`: it changes what F01-AC20 measures (ARCHITECTURE.md §3.7).
+  - Separate CI steps: D-140 rejects them, because local and CI runs would differ. Both invocations stay inside the one script.
+  - Ordering every task after the engine test inside one invocation (`mustRunAfter`, a shared build service): more build logic for the same effect.
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 integration).
+
+#### D-224 — Drawn mechanism-(B) flips are written inside the due frame's callback; the nudge's `Reject` fires on its first animation frame (clarifies D-061, D-064, D-065, D-183; amends MOTION_SPEC.md §2.3 T2, §2.4, §6.1 and ARCHITECTURE.md §5.9)
+- **Decision:**
+  - `MoveTimeline` gains `suspend fun awaitOffset(moveId: Long, ms: Int, onDue: () -> Unit): Boolean`. It waits exactly as `awaitOffset(moveId, ms)` and runs `onDue` inside the `withFrameNanos` callback of the due frame, before that frame recomposes; when the offset is already due at the publish (an offset of 0 or a scale of 0) it runs `onDue` at once. `onDue` runs only when the call returns true. The two-argument form and `awaitRealTime` are unchanged.
+  - The mechanism-(B) flips that are drawn use it: the displayed Score and Best values (+80), the "+N" float's creation (+80; Reduced +0) and the new-best moment's label flip, star and sparkle emission (+80). When a newer move publishes first, the float and the moment flip at once, as before, and the pending score update is dropped. The moment's animated values are snapped to their start values before the wait, while nothing draws them. Haptics, which are not drawn, keep the two-argument form.
+  - `HapticsEffects` waits one frame (`withFrameNanos`) after the frame that composes a new nudge before it calls `onNudge`. That is the frame `BoardView`'s nudge spring or outline pulse animates from, the `MotionProbe.nudgeOriginMs` of MOTION_SPEC.md §8.1, so "on the nudge's start frame" means its first animation frame.
+- **Rationale:**
+  - The Recomposer sends a frame to the frame-clock awaiters, applies the snapshot and recomposes, and the coroutines that the frame woke resume on the dispatcher only after that. A state write placed after `awaitOffset` returned on frame 80 was therefore composed and drawn on frame 96. In the M3 part 1 integration (2026-10-29) AC-SCORE-1 (`displayedScore` at t = 80) and AC-BEST-1 (the label key at t = 80) failed, and the `plus_n_float` strip showed the float's first pixels at t = 96, while T2 says that (B) elements appear on frame ⌈X⌉. `Animatable` writes its value inside the frame callback, which is why the mechanism-(A) animations never lagged.
+  - `HapticsMapTest.invalidMoveRejectRateLimited` (F14-AC5) recorded the two `Reject`s on the nudges' F0 (32 and 496), one frame before their first animation frames (48 and 512).
+- **Rejected:** reporting the probe's header values from state instead of the composed view (the probe would pass while the pixels still lagged); a `withFrameNanos` after the write (one frame later still).
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 integration).
+
+#### D-225 — Invariant I1 allows a merged tile over a sliding tile of the same change (amends MOTION_SPEC.md §4.3 I1; AC-CONS-1)
+- **Decision:** besides one merge group (a merged tile and its two ghosts), I1 allows the overlap of a `Merged` tile with a `Moved` or `Ghost` tile of the same change whose position is not yet its own target cell (by more than the position tolerance). D-060's reveal at +80, the slide spring and I7's z-order, which draws merged tiles above `Static`/`Moved` tiles and ghosts, are unchanged. `Invariants.overlaps` in `motion/MotionHarness.kt` implements the rule.
+- **Rationale:** at t = 80 the slide spring is at 0.8475 of its distance. In a row `a, a, b, _` moved RIGHT, `b` is still leaving column 2 for column 3 when the merged tile appears in column 2: they overlap by about 0.028 cells, 7 px on the Pixel 7. On 8×8 a long slide crosses a merge cell after +80, by up to 0.12 cells at t = 96–112. `ConsistencyPropertyTest` found 17 such frames over its 20 sequences and no other I1–I4 violation, and a simulation of the MOTION_SPEC.md timeline alone predicts exactly those 17 frames, so no implementation of the timeline could satisfy I1 as written. The slider passes beneath the merged tile for one to three frames.
+- **Rejected:** delaying the reveal until every slider has left (changes D-060 and the frame tables of MOTION_SPEC.md §3.1 and §8.3); clipping the sliders (new drawing that no decision specifies).
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 integration).
+
+#### D-226 — The Game title is the game numeral 2048 (amends DESIGN_SYSTEM.md §6.1; clarifies D-076, D-110)
+- **Decision:** `GameTitle` draws `2048L.toString()` in the game numerals with heading semantics, in every locale and build, instead of the `app_name` resource. F21-AC1 ("the title reads 2048") is unchanged.
+- **Rationale:** the debug source set sets `app_name` to "2048 Debug" (D-110), and the tests and goldens run the debug variant, so a title read from `app_name` would fail F21-AC1 and show a debug label in every golden. The title is set in the game numerals (D-076), whose M4 subset holds digits only, and game numerals use Latin digits built in code (D-103), like the Score and Best values.
+- **Rejected:** a second non-translatable string resource with "2048" (a copy of the label that the numeral rule already covers); `app_name` in release builds only (debug goldens would differ from what users see).
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 integration).
+
+#### D-227 — The focus ring shows only in keyboard input mode (amends DESIGN_SYSTEM.md §7.7; clarifies D-053, D-084)
+- **Decision:** `Modifier.focusRing` draws while its focus target is focused and `LocalInputModeManager.current.inputMode` is `InputMode.Keyboard`. Its geometry, colour (`primary`) and contrast are unchanged, and the board still requests focus when Game appears (D-053).
+- **Rationale:** the board holds focus whenever Game is shown, so with the rule as written a touch player would always see a ring around the board, and every golden would show it. Compose switches to keyboard input mode on the first key event and back on touch, the same rule as Android's own focus highlights, so a keyboard, D-pad or gamepad player sees the ring from the first key press with D-084's ≥ 3:1 contrast.
+- **Rejected:** requesting the board's focus only after a key event (keys would not reach the board first, D-053, F16-AC7); a ring in every input mode.
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 integration).
+
+#### D-228 — Tiles set scale and alpha in their placement layer; the nudge runs on `AnimationState` (amends ARCHITECTURE.md §5.3, §5.7; clarifies D-025, D-080)
+- **Decision:**
+  - `TileView` measures and places itself in one `layout {}` modifier: the tile side in measure, the position in placement, and the scale and alpha as the `placeWithLayer` layer block, all read in their own phase. No tile uses `Modifier.graphicsLayer`.
+  - The board nudge in `game/board/BoardEffects.kt` runs `AnimationState<Offset>.animateTo`, whose `AnimationScope.startTimeNanos` gives `MotionProbe.nudgeOriginMs`; the spring and its values are those of MOTION_SPEC.md §3.7.
+- **Rationale:**
+  - In ui-android 1.12.1, `BlockGraphicsLayerModifier` and `SimpleGraphicsLayerModifier` implement `SemanticsModifierNode` (`javap`, 2026-10-29). A tile with a `graphicsLayer` was therefore an empty semantics node inside the board, which breaks D-080's rule that tiles carry no semantics; F17-AC2 and F17-AC6 failed in the first scratch integration of M3-B. The board's size-switch `AnimatedContent` still adds one empty layer node between the board node and its cells, which TalkBack skips and `BoardSemanticsTest` allows.
+  - `Animatable` does not expose its start frame time, which the nudge's origin needs.
+- **Rejected:** `Modifier.graphicsLayer` plus `clearAndSetSemantics {}` on every tile (still one node per tile); timing the nudge origin from the frame after the commit (an estimate, not the spring's start).
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 integration).
+
+#### D-229 — M3 part 1 corrections to the motion test specification (amends MOTION_SPEC.md §1.5, §8.1, AC-NEW-1, AC-MOVE-7, AC-CONS-3; FEATURES.md F07-AC27; QUALITY.md §1.9)
+- **Decision:**
+  - AC-NEW-1 counts `FIX_MID_4`'s 13 tiles (DESIGN_SYSTEM.md §10.3), so `step` = min(15, 240 / 13) = 15 and `T_in` = 195: incoming tile 0 has alpha 0 at t = 192 and > 0 at t = 208, incoming tile 1 has alpha 0 at t = 240 and > 0 at t = 256. The MOTION_SPEC.md §3.8 example of 14 tiles stays an example.
+  - AC-MOVE-7's "nothing is running" at t = 432 means no board animation (the board's frame-rate vote and every tile's end values). The move's "+N" float runs until t = 752 (§3.4), so `MotionSnapshot.isAnyRunning` is not part of it.
+  - AC-CONS-3 and F07-AC27 compare with `MotionHarness.staticRender()`, which composes the content anew after the settle bound and so draws the ViewModel's settled state as `BoardEvent.Restored`; `presenter.reemitStatic()` does not exist.
+  - `MotionHarness.recreate()` saves `rememberSaveable` state through its own `SaveableStateRegistry`, disposes the content and composes it again, one frame per step. compose-ui-test's `StateRestorationTester.emulateSavedInstanceStateRestore()` waits for idle between dispose and restore, which never composes while `autoAdvance` is false.
+  - `GameMotion.NewBest.SPARKLE_JITTER_DEG = 10f` names MOTION_SPEC.md §3.6's ±10° sparkle jitter in the §1.5 listing, so the particle engine holds no literal. The QUALITY.md §1.9 example names `FIX_MID_4`'s 13 tiles.
+- **Rationale:** each item is a number or an API name that the text got wrong and the M3-E1 harness corrected; the behaviour under test is unchanged.
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 integration).
+
+#### D-230 — The confetti step budget is measured in thread CPU time (amends MOTION_SPEC.md AC-PERF-3, §7.5; QUALITY.md §1.14)
+- **Decision:** `ConfettiSystemTest.tenThousandStepsAt160ParticlesWithinBudget` times its 10,000 `step(1/60f)` calls with `ThreadMXBean.currentThreadCpuTime` of the test thread and asserts that the JVM supports and enables it. The budget (≤ 200 ms), the 160 immortal particles, the 100 warm-up steps and the allocation check are unchanged. The test also prints the wall time.
+- **Rationale:** `:app:testDebugUnitTest` runs beside Lint, R8 and the other tasks of the full gate's second Gradle invocation (D-223) on 4 CPUs. Alone the loop took 110 ms (M3-A, 2026-10-29); in a full run with `--rerun-tasks`, the shape of a CI run without a build cache, it took 219 ms of wall time on `01f6b20` and failed, and 233 ms of wall time but 121 ms of CPU time on `98bbc33`. CPU time counts only the time the thread ran, so the check measures the step's cost and not the scheduler's choices; unlike `EnginePerformanceTest` (D-223), one test of the app task cannot run in an invocation of its own without a second test task in `app/build.gradle.kts`.
+- **Rejected:** raising the budget, best-of-N timing or retries (each weakens the gate); a separate test task for the one class (build logic for one check).
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 integration).
+
+#### D-231 — `GameViewModel.message` carries the undo snackbar requests (extends D-186; amends ARCHITECTURE.md §4.7, §4.9)
+- **Decision:**
+  - `GameViewModel` exposes one more flow, `val message: StateFlow<GameMessage?>`, which is `null` until the first request. `@Immutable data class GameMessage(val id: Long, val kind: GameMessageKind)`; `enum class GameMessageKind { UNDO_USED, NOTHING_TO_UNDO }` names `undo_hint_no_undo_best` and `nothing_to_undo`. Every request has a new `id`. Nothing is persisted.
+  - `onUndo` decides both D-186 triggers. It posts `UNDO_USED` when the accepted undo takes `undoCount` from 0 to 1 while `RecordsMath.aggregate(records).totalUndos == 0`. At `moveCount == 0` it posts `NOTHING_TO_UNDO` at most once per `GameMotion.Input.NOTHING_TO_UNDO_MIN_INTERVAL_MS` (2,000 ms, D-222) of `MonotonicClock` time, and changes nothing else.
+  - `GameScreen` collects `message` once, beside the other flows. Its snackbar effect shows each new `id` once in the screen's `SnackbarHostState` (`SnackbarDuration.Short`, no action) and picks the string resource; the ViewModel holds no strings. The message present when the screen first composes counts as shown, so a recreation does not show it again (D-047). An accepted move or undo dismisses the snackbar (D-186).
+- **Rationale:** ARCHITECTURE.md §4.9 said that "the screen shows" the hints, but only the ViewModel holds the records and the undo count before and after the undo, and the 2 s limit is a rule about commands, which every Undo path (U, Ctrl+Z, Backspace, the board's Undo action) reaches through `onUndo`. Timing it on `MonotonicClock` makes it testable with `FakeClock` (`GameScreenTest.nothingToUndoSnackbarRateLimited`). An id in a `StateFlow` follows the `Nudge` pattern of §4.7; a `Channel` or `SharedFlow` loses a request that arrives while no collector is active.
+- **Rejected:** deciding the triggers in the screen (it would read records and compare game states in composition); a `SharedFlow` of events; a persisted "hint shown" flag (D-186 rejects it).
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 review: a contract gap of PLAN.md §5.3 M3.5).
+
+#### D-232 — `settings` keeps a temporary `UnusedResources` suppression between M3 part 1 and part 2 (amends L10N_STORE_LEGAL.md §1.3 rule 2, §1.4 rule 2; clarifies D-101, D-142)
+- **Decision:**
+  - From the M3 part 1 commit until the M3 part 2 commit, `values/strings.xml` declares `<string name="settings" tools:ignore="UnusedResources">` with D-142's same-line reason. It is the only resource with that suppression; the 20 `values-xx` translations of `settings` are unchanged.
+  - The M3 part 2 integration (PLAN.md §5.3 M3.12) removes the attribute and its comment once `GameMoreMenu` (M3-D3) reads `R.string.settings`; `:app:lintDebug` then proves the key is used again.
+- **Rationale:** the M0 placeholder screen was the only call site of `settings`, and M3 part 1 replaces it with the Game screen. Under L10N_STORE_LEGAL.md §1.3 rule 2 the key would leave all 21 locales, which drops the 20 shipped legacy translations that D-101 keeps verbatim; part 2 would then add the English key back without them, and M5 would translate a word that already had translations.
+- **Rejected:** deleting the key and adding it back in part 2 (loses D-101's translations); a reference from main code that only exists to satisfy Lint; a Lint baseline (D-142).
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 review).
+
+#### D-233 — M3 part 1 acceptance criteria whose remaining cases need part 2 (amends PLAN.md §5.3 M3.6, M3.9–M3.12)
+- **Decision:** these criteria keep their ID on the part 1 methods, and the named part 2 work packages add the cases that need the overlays, the size sheet or the menu:
+  - F13-AC4 (`EffectiveMotionTest.delaysScaleWithAnimatorScale`) reads whether the win card is interactive at t = 1,744 and 1,760 under animator scale 2.0, which is `OverlayController.interactive` (M3.8, D-200). M3-E2 adds the method (M3.11). Part 1's `EffectiveMotionTest` covers F13-AC1–AC3 and F13-AC11.
+  - AC-CONS-3's win and game-over cases (`FinalFrameEqualsStaticTest`) need the cards. M3-E2 adds them (M3.11). Part 1 covers move, merge, undo, new game and size switch.
+  - F15-AC11 (`SwipeInputTest.ignoredWhileModalOpen`): M3-D2 adds the size-sheet and win-card cases (M3.9) and M3-D3 the game-menu case (M3.10). The What's new case stays in M4 (FEATURES.md §8). Part 1 covers the new-game dialog.
+  - AC-RESTORE-1's three board cases, `FIX_WON_4` included, are part 1 (`RestoreNoMotionTest`). M3.11 adds the card end states.
+  - The part 2 integrator (M3.12) checks that each case above exists. The A12 report counts an AC as mapped once any method carries its ID, so it cannot detect a missing case.
+- **Rationale:** PLAN.md §5.3 M3.6 assigned F13-AC4 and all of AC-CONS-3 to part 1 classes, but neither can be tested without `OverlayController`. M3.9–M3.11 listed only some of those classes as extended in part 2, so the remaining cases had no owner.
+- **Rejected:** a part 1 placeholder method for F13-AC4 (there is no card to read); moving the whole criteria to part 2 (the part 1 cases already pass and guard the board).
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 review).
+
+#### D-234 — `PaletteSwatch` takes the resolved palette and skin (amends DESIGN_SYSTEM.md §7.8)
+- **Decision:**
+  - `PaletteSwatch(palette: TilePalette, skin: TileSkin, modifier: Modifier = Modifier)` draws the palette and skin it is given: it provides them to its four `MiniTile`s (2, 8, 128, 2048 at `SwatchTile`, `Space4` apart) and draws `palette.board` behind them with `Space4` padding. It has no semantics. Its geometry and tiles are those of DESIGN_SYSTEM.md §7.8.
+  - The caller resolves the palette option and the current light or dark mode to that pair with the same selection `GameTheme` makes, so each Palette dialog option previews its own palette (§7.8).
+  - `MiniTileTest.paletteSwatchShowsFourTilesWithoutSemantics` checks it with the Classic dark pair under a light theme.
+- **Rationale:** §7.8 wrote `PaletteSwatch(palette, darkTheme)`. M3 part 1 has only the Classic palettes; the Neon objects come with M4's `ui/theme/NeonArcadePalette.kt`. A `(PaletteId, darkTheme)` form would either repeat `GameTheme`'s palette selection inside `ui/components/` or have no Neon palette to draw. The swatch reads only a `TilePalette`'s fills, ink and board and a `TileSkin`'s radius and outline, so taking them keeps one place that maps settings to palettes. Nothing calls `PaletteSwatch` before M4's Settings screen (PLAN.md §5.3 M4.4).
+- **Rejected:** `PaletteSwatch(palette: PaletteId, darkTheme: Boolean)` with its own palette `when` (a second palette table); leaving the swatch to M4 (PLAN.md §5.3 M3.5 assigns `MiniTile.kt`, with it, to M3 part 1).
+- **Source:** [ORCH] O17 (D-173 change control, M3 part 1 review).
 
 ---
 

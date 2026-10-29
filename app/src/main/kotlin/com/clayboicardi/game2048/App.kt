@@ -1,30 +1,45 @@
 package com.clayboicardi.game2048
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.clayboicardi.game2048.data.platform.MonotonicClock
+import com.clayboicardi.game2048.data.settings.Settings
+import com.clayboicardi.game2048.data.settings.ThemeMode
+import com.clayboicardi.game2048.game.GameScreen
+import com.clayboicardi.game2048.game.GameViewModel
+import com.clayboicardi.game2048.ui.theme.AnimatorScaleSource
 import com.clayboicardi.game2048.ui.theme.GameTheme
+import kotlinx.coroutines.flow.StateFlow
 
 /**
- * The app root. M0 placeholder: the migrated `settings` string, centered (ARCHITECTURE.md §1.2).
- * Its ink is the scheme's `onBackground` role (D-083): nothing here draws a background, so the text
- * sits on the light or dark window background, and the theme provides no content color.
+ * The app root. M3 part 1: `GameTheme` around `GameScreen` (ARCHITECTURE.md §10.3). [settings] is
+ * `SettingsRepository.state` and [animatorScale] the container's one `AnimatorScaleSource`: their
+ * values feed `GameTheme(darkTheme, motion, animatorScale)` and `GameScreen(…, settings, clock)`.
+ * [gameViewModel] is the activity-scoped `GameViewModel` (ARCHITECTURE.md §4.7) and [clock] the
+ * container's `MonotonicClock`. The Theme setting picks dark mode: System follows the system, Light
+ * and Dark are fixed (D-006).
  */
+@Suppress("ComposeViewModelForwarding") // the activity's GameViewModel serves its one screen (§4.7)
 @Composable
-fun App(modifier: Modifier = Modifier) {
-    GameTheme {
-        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = stringResource(R.string.settings),
-                modifier = Modifier.testTag("placeholder"),
-                color = MaterialTheme.colorScheme.onBackground,
-            )
+fun App(
+    gameViewModel: GameViewModel,
+    settings: StateFlow<Settings>,
+    animatorScale: AnimatorScaleSource,
+    clock: MonotonicClock,
+    modifier: Modifier = Modifier,
+) {
+    val current by settings.collectAsStateWithLifecycle()
+    val scale by animatorScale.scale.collectAsStateWithLifecycle()
+    val darkTheme =
+        when (current.themeMode) {
+            ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            ThemeMode.LIGHT -> false
+            ThemeMode.DARK -> true
         }
+    GameTheme(darkTheme = darkTheme, motion = current.motion, animatorScale = scale) {
+        GameScreen(gameViewModel, current, clock, modifier)
     }
 }

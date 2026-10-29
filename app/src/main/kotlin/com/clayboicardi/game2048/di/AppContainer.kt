@@ -21,6 +21,8 @@ import com.clayboicardi.game2048.data.records.RecordsRepository
 import com.clayboicardi.game2048.data.settings.Settings
 import com.clayboicardi.game2048.data.settings.SettingsRepository
 import com.clayboicardi.game2048.engine.BoardSize
+import com.clayboicardi.game2048.ui.theme.AnimatorScaleSource
+import com.clayboicardi.game2048.ui.theme.SystemAnimatorScaleSource
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,8 +32,8 @@ import kotlinx.coroutines.plus
 /**
  * Manual DI (D-022, ARCHITECTURE.md §4.2): the one owner of every DataStore (one per file per
  * process, D-040) and of the repositories, clock and seed source. `Game2048Application` creates it
- * with [create]; JVM tests build it through `testing/TestAppContainer.kt`. The `animatorScale`
- * parameter arrives in M3 part 1.
+ * with [create]; JVM tests build it through `testing/TestAppContainer.kt`. It owns the one
+ * [AnimatorScaleSource] (M3 part 1, ARCHITECTURE.md §5.8); tests pass a fake.
  *
  * Constructing it does no I/O: `DataStoreFactory.create` opens its file only at the first read or
  * write, and the repositories are created on first use.
@@ -45,6 +47,8 @@ class AppContainer(
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
     val clock: MonotonicClock = SystemMonotonicClock,
     val seedSource: SeedSource = SecureRandomSeedSource(),
+    /** The live system animator duration scale (D-063); `SystemAnimatorScaleSource` in [create]. */
+    val animatorScale: AnimatorScaleSource,
 ) {
     /** DataStore file I/O: `applicationScope` + the I/O dispatcher (D-040). */
     private val storeScope: CoroutineScope = applicationScope + ioDispatcher
@@ -105,13 +109,18 @@ class AppContainer(
         /**
          * The production container. Runs on the main thread in `Application.onCreate`: no I/O and
          * no `PackageManager` call; `versionCode = BuildConfig.VERSION_CODE` (D-134). The files are
-         * `files/datastore/<name>` (D-040), resolved only when a store first opens its file.
+         * `files/datastore/<name>` (D-040), resolved only when a store first opens its file. The
+         * one `SystemAnimatorScaleSource` shares the application scope.
          */
+        @Suppress("InjectDispatcher") // the production root makes the one application scope (§4.2)
         fun create(context: Context): AppContainer {
             val app = context.applicationContext
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             return AppContainer(
                 files = { name -> app.dataStoreFile(name) },
                 versionCode = BuildConfig.VERSION_CODE,
+                applicationScope = scope,
+                animatorScale = SystemAnimatorScaleSource(app, scope),
             )
         }
     }
