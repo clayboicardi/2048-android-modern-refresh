@@ -1,1 +1,1 @@
-2048 Juego de Puzzle. Este es el puerto de código abierto Android.
+Rompecabezas 2048 de fichas deslizantes. Sin conexión, sin anuncios ni rastreo.

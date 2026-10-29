@@ -1,0 +1,32 @@
+2048 to klasyczna łamigłówka z przesuwaniem kafelków, napisana od nowa jako szybka natywna aplikacja na Androida. Przesuń palcem, aby poruszyć wszystkie kafelki naraz. Dwa kafelki z tą samą liczbą łączą się w jeden. Dojdź do kafelka 2048, a potem graj dalej, jak najdłużej się da.
+
+Prywatność od podstaw
+• Działa całkowicie offline: aplikacja nie ma dostępu do internetu.
+• Bez reklam, bez śledzenia, bez analityki i bez kont.
+• Bez uprawnień w czasie działania. Twoje gry i statystyki pozostają na Twoim urządzeniu.
+
+Graj po swojemu
+• Rozmiary planszy od 3×3 do 8×8. Każdy rozmiar ma własną zapisaną grę, najlepszy wynik i statystyki. Na planszy 3×3 celem jest 256.
+• Nieograniczone cofanie, nawet po zakończeniu gry. Cofnięcie przywraca ten sam następny kafelek, więc naprawia pomyłki bez zmieniania Twojego szczęścia. Cofnięcia są liczone, a osobny rekord obejmuje gry rozegrane bez cofania.
+• Gra zapisuje się po każdym ruchu i wraca dokładnie do miejsca, w którym ją przerwano.
+• Statystyki dla każdego rozmiaru planszy: rozegrane gry, wygrane, najlepszy kafelek, średni wynik, łączna liczba ruchów, czas gry i użyte cofnięcia.
+
+Wygląd i wrażenia
+• Dwie palety, Classic Refined i Neon Arcade, w jasnym i ciemnym motywie, a do tego opcja wysokiego kontrastu.
+• Płynne animacje z ustawieniami Pełne, Ograniczone i Wyłączone. Wyłączenie animacji w ustawieniach Androida wyłącza je także tutaj.
+• Opcjonalna reakcja haptyczna, regulowana czułość przesuwania i moment ruchu oraz tryb pełnego ekranu, który ukrywa paski systemowe.
+• Układy dla telefonów, tabletów, urządzeń składanych, orientacji poziomej i okien na komputerze.
+
+Ułatwienia dostępu
+• Pełna obsługa TalkBack: każde pole można odczytać, każdy ruch jest ogłaszany, a gdy TalkBack jest włączony, pojawia się panel kierunkowy.
+• Graj na klawiaturze, krzyżaku lub kontrolerze do gier: strzałki, WASD lub HJKL do ruchu; U, Ctrl+Z lub Backspace do cofania.
+• Tekst czytelny przy dużych rozmiarach czcionki i kolory kafelków sprawdzone pod kątem kontrastu i zaburzeń widzenia barw.
+
+Nowa aplikacja
+To nowa aplikacja z nową nazwą pakietu (com.clayboicardi.game2048); stara aplikacja może pozostać zainstalowana obok niej; wyniki nie są przenoszone.
+
+Otwarty kod źródłowy
+Wolne i otwarte oprogramowanie na licencji MIT: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Twórcy
+Oryginalną grę 2048 stworzył Gabriele Cirulli. Oryginalną aplikację 2048 na Androida stworzył Paul Sarbinowski (uberspot) wraz ze współtwórcami i tłumaczami. Tłumaczenia tej wersji powstały przy pomocy tłumaczenia maszynowego; poprawki zgłoszone na GitHubie są mile widziane.

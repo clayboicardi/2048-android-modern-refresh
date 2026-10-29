@@ -1,0 +1,6 @@
+La version 3.0.0 est une réécriture complète en application native, avec un nouveau nom de package. Elle s’installe à côté de l’application 2048 d’origine ; les scores de l’application d’origine ne sont pas transférés.
+• Tailles de grille de 3×3 à 8×8
+• Annulation illimitée, même une fois la partie terminée
+• Thèmes Neon Arcade, sombre et à contraste élevé
+• Statistiques, clavier et prise en charge de TalkBack
+• Toujours hors ligne : sans publicité, sans pistage

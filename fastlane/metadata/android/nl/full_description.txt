@@ -1,0 +1,32 @@
+2048 is de klassieke schuifpuzzel met tegels, helemaal opnieuw gebouwd als snelle native Android-app. Veeg om alle tegels tegelijk te verplaatsen. Twee tegels met hetzelfde getal worden samengevoegd tot één. Haal de tegel 2048 en speel daarna zo ver door als je kunt.
+
+Ontworpen met privacy voorop
+• Werkt volledig offline: de app heeft geen internettoegang.
+• Geen advertenties, geen tracking, geen gebruiksanalyse en geen accounts.
+• Geen runtime-rechten. Je spellen en statistieken blijven op je apparaat.
+
+Speel zoals jij wilt
+• Bordgroottes van 3×3 tot 8×8. Elke grootte heeft een eigen opgeslagen spel, een eigen record en eigen statistieken. Op 3×3 is het doel 256.
+• Onbeperkt ongedaan maken, ook als het spel voorbij is. Ongedaan maken brengt dezelfde volgende tegel terug, zodat je vergissingen herstelt zonder je geluk te veranderen. Elke keer ongedaan maken wordt geteld, en een apart record houdt de spellen zonder ongedaan maken bij.
+• Je spel wordt na elke zet opgeslagen en gaat precies verder waar je was gebleven.
+• Statistieken voor elke bordgrootte: gespeelde spellen, overwinningen, hoogste tegel, gemiddelde score, totaal aantal zetten, speeltijd en aantal keer ongedaan gemaakt.
+
+Vormgeving
+• Twee paletten, Classic Refined en Neon Arcade, in een licht en een donker thema, plus een optie voor hoog contrast.
+• Vloeiende animaties met de instellingen Volledig, Beperkt en Uit. Zet je animaties uit in de instellingen van Android, dan staan ze hier ook uit.
+• Optionele haptische feedback, instelbare veeggevoeligheid en timing van zetten, en een volledig scherm dat de systeembalken verbergt.
+• Lay-outs voor telefoons, tablets, vouwbare toestellen, liggende stand en desktopvensters.
+
+Toegankelijkheid
+• Volledige ondersteuning voor TalkBack: elk vak kan worden voorgelezen, elke zet wordt aangekondigd en er verschijnen pijlknoppen zolang TalkBack aan staat.
+• Speel met een toetsenbord, D-pad of gamecontroller: pijltjestoetsen, WASD of HJKL om te verplaatsen; U, Ctrl+Z of Backspace om ongedaan te maken.
+• Tekst die leesbaar blijft bij grote lettergroottes, en tegelkleuren die zijn gecontroleerd op contrast en kleurenblindheid.
+
+Een nieuwe app
+Dit is een nieuwe app met een nieuwe pakketnaam (com.clayboicardi.game2048); de oude app kan ernaast geïnstalleerd blijven; scores worden niet overgenomen.
+
+Open source
+Gratis en open source onder de MIT-licentie: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Met dank aan
+Het oorspronkelijke 2048-spel is van Gabriele Cirulli. De oorspronkelijke 2048-app voor Android is van Paul Sarbinowski (uberspot) en de bijdragers en vertalers van die app. De vertalingen van deze versie zijn gemaakt met behulp van machinevertaling; correcties zijn welkom op GitHub.

@@ -1,0 +1,6 @@
+3.0.0 is een volledige herschrijving als native app met een nieuwe pakketnaam. De app wordt naast de oorspronkelijke 2048-app geïnstalleerd; scores uit de oorspronkelijke app worden niet overgenomen.
+• Bordgroottes van 3×3 tot 8×8
+• Onbeperkt ongedaan maken, ook als het spel voorbij is
+• Thema’s: Neon Arcade, donker en hoog contrast
+• Statistieken, toetsenbord en ondersteuning voor TalkBack
+• Nog steeds offline: geen advertenties, geen tracking

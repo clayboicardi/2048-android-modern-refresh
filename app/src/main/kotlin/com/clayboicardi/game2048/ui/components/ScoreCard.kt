@@ -36,6 +36,8 @@ import com.clayboicardi.game2048.game.header.scoreLines
 import com.clayboicardi.game2048.ui.theme.GameDimens
 import com.clayboicardi.game2048.ui.theme.GameFonts
 import com.clayboicardi.game2048.ui.theme.LocalTileSkin
+import java.text.Normalizer
+import java.util.Locale
 
 /**
  * A Score or Best chip (DESIGN_SYSTEM.md §7.2; D-064, D-084): the `surfaceContainerHigh` container
@@ -81,20 +83,35 @@ fun ScoreChip(
 }
 
 /**
- * A chip label (DESIGN_SYSTEM.md §3.5, §3.7): [text] upper-cased with the current locale in
- * `labelMediumEmphasized`, at most 2 lines, coloured by [color] at draw time.
+ * A chip label (DESIGN_SYSTEM.md §3.5, §3.7): [text] upper-cased with the current locale
+ * ([chipLabelText]) in `labelMediumEmphasized`, at most 2 lines, coloured by [color] at draw time.
  */
 @Composable
 fun ScoreChipLabel(text: String, color: ColorProducer, modifier: Modifier = Modifier) {
     val locale = LocalConfiguration.current.locales[0]
     BasicText(
-        text = text.uppercase(locale),
+        text = chipLabelText(text, locale),
         modifier = modifier,
         style = MaterialTheme.typography.labelMediumEmphasized.copy(textAlign = TextAlign.Center),
         maxLines = 2,
         color = color,
     )
 }
+
+/**
+ * [text] upper-cased in [locale] for a chip label (DESIGN_SYSTEM.md §3.7). Greek capitals carry no
+ * stress mark ("ΡΕΚΟΡ"), which the JVM's case mapping keeps ("ΡΕΚΌΡ"), so for `el` the acute U+0301
+ * is removed after upper-casing (L10N_STORE_LEGAL.md L-OI-13).
+ */
+fun chipLabelText(text: String, locale: Locale): String {
+    val upper = text.uppercase(locale)
+    if (locale.language != GREEK) return upper
+    val decomposed = Normalizer.normalize(upper, Normalizer.Form.NFD)
+    return Normalizer.normalize(decomposed.replace(COMBINING_ACUTE, ""), Normalizer.Form.NFC)
+}
+
+private const val GREEK = "el"
+private const val COMBINING_ACUTE = "\u0301"
 
 /**
  * Score or Best digits (DESIGN_SYSTEM.md §7.2): [text] in the score numerals at [fontSize] (one

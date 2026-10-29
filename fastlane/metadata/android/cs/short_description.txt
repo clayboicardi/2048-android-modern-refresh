@@ -1,0 +1,1 @@
+Klasický hlavolam 2048 s posouváním dlaždic. Offline, bez reklam a sledování.

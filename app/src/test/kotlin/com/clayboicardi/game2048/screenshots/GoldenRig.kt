@@ -1,7 +1,7 @@
 package com.clayboicardi.game2048.screenshots
 
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.test.junit4.ComposeContentTestRule
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.ViewModelProvider
@@ -94,7 +94,7 @@ internal class GoldenRig(
     }
 
     /** Waits for the load (the stores read on real I/O threads and resume on the main looper). */
-    fun awaitReady(compose: ComposeContentTestRule) {
+    fun awaitReady(compose: ComposeTestRule) {
         compose.waitUntil(timeoutMillis = LOAD_TIMEOUT_MS) {
             ShadowLooper.idleMainLooper()
             vm.ready.value
@@ -113,7 +113,7 @@ internal class GoldenRig(
 }
 
 /** Opens [key] from the Game screen's menu (More, then the item; D-249), Motion Off. */
-internal fun ComposeContentTestRule.openFromMenu(key: NavKey) {
+internal fun ComposeTestRule.openFromMenu(key: NavKey) {
     onNodeWithTag(MORE_TAG).performClick()
     waitForIdle()
     onNodeWithTag(menuItemTag(key)).performClick()
@@ -124,7 +124,7 @@ internal fun ComposeContentTestRule.openFromMenu(key: NavKey) {
  * Waits until [condition] holds, running the main looper between checks (what a screen reads on its
  * I/O dispatcher resumes there), then until Compose is idle.
  */
-internal fun ComposeContentTestRule.awaitLoaded(condition: () -> Boolean) {
+internal fun ComposeTestRule.awaitLoaded(condition: () -> Boolean) {
     waitUntil(timeoutMillis = 10_000L) {
         ShadowLooper.idleMainLooper()
         condition()

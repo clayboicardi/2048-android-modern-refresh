@@ -45,6 +45,7 @@ import com.clayboicardi.game2048.ui.components.MiniTile
 import com.clayboicardi.game2048.ui.components.ScoreChipLabel
 import com.clayboicardi.game2048.ui.components.ScoreValueLines
 import com.clayboicardi.game2048.ui.components.ScoreValueText
+import com.clayboicardi.game2048.ui.components.chipLabelText
 import com.clayboicardi.game2048.ui.components.formatCount
 import com.clayboicardi.game2048.ui.components.formatElapsed
 import com.clayboicardi.game2048.ui.components.rememberGameButtonMinWidth
@@ -198,7 +199,7 @@ private fun CompactStats(summary: GameSummary) {
         val stacked =
             remember(labels, third, style, density, measurer, locale) {
                 labels.any { label ->
-                    label.uppercase(locale).split(' ').any { word ->
+                    chipLabelText(label, locale).split(' ').any { word ->
                         measurer.measure(word, style, maxLines = 1).size.width > third
                     }
                 }

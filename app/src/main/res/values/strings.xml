@@ -1,7 +1,385 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-
+<!-- app/src/main/res/values/strings.xml: English source (L10N_STORE_LEGAL.md §1.3). Comments are translator context. -->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- A. App-wide and shared -->
+    <!-- Launcher label and the title on the Game screen. Never translated (U2). Lives only in `values/`; the debug source set overrides it with "2048 Debug". -->
     <string name="app_name" translatable="false">2048</string>
+    <!-- Name of the Settings screen: game-menu item and top-bar title. The 20 legacy translations are kept verbatim (D-101). -->
     <string name="settings">Settings</string>
+    <!-- Dismiss button of every dialog. Never means "undo". -->
+    <string name="cancel">Cancel</string>
+    <!-- Spoken label of the back arrow in every top app bar. -->
+    <string name="navigate_up">Navigate up</string>
+    <!-- Spoken label of the ⋮ button that opens the game menu. -->
+    <string name="more_options">More options</string>
+    <!-- Button that dismisses an informational card or sheet. Short acknowledgement. -->
+    <string name="got_it">Got it</string>
+    <!-- Snackbar when no browser or settings app can handle a link. No final period (matches English). -->
+    <string name="link_open_failed">No app can open this link</string>
+    <!-- Spoken action for a settings row that opens a choice dialog. TalkBack says "Double-tap to change". Verb, infinitive or imperative per locale convention. -->
+    <string name="a11y_action_change">Change</string>
+    <!-- Spoken action for a row that opens a link, a system page or the licenses screen. TalkBack says "Double-tap to open". -->
+    <string name="a11y_action_open">Open</string>
 
+    <!-- B. Game screen: header, controls, menu -->
+    <!-- Label above the current score in the header chip. Code upper-cases it with the current locale; write sentence case. Keep ≤ 10 characters if possible. -->
+    <string name="score_label">Score</string>
+    <!-- Label above the best score for this board size. Code upper-cases it. Noun or adjective that means "best score / record". ≤ 10 characters. -->
+    <string name="best_label">Best</string>
+    <!-- Replaces "Best" on the chip once this game beats the previous best. Code upper-cases it. ≤ 12 characters. -->
+    <string name="new_best_label">New best</string>
+    <!-- Spoken text of a score chip, e.g. "Score 10220". Reorder or add punctuation if your language needs it. Arguments: %1$s = chip label in sentence case ("Score"); %2$s = value, Latin digits -->
+    <string name="a11y_chip_value">%1$s %2$s</string>
+    <!-- Button and accessibility action that takes back the last move. Verb (button). Glossary term "Undo (button)". Must differ from "Cancel" where the language allows; see the glossary note for fr/it. -->
+    <string name="undo">Undo</string>
+    <!-- Button and accessibility action that starts a new game. Glossary term. -->
+    <string name="new_game">New game</string>
+    <!-- Spoken label of the board-size chip, e.g. "Board size 4×4". Arguments: %1$s = size label built in code, e.g. "4×4" (Latin digits, U+00D7) -->
+    <string name="board_size_cd">Board size %1$s</string>
+    <!-- Spoken action of the board-size chip: "Double-tap to change board size". -->
+    <string name="board_size_change">Change board size</string>
+    <!-- Game-menu item that opens the Statistics screen. Use the same word as `statistics`. -->
+    <string name="menu_statistics">Statistics</string>
+    <!-- Game-menu item that opens the rules screen. Use the same words as `how_to_play`. -->
+    <string name="menu_how_to_play">How to play</string>
+    <!-- Game-menu item that opens the About screen. Use the same word as `about`. -->
+    <string name="menu_about">About</string>
+    <!-- One-time hint on first launch, shown while the starting game has no move (above the board on phones). Three short imperative sentences. Arguments: %1$s = target tile as a game numeral: "2048", or "256" on 3×3 -->
+    <string name="hint_first_launch">Swipe to move all tiles. Equal tiles merge. Reach %1$s.</string>
+    <!-- The same first-launch hint while TalkBack is on: TalkBack takes over swipes, so the player moves with the arrow buttons of the direction pad. Three short imperative sentences; "arrow buttons" are the four on-screen buttons, not keyboard keys. Arguments: %1$s = target tile as a game numeral: "2048", or "256" on 3×3 -->
+    <string name="hint_first_launch_talkback">Use the arrow buttons to move all tiles. Equal tiles merge. Reach %1$s.</string>
+    <!-- Snackbar when a game's first undo happens; it stops appearing once a finished game has used undo. "Best without undo" is the statistic name (glossary); write it exactly as in `stats_best_no_undo`, capitalized as a name if your language allows. -->
+    <string name="undo_hint_no_undo_best">Undo used. This game no longer counts for Best without undo.</string>
+    <!-- Snackbar when an undo key is pressed at move 0 (at most once every 2 seconds). No final period. -->
+    <string name="nothing_to_undo">Nothing to undo</string>
+
+    <!-- C. Board-size sheet -->
+    <!-- Title of the sheet that lists 3×3 … 8×8. Glossary term. -->
+    <string name="board_size_title">Board size</string>
+    <!-- Target tile of a board size, e.g. "Goal 2048". Short. Arguments: %1$s = "2048" or "256" (game numeral) -->
+    <string name="board_size_goal">Goal %1$s</string>
+    <!-- Best score on that size, e.g. "Best 24,680". Arguments: %1$s = best score from `formatCount` (Latin digits, locale grouping) -->
+    <string name="board_size_best">Best %1$s</string>
+    <!-- Shown instead of the best score when that size has never been scored. -->
+    <string name="board_size_no_best">No best score yet</string>
+    <!-- Joins the goal and best parts of a row. Contains no words. Arguments: %1$s = `board_size_goal`; %2$s = `board_size_best` or `board_size_no_best` -->
+    <string name="board_size_supporting" translatable="false">%1$s · %2$s</string>
+    <!-- Small pill on a size whose saved game is unfinished. ≤ 12 characters (§1.7 rule 7; D-259). -->
+    <string name="in_progress" tools:override="true">In progress</string><!-- reason: compose-ui has a private in_progress with the same English text (PrivateResource) -->
+
+    <!-- D. New-game dialog, win card, game-over card, share -->
+    <!-- Dialog title shown only when a game is in progress. Buttons are `new_game` and `cancel`. -->
+    <string name="new_game_confirm_title">Start a new game?</string>
+    <!-- Title of the win card when the target tile appears. Address the player without grammatical gender. -->
+    <string name="win_title">You win!</string>
+    <!-- Primary button of the win card: continue playing past the target. Glossary term. -->
+    <string name="keep_going">Keep going</string>
+    <!-- Title of the card when no move is left. No exclamation mark. -->
+    <string name="game_over_title">Game over</string>
+    <!-- Label of the box that shows the highest tile of the finished game. -->
+    <string name="best_tile">Best tile</string>
+    <!-- Spoken label of a mini tile that shows the best tile, e.g. "Best tile, 2048". Arguments: %1$s = full decimal value, Latin digits -->
+    <string name="a11y_best_tile">Best tile, %1$s</string>
+    <!-- Shares the result as text: a button on the game-over card, and the spoken label of the icon-only share button on the win card. -->
+    <string name="share">Share</string>
+    <!-- Title of the Android share sheet. -->
+    <string name="share_chooser_title">Share result</string>
+    <!-- Number of moves in a game. Quantity = the move count. Arguments: %1$s = the count, already formatted (do not use %d) -->
+    <plurals name="moves_count">
+        <item quantity="one">%1$s move</item>
+        <item quantity="other">%1$s moves</item>
+    </plurals>
+    <!-- Number of undos used in a game. Quantity = the undo count (never 0; see `undos_none`). Arguments: %1$s = the count, already formatted -->
+    <plurals name="undos_count">
+        <item quantity="one">%1$s undo</item>
+        <item quantity="other">%1$s undos</item>
+    </plurals>
+    <!-- Shown instead of a count when the game used no undo. -->
+    <string name="undos_none">No undo</string>
+    <!-- Joins moves, time and undos. Contains no words. Arguments: %1$s = `moves_count`; %2$s = time "m:ss"; %3$s = `undos_count` or `undos_none` -->
+    <string name="game_over_summary" translatable="false">%1$s · %2$s · %3$s</string>
+    <!-- First line of the shared text. Keep "2048" and every " · " separator. Translate only "best tile". Arguments: %1$s = "4×4"; %2$s = score; %3$s = best tile value; %4$s = `moves_count`; %5$s = time; %6$s = `undos_count`/`undos_none`. All Latin digits, no grouping -->
+    <string name="share_summary">2048 · %1$s · %2$s · best tile %3$s · %4$s · %5$s · %6$s</string>
+
+    <!-- E. Accessibility (TalkBack) and the direction pad -->
+    <!-- Accessibility action on the board and spoken label of the direction-pad button. Direction is the physical screen direction in every locale (the board never mirrors). -->
+    <string name="move_up">Move up</string>
+    <!-- Accessibility action on the board and spoken label of the direction-pad button. Direction is the physical screen direction in every locale (the board never mirrors). -->
+    <string name="move_down">Move down</string>
+    <!-- Accessibility action on the board and spoken label of the direction-pad button. Direction is the physical screen direction in every locale (the board never mirrors). -->
+    <string name="move_left">Move left</string>
+    <!-- Accessibility action on the board and spoken label of the direction-pad button. Direction is the physical screen direction in every locale (the board never mirrors). -->
+    <string name="move_right">Move right</string>
+    <!-- Spoken description of the whole board, e.g. "Game board, 4 by 4. 13 tiles. Highest tile 1024." Arguments: %1$s = N (used twice); %2$s = the `a11y_tiles` sentence; %3$s = highest value -->
+    <string name="a11y_board_description">Game board, %1$s by %1$s. %2$s Highest tile %3$s.</string>
+    <!-- Spoken description of the board while the saved game is still loading (empty cells). Arguments: %1$s = N (used twice) -->
+    <string name="a11y_board_loading">Game board, %1$s by %1$s. Loading.</string>
+    <!-- A full sentence counting tiles on the board. Quantity = tile count (≥ 2 in practice). Arguments: %1$s = count from `formatCount` -->
+    <plurals name="a11y_tiles">
+        <item quantity="one">%1$s tile.</item>
+        <item quantity="other">%1$s tiles.</item>
+    </plurals>
+    <!-- Spoken label of one occupied cell. Rows count from the top, columns from the left, in every locale. Arguments: %1$s = row (1-based); %2$s = column; %3$s = full tile value, Latin digits -->
+    <string name="a11y_cell_tile">Row %1$s, column %2$s, %3$s</string>
+    <!-- Spoken label of one empty cell. Arguments: %1$s = row; %2$s = column -->
+    <string name="a11y_cell_empty">Row %1$s, column %2$s, empty</string>
+    <!-- First sentence of the TalkBack status line after a move. -->
+    <string name="a11y_moved_up">Moved up.</string>
+    <!-- First sentence of the TalkBack status line after a move. -->
+    <string name="a11y_moved_down">Moved down.</string>
+    <!-- First sentence of the TalkBack status line after a move. -->
+    <string name="a11y_moved_left">Moved left.</string>
+    <!-- First sentence of the TalkBack status line after a move. -->
+    <string name="a11y_moved_right">Moved right.</string>
+    <!-- Status-line sentence when one merge happened. The value is the new tile. Arguments: %1$s = value of the created tile (prose number) -->
+    <string name="a11y_merged_1">Merged %1$s.</string>
+    <!-- Status-line sentence for two merges, largest first. Arguments: %1$s, %2$s = created tile values -->
+    <string name="a11y_merged_2">Merged %1$s and %2$s.</string>
+    <!-- Status-line sentence for three merges, largest first. Arguments: %1$s–%3$s = created tile values -->
+    <string name="a11y_merged_3">Merged %1$s, %2$s and %3$s.</string>
+    <!-- Status-line sentence for four or more merges: the three largest, then how many more. Quantity = the extra count in %4$s. Arguments: %1$s–%3$s = largest created values; %4$s = number of further merges -->
+    <plurals name="a11y_merged_more">
+        <item quantity="one">Merged %1$s, %2$s, %3$s and %4$s more.</item>
+        <item quantity="other">Merged %1$s, %2$s, %3$s and %4$s more.</item>
+    </plurals>
+    <!-- Status-line sentence after an accepted move: where the new tile appeared. It comes after the merged sentence and before the score, e.g. "Moved left. Merged 64 and 16. New 2 at row 4, column 1. Score 1,240." Rows count from the top, columns from the left, in every locale. Arguments: %1$s = value of the new tile as a game numeral; %2$s, %3$s = 1-based row and column, in the same number format as `a11y_cell_tile` -->
+    <string name="a11y_spawned">New %1$s at row %2$s, column %3$s.</string>
+    <!-- Last sentence of the status line. Arguments: %1$s = score from `formatCount` -->
+    <string name="a11y_score">Score %1$s.</string>
+    <!-- Status-line sentence after a swipe that changes nothing. -->
+    <string name="a11y_blocked_up">Can\'t move up.</string>
+    <!-- Status-line sentence after a swipe that changes nothing. -->
+    <string name="a11y_blocked_down">Can\'t move down.</string>
+    <!-- Status-line sentence after a swipe that changes nothing. -->
+    <string name="a11y_blocked_left">Can\'t move left.</string>
+    <!-- Status-line sentence after a swipe that changes nothing. -->
+    <string name="a11y_blocked_right">Can\'t move right.</string>
+    <!-- Status line after every undo. Arguments: %1$s = score from `formatCount` -->
+    <string name="a11y_undone">Move undone. Score %1$s.</string>
+    <!-- Status line after New game; one `a11y_spawned` sentence per start tile follows it. -->
+    <string name="a11y_new_game">New game started.</string>
+    <!-- Status line after the board size changes, e.g. "Board 5×5. Score 0." Arguments: %1$s = size label built in code, e.g. "5×5" (Latin digits, U+00D7); %2$s = score from `formatCount` -->
+    <string name="a11y_size_switched">Board %1$s. Score %2$s.</string>
+
+    <!-- F. Statistics -->
+    <!-- Title of the Statistics screen. -->
+    <string name="statistics">Statistics</string>
+    <!-- Spoken label of the trash icon in the Statistics top bar. -->
+    <string name="stats_reset">Reset statistics</string>
+    <!-- First tab: totals over every board size. Other tabs are "3×3" … "8×8" built in code. -->
+    <string name="stats_all_sizes">All sizes</string>
+    <!-- Label of the hero value. -->
+    <string name="stats_best_score">Best score</string>
+    <!-- Label next to the hero mini tile. -->
+    <string name="stats_best_tile">Best tile</string>
+    <!-- Row label; the value is a plain number. -->
+    <string name="stats_games_played">Games played</string>
+    <!-- Row label; the value is "count (percent)". -->
+    <string name="stats_wins">Wins</string>
+    <!-- Win count and win rate, e.g. "9 (24%)". Contains no words. Arguments: %1$s = `formatCount(gamesWon, locale)`; %2$s = Latin-digit percent -->
+    <string name="stats_wins_value" translatable="false">%1$s (%2$s)</string>
+    <!-- Row label: best score of games in which undo was never used. This is the statistic called "Best without undo" elsewhere; keep the wording consistent. -->
+    <string name="stats_best_no_undo">Best score without undo</string>
+    <!-- Row label. -->
+    <string name="stats_average_score">Average score</string>
+    <!-- Row label. -->
+    <string name="stats_total_moves">Total moves</string>
+    <!-- Row label; the value is "h:mm:ss". -->
+    <string name="stats_time_played">Time played</string>
+    <!-- Row label: total undos. -->
+    <string name="stats_undos_used">Undos used</string>
+    <!-- Empty state of one size tab. Arguments: %1$s = size label, e.g. "5×5" -->
+    <string name="stats_empty_title">No games on %1$s yet</string>
+    <!-- Empty state of the All sizes tab. -->
+    <string name="stats_empty_title_all">No games yet</string>
+    <!-- Explains when a game is counted. -->
+    <string name="stats_empty_body">Finished and abandoned games appear here.</string>
+    <!-- First reset dialog title. -->
+    <string name="stats_reset_title">Reset statistics?</string>
+    <!-- First reset dialog body. -->
+    <string name="stats_reset_body">Best scores and statistics for every board size will be cleared. Games in progress are kept.</string>
+    <!-- Confirm button of the first reset dialog. Verb. -->
+    <string name="reset">Reset</string>
+    <!-- Second, final reset dialog title. -->
+    <string name="stats_reset_confirm_title">Reset everything?</string>
+    <!-- Second reset dialog body. -->
+    <string name="stats_reset_confirm_body">This can\'t be undone.</string>
+    <!-- Confirm button of the second reset dialog. -->
+    <string name="stats_reset_confirm_button">Reset everything</string>
+    <!-- Snackbar after the reset. Past participle ("have been reset"), no period. -->
+    <string name="stats_reset_done">Statistics reset</string>
+
+    <!-- G. Settings -->
+    <!-- Section header. -->
+    <string name="settings_section_appearance">Appearance</string>
+    <!-- Row and dialog title: light or dark appearance. In languages with grammatical gender the values below agree with this noun. -->
+    <string name="setting_theme">Theme</string>
+    <!-- Theme value: follow the system dark-theme setting. Agrees with `setting_theme`. -->
+    <string name="theme_system">System default</string>
+    <!-- Theme value. Agrees with `setting_theme`. -->
+    <string name="theme_light">Light</string>
+    <!-- Theme value. Agrees with `setting_theme`. -->
+    <string name="theme_dark">Dark</string>
+    <!-- Row and dialog title: the tile color set. -->
+    <string name="setting_palette">Palette</string>
+    <!-- Product name of the default palette. -->
+    <string name="palette_classic" translatable="false">Classic Refined</string>
+    <!-- Product name of the second palette. -->
+    <string name="palette_neon" translatable="false">Neon Arcade</string>
+    <!-- Switch row. -->
+    <string name="setting_high_contrast">High-contrast tiles</string>
+    <!-- Supporting line of the high-contrast switch. -->
+    <string name="setting_high_contrast_summary">Black or white numbers and tile outlines</string>
+    <!-- Supporting line while Android's own contrast setting forces the switch on. -->
+    <string name="setting_high_contrast_forced">On because the system contrast setting is high</string>
+    <!-- Switch row (Android 12+): use wallpaper colors for the interface. -->
+    <string name="setting_dynamic_color">Dynamic color</string>
+    <!-- Supporting line of the dynamic-color switch. -->
+    <string name="setting_dynamic_color_summary">Use wallpaper colors for buttons and panels. Tiles keep their palette.</string>
+    <!-- Section header. -->
+    <string name="settings_section_motion">Motion and feedback</string>
+    <!-- Row and dialog title: how much animation the game plays. Values below agree with this noun. -->
+    <string name="setting_motion">Motion</string>
+    <!-- Motion value: all animations. -->
+    <string name="motion_full">Full</string>
+    <!-- Motion value: calmer animations. -->
+    <string name="motion_reduced">Reduced</string>
+    <!-- Motion value: no animations. -->
+    <string name="motion_off">Off</string>
+    <!-- Row summary while Android's "Remove animations" is on; the row is disabled. -->
+    <string name="motion_off_system">Off (system animations are off)</string>
+    <!-- Switch row: vibration feedback. Glossary term. -->
+    <string name="setting_haptics">Haptics</string>
+    <!-- Supporting line of the haptics switch. -->
+    <string name="setting_haptics_summary">Feedback for merges, wins and blocked moves</string>
+    <!-- Section header. -->
+    <string name="settings_section_controls">Controls</string>
+    <!-- Row and dialog title: when a swipe turns into a move. -->
+    <string name="setting_move_timing">Move timing</string>
+    <!-- Value: the move happens during the swipe. -->
+    <string name="move_timing_swipe">As you swipe</string>
+    <!-- Value: the move happens when the finger leaves the screen. -->
+    <string name="move_timing_release">When you lift your finger</string>
+    <!-- Row and dialog title. -->
+    <string name="setting_swipe_sensitivity">Swipe sensitivity</string>
+    <!-- Value. Agrees with `setting_swipe_sensitivity`. -->
+    <string name="sensitivity_low">Low</string>
+    <!-- Value (default). -->
+    <string name="sensitivity_medium">Medium</string>
+    <!-- Value. -->
+    <string name="sensitivity_high">High</string>
+    <!-- Supporting line under "Low". -->
+    <string name="sensitivity_low_detail">Needs a longer swipe</string>
+    <!-- Supporting line under "Medium". -->
+    <string name="sensitivity_medium_detail">Recommended</string>
+    <!-- Supporting line under "High". -->
+    <string name="sensitivity_high_detail">Reacts to short swipes</string>
+    <!-- Section header. -->
+    <string name="settings_section_display">Display</string>
+    <!-- Switch row that hides the status and navigation bars. Seeded from the legacy "full screen" nouns (glossary). -->
+    <string name="setting_immersive">Immersive mode</string>
+    <!-- Supporting line of the immersive switch. Use Android's own names for the status bar and navigation bar. -->
+    <string name="setting_immersive_summary">Hide the status and navigation bars</string>
+    <!-- Switch row. -->
+    <string name="setting_keep_screen_on">Keep screen on while playing</string>
+    <!-- Supporting line of the keep-screen-on switch. -->
+    <string name="setting_keep_screen_on_summary">Only while a game is in progress</string>
+    <!-- Section header (Android 13+ only). -->
+    <string name="settings_section_language">Language</string>
+    <!-- Link row that opens Android's per-app language page. -->
+    <string name="setting_app_language">App language</string>
+    <!-- Row summary when no app-specific language is chosen. Agrees with the word for "language" (it may differ from `theme_system`, e.g. ru "Системный" vs "Системная"). -->
+    <string name="setting_app_language_system">System default</string>
+
+    <!-- H. How to play -->
+    <!-- Title of the rules screen. -->
+    <string name="how_to_play">How to play</string>
+    <!-- Section heading (noun). -->
+    <string name="htp_goal">Goal</string>
+    <!-- Keep "3×3" exactly (Latin digits, U+00D7). Arguments: %1$s = "2048"; %2$s = "256" -->
+    <string name="htp_goal_body">Slide the tiles to merge equal numbers and build the %1$s tile. On a 3×3 board the goal is %2$s.</string>
+    <!-- Section heading (noun or gerund). -->
+    <string name="htp_moving">Moving</string>
+    <!-- Body of the How to play section "Moving". -->
+    <string name="htp_moving_body">Swipe up, down, left or right. Every tile slides as far as it can in that direction.</string>
+    <!-- Section heading. -->
+    <string name="htp_merging">Merging</string>
+    <!-- Body of the How to play section "Merging". -->
+    <string name="htp_merging_body">Two touching tiles with the same number merge into one tile with their sum. A tile merges only once per move.</string>
+    <!-- Spoken description of the left-to-right example picture. Keep the digits and their order. -->
+    <string name="htp_merging_illustration_cd">Example: 2, 2, 2, 2 moved left becomes 4, 4</string>
+    <!-- Section heading. -->
+    <string name="htp_new_tiles">New tiles</string>
+    <!-- "2" and "4" are tile values: keep them as Latin digits. "nine times out of ten" is written in words. -->
+    <string name="htp_new_tiles_body">After every move that changes the board, a new tile appears in a random empty cell: a 2 nine times out of ten, otherwise a 4.</string>
+    <!-- Section heading. -->
+    <string name="htp_board_sizes">Board sizes</string>
+    <!-- Body of the How to play section "Board sizes", below the table of sizes and goals. -->
+    <string name="htp_board_sizes_body">Each size keeps its own game, best score and statistics.</string>
+    <!-- Section heading (noun; may differ from the `undo` button verb). -->
+    <string name="htp_undo">Undo</string>
+    <!-- "Best without undo" is the statistic name; match `stats_best_no_undo`. -->
+    <string name="htp_undo_body">Undo is unlimited and also works after game over. Undo brings back the same next tile, so repeating a move gives the same result. Undos are counted, and games with undo don\'t count toward Best without undo.</string>
+    <!-- Section heading for the key table. -->
+    <string name="htp_keys">Keyboard and controllers</string>
+    <!-- Key-table label: the keys that move tiles. Verb. -->
+    <string name="htp_key_move">Move</string>
+    <!-- Translate only "Arrow keys" and "D-pad". Keep the letters, spaces and " · " separators. -->
+    <string name="htp_key_move_keys">Arrow keys · W A S D · H J K L · D-pad</string>
+    <!-- Translate only the key name "Backspace" if your keyboards label it differently; keep "U" and "Ctrl+Z". -->
+    <string name="htp_key_undo_keys">U · Ctrl+Z · Backspace</string>
+    <!-- Keep "N · R"; translate the parenthesis. -->
+    <string name="htp_key_new_game_keys">N · R (asks first while a game is in progress)</string>
+    <!-- Section heading: Android's screen reader. Product name. -->
+    <string name="htp_accessibility" translatable="false">TalkBack</string>
+    <!-- Keep "TalkBack". Use the same words as `htp_key_move`, `undo` and `new_game` for the three actions. -->
+    <string name="htp_accessibility_body">With TalkBack on, a direction pad appears below the board, and the board offers Move, Undo and New game in the TalkBack actions menu.</string>
+
+    <!-- I. About, Licenses, What's new -->
+    <!-- Title of the About screen. -->
+    <string name="about">About</string>
+    <!-- Version line, e.g. "Version 3.0.0 (30000)". Arguments: %1$s = versionName; %2$s = versionCode (Latin digits) -->
+    <string name="about_version">Version %1$s (%2$s)</string>
+    <!-- Section heading listing every release of this app. -->
+    <string name="about_whats_new">What\'s new</string>
+    <!-- Row that opens the GitHub repository. -->
+    <string name="about_source_code">Source code</string>
+    <!-- Supporting text of the source row. -->
+    <string name="about_source_code_url" translatable="false">github.com/clayboicardi/2048-android-modern-refresh</string>
+    <!-- Section heading. -->
+    <string name="about_privacy">Privacy</string>
+    <!-- The privacy policy shown in the app (D-123). Translate faithfully; do not add or remove claims. Keep "Android" and "Google". -->
+    <string name="privacy_text">This app collects nothing. It has no network access, no accounts, no ads and no analytics. Game data stays on your device. Android\'s own backup may copy it to your Google account if you enabled device backup.</string>
+    <!-- Row that opens the licenses screen. -->
+    <string name="about_licenses">Open-source licenses</string>
+    <!-- Section heading; its rows are English names. -->
+    <string name="about_credits">Credits</string>
+    <!-- Section heading: release history of the original Android app (shown in English). -->
+    <string name="about_legacy_history">Legacy history</string>
+    <!-- Title of the licenses screen. Same words as `about_licenses`. -->
+    <string name="licenses">Open-source licenses</string>
+    <!-- Official license name. -->
+    <string name="license_mit_name" translatable="false">MIT License</string>
+    <!-- Official license name. -->
+    <string name="license_ofl_name" translatable="false">SIL Open Font License 1.1</string>
+    <!-- Official license name. -->
+    <string name="license_apache_name" translatable="false">Apache License 2.0</string>
+    <!-- Toggle row under a license group. -->
+    <string name="license_show_text">Show license text</string>
+    <!-- Same toggle while expanded. -->
+    <string name="license_hide_text">Hide license text</string>
+    <!-- Title of the sheet shown once after an update. -->
+    <string name="whats_new_title">What\'s new</string>
+    <!-- Subtitle of the sheet. Arguments: %1$s = versionName, e.g. "3.0.0" -->
+    <string name="whats_new_version">Version %1$s</string>
+    <!-- Bullet in the 3.0.0 change list. No final period. -->
+    <string name="whatsnew_30000_1">Rebuilt from scratch as a fast native app</string>
+    <!-- Bullet. Keep "3×3" and "8×8". -->
+    <string name="whatsnew_30000_2">Board sizes from 3×3 to 8×8, each with its own best score</string>
+    <!-- Bullet. -->
+    <string name="whatsnew_30000_3">Unlimited undo, even after game over</string>
+    <!-- Bullet. "Neon Arcade" is a product name; keep it in Latin letters. -->
+    <string name="whatsnew_30000_4">Light, dark, Neon Arcade and high-contrast themes</string>
+    <!-- Bullet. Keep "TalkBack". -->
+    <string name="whatsnew_30000_5">Statistics, keyboard controls and TalkBack support</string>
 </resources>

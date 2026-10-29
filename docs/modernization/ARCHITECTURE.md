@@ -3155,7 +3155,7 @@ Root package:
 | `ManifestPolicyTest` | Robolectric, including `legacyLauncherIconOnApi24` and `splashThemeUsesIdentityColors` | M4 |
 | `ImmersiveModeTest`, `KeepScreenOnTest` | Robolectric | M4 |
 | `LocalizationTest` | Robolectric (F24-AC8, F28-AC2–AC6) | M5 |
-| `TranslationQualityTest` | Robolectric, the 9 methods of L10N_STORE_LEGAL.md §1.9 | M5 |
+| `TranslationQualityTest` | Robolectric, the 10 methods of L10N_STORE_LEGAL.md §1.9 (D-259) | M5 |
 
 `data/` (all JVM, M2): `PersistenceFixturesTest`, `PersistenceCorruptionTest`, `PersistenceBudgetTest`, `ConflatedWriterTest`, `SettingsRepositoryTest`, `RecordsMathTest`, `LongGameGeneratorTest`, `DataMigrationSeamTest`.
 

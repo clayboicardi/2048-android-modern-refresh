@@ -1755,7 +1755,7 @@ Geometry (research/01 §5.3, research/07-critique.md G4):
 
 - **Rendering:** `Bitmap(512, 512, ARGB_8888)`, fill `#E6A11A`, then draw `ic_launcher_foreground` with `setBounds(-128, -128, 640, 640)`.
   - The 108-unit canvas is scaled so that its visible 72-unit centre fills 512 px, which matches what launchers show.
-  - The glyph band becomes 398 × 133 px. No mask is applied; Play applies its own.
+  - The glyph band becomes 398 × 133 px. No mask is applied; a store that shows the icon applies its own (D-257: there is no Google Play listing).
 - **Output:** an opaque PNG at `fastlane/metadata/android/en-US/images/icon.png`, written by the test-only `store/OpaquePngWriter` (`java.util.zip`, bit depth 8, color type 2; D-190).
 
 ### 8.5 Feature graphic, 1024 × 500 (D-115)

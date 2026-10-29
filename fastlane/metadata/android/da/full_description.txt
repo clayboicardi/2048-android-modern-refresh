@@ -1,0 +1,32 @@
+2048 er det klassiske puslespil med glidende brikker, genopbygget fra bunden som en hurtig, native Android-app. Stryg for at flytte alle brikker på én gang. To brikker med samme tal smelter sammen til én. Nå frem til 2048-brikken, og fortsæt derefter så langt, du kan.
+
+Privatliv fra starten
+• Virker helt offline: appen har ingen internetadgang.
+• Ingen reklamer, ingen sporing, ingen brugsanalyse og ingen konti.
+• Ingen runtime-tilladelser. Dine spil og din statistik bliver på din enhed.
+
+Spil på din måde
+• Brætstørrelser fra 3×3 til 8×8. Hver størrelse har sit eget gemte spil, sin egen bedste score og sin egen statistik. På 3×3 er målet 256.
+• Ubegrænset fortryd, også når spillet er slut. Fortryd giver den samme næste brik igen, så du kan rette fejltrin uden at ændre dit held. Fortrydelser tælles, og en separat bedste score holder styr på spil uden fortryd.
+• Dit spil gemmes efter hvert træk og fortsætter præcis dér, hvor du slap.
+• Statistik for hver brætstørrelse: spillede spil, sejre, bedste brik, gennemsnitlig score, træk i alt, spilletid og brugte fortrydelser.
+
+Udseende
+• To paletter, Classic Refined og Neon Arcade, i lyst og mørkt tema samt en mulighed for høj kontrast.
+• Bløde animationer med indstillingerne Fuld, Reduceret og Fra. Slår du animationer fra i Androids indstillinger, er de også slået fra her.
+• Valgfri haptisk feedback, justerbar strygefølsomhed og tidspunkt for træk samt fuld skærm, der skjuler systembjælkerne.
+• Layout til telefoner, tablets, foldbare enheder, liggende format og computervinduer.
+
+Tilgængelighed
+• Fuld understøttelse af TalkBack: alle felter kan læses op, hvert træk annonceres, og der vises retningsknapper, mens TalkBack er slået til.
+• Spil med tastatur, D-pad eller controller: piletaster, WASD eller HJKL til at flytte; U, Ctrl+Z eller Backspace til at fortryde.
+• Tekst, der forbliver læsbar ved store skriftstørrelser, og brikfarver, der er kontrolleret for kontrast og nedsat farvesyn.
+
+En ny app
+Dette er en ny app med et nyt pakkenavn (com.clayboicardi.game2048); den gamle app kan forblive installeret ved siden af; resultater overføres ikke.
+
+Open source
+Gratis og open source under MIT-licensen: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Medvirkende
+Det oprindelige 2048-spil er lavet af Gabriele Cirulli. Den oprindelige 2048-app til Android er lavet af Paul Sarbinowski (uberspot) og appens bidragydere og oversættere. Denne versions oversættelser er maskinassisterede; rettelser er velkomne på GitHub.

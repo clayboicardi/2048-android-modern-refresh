@@ -1,1 +1,1 @@
-2048 Puzzle Oyunu. Bu android açık kaynak limanıdır.
+Klasik 2048 kaydırmalı karo bulmacası. Çevrimdışı, reklam yok, takip yok.

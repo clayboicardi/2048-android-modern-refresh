@@ -1,0 +1,1 @@
+Klassisk 2048-puslespil med glidende brikker. Offline, uden reklamer og sporing.

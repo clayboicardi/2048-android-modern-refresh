@@ -1,1 +1,1 @@
-2048 dėlionė. Tai Android atviro kodo uosto.
+Klasikinis 2048 plytelių stumdymo galvosūkis. Be interneto, reklamų ir sekimo.

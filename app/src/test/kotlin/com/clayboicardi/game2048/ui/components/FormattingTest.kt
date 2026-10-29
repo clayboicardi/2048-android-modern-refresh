@@ -50,6 +50,15 @@ class FormattingTest {
         assertThat(formatPercent(0, 0, Locale.ENGLISH)).isEqualTo("0%")
     }
 
+    /** L-AC5 */
+    @Test
+    fun toLatinDigitsMapsArabicIndicAndPersian() {
+        assertThat("\u0661\u0662\u0663".toLatinDigits()).isEqualTo("123")
+        assertThat("\u06F2\u06F0\u06F4\u06F8".toLatinDigits()).isEqualTo("2048")
+        val ascii = "Score 1234567890 · 4×4"
+        assertThat(ascii.toLatinDigits()).isEqualTo(ascii)
+    }
+
     private companion object {
         /** 0 ms, 6:41, one hour and 100 hours. */
         val ELAPSED = listOf(0L, 401_000L, 3_600_000L, 360_000_000L)

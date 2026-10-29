@@ -1,0 +1,32 @@
+2048 ist das klassische Schiebepuzzle, von Grund auf neu entwickelt als schnelle native Android-App. Wische, um alle Kacheln auf einmal zu verschieben. Zwei Kacheln mit derselben Zahl verschmelzen zu einer. Erreiche die Kachel 2048 und spiele dann so weit weiter, wie du kommst.
+
+Von Grund auf privat
+• Funktioniert komplett offline: Die App hat keinen Internetzugriff.
+• Keine Werbung, keine Nachverfolgung, keine Analysedienste und keine Konten.
+• Keine Laufzeitberechtigungen. Deine Spiele und Statistiken bleiben auf deinem Gerät.
+
+Spiele, wie du willst
+• Spielfeldgrößen von 3×3 bis 8×8. Jede Größe hat ihr eigenes gespeichertes Spiel, ihren eigenen Rekord und ihre eigene Statistik. Auf 3×3 ist das Ziel 256.
+• Unbegrenztes Rückgängigmachen, auch nach Spielende. Danach kommt wieder dieselbe nächste Kachel, so korrigierst du Ausrutscher, ohne dein Glück zu verändern. Rücknahmen werden gezählt, und ein eigener Rekord erfasst Spiele ohne Rücknahme.
+• Dein Spiel wird nach jedem Zug gespeichert und geht genau dort weiter, wo du aufgehört hast.
+• Statistik für jede Spielfeldgröße: gespielte Spiele, Siege, höchste Kachel, Punkteschnitt, Züge insgesamt, Spielzeit und genutzte Rücknahmen.
+
+Aussehen und Bedienung
+• Zwei Paletten, Classic Refined und Neon Arcade, in hellem und dunklem Design, dazu eine kontrastreiche Option.
+• Flüssige Animationen mit den Stufen „Alle“, „Reduziert“ und „Aus“. Wenn du Animationen in den Android-Einstellungen ausschaltest, sind sie auch hier aus.
+• Optionales haptisches Feedback, einstellbare Wischempfindlichkeit und Zugauslösung sowie ein Vollbildmodus, der die Systemleisten ausblendet.
+• Angepasste Darstellung für Smartphones, Tablets, faltbare Geräte, Querformat und Desktop-Fenster.
+
+Barrierefreiheit
+• Volle TalkBack-Unterstützung: Jedes Feld kann vorgelesen werden, jeder Zug wird angesagt, und solange TalkBack an ist, erscheint ein Steuerkreuz.
+• Spiele mit Tastatur, Steuerkreuz oder Controller: Pfeiltasten, WASD oder HJKL zum Schieben; U, Ctrl+Z oder Rücktaste zum Rückgängigmachen.
+• Text, der auch bei großer Schrift lesbar bleibt, und Kachelfarben, die auf Kontrast und Farbsehschwächen geprüft sind.
+
+Eine neue App
+Dies ist eine neue App mit einem neuen Paketnamen (com.clayboicardi.game2048); die alte App kann daneben installiert bleiben; Punktestände werden nicht übernommen.
+
+Quelloffen
+Frei und quelloffen unter der MIT-Lizenz: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Mitwirkende
+Das ursprüngliche Spiel 2048 stammt von Gabriele Cirulli. Die ursprüngliche 2048-App für Android stammt von Paul Sarbinowski (uberspot) sowie seinen Mitwirkenden und Übersetzern. Die Übersetzungen dieser Version sind maschinell unterstützt; Korrekturen sind auf GitHub willkommen.

@@ -261,6 +261,9 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-254 | About | The bullet glyph, credit separator and version titles as non-resource text; the What's new sheet lists all newer bullets oldest first; the merge illustration stacks below 400 dp; the OFL group shows its text |
 | D-255 | Motion | The restore gate holds Motion Off until a composition has shown the loaded appearance (`AppearanceUi.loaded`), so settings and game loads landing in one frame do not crossfade |
 | D-256 | Adaptive layout | The layout preference, the title and the hero badge read `GameLayout`'s measured window (constraints plus safe insets) at the `WindowSizeClass` breakpoints; `rememberLayoutMode()` is removed |
+| D-257 | Scope | No Google Play listing (owner, 2026-10-29); an F-Droid submission follows after the execution PR merges. The listing tree stays store-neutral and F-Droid-compatible; no AAB, upload key, Play Console or Data safety files; no text implies a Play listing |
+| D-258 | Localization | Every `values-xx/strings.xml` declares `xmlns:tools` and gives its `in_progress` `tools:override="true"` (Lint `PrivateResource` reports a locale override of compose-ui's private string too); locale files stay comment-free; no-break spaces in string resources are the escape `\u00A0`, in store texts the U+00A0 character |
+| D-259 | Localization | Chip labels stay within 12 characters: fr and lt "New best" become "Record battu" and "Rekordas!"; fa "Keep going" writes its ezafe; `TranslationQualityTest` gains `chipLabelsAtMostTwelveCharacters`; the `in_progress` context says ≤ 12 |
 
 ---
 
@@ -490,6 +493,7 @@ Not in the research/05 roadmap but **In v1.0**:
 - **Rationale:** U5 and U6 constraints; research/05-features.md §1 (permission traps), §5 (tiers); research/07-critique.md §4 D3.
 - **Rejected:** shipping any deferred item in the execution PR. It widens the single PR that U7 requires to land hands-off.
 - **Source:** [USER] U5, U6 · [ORCH] O2, O8 · [RESEARCH] research/05 §5, research/07 §4 D3.
+- **Note:** Clarified by D-257 (no Google Play listing; an F-Droid submission follows after the execution PR).
 
 #### D-005 — No legacy data import; side-by-side install
 - **Decision:**
@@ -2061,6 +2065,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/07 G7.
 - **Rejected:** English fallbacks for untranslated strings (`MissingTranslation` is fatal, D-100); importing the machine-translated listing texts.
 - **Source:** [RESEARCH].
+- **Note:** Clarified by D-259 (three glossary terms changed in M5; chip labels are length-checked).
 
 #### D-106 — Pseudo-locales
 - **Decision:**
@@ -2301,6 +2306,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** U5; research/07 G18.
 - **Rejected:** research/06 §3.5's release workflow.
 - **Source:** [USER] U5.
+- **Note:** Clarified by D-257.
 
 #### D-134 — Reproducibility hygiene and R8 rules
 - **Decision.** The build:
@@ -3810,6 +3816,7 @@ jobs:
 - **Rationale:** `androidx.compose.ui:ui` declares a private `in_progress` ("In progress", the state description of its progress semantics) with translations in its own locales. An app resource of the same name overrides it, and Lint's `PrivateResource` check reports that override as a warning, which D-142 makes an error. The two strings mean the same thing, so the override changes no text Compose shows in English. Until M5 adds the 20 translations, a non-English locale shows compose-ui's own translation of the pill, because an app default overrides only the library's default; from M5 the app's translations win in its locales.
 - **Rejected:** renaming the key (it is the §1.3 and DESIGN_SYSTEM.md §6.7 name, and the conflict is with a library's private resource, not with an app key); a Lint baseline or a `lint.xml` entry (D-142).
 - **Source:** [ORCH] O17 (D-173 change control, M3 part 2 integration).
+- **Note:** Amended by D-258 (each locale's `in_progress` carries the same override).
 
 #### D-240 — Game buttons show focus visuals only in keyboard input mode (extends D-227; clarifies D-081, D-053; amends DESIGN_SYSTEM.md §7.7)
 - **Decision:**
@@ -4015,6 +4022,39 @@ jobs:
 - **Rationale:** M4-B built the preference from the measured window, and the tests rely on that, so D-092 and the code had diverged without a record. Reading one window value for both the preference and the fit keeps them consistent.
 - **Rejected:** taking the preference from the size class and the fit from the constraints (two window readings that can disagree in a sub-window, and every multi-window screen test would need its own device qualifiers); keeping `rememberLayoutMode()` without a caller or a test.
 - **Source:** [ORCH] O17 (D-173 change control, M4 review).
+
+#### D-257 — Distribution: no Google Play listing; F-Droid after the execution PR (clarifies D-004 items 1 and 10, D-113, D-114, D-116, D-133; amends L10N_STORE_LEGAL.md §2.7, §5.7)
+- **Decision:**
+  - The repository owner decided on 2026-10-29 that the app gets **no Google Play listing**. An F-Droid submission (an `fdroiddata` recipe, L10N_STORE_LEGAL.md §2.7) is a follow-up after the execution PR merges; it stays outside this PR (D-004 item 10).
+  - M5's scope is unchanged. `fastlane/metadata/android/` stays store-neutral and F-Droid-compatible (L10N_STORE_LEGAL.md §2.7): D-113's 22 directories, D-114's texts, D-115's images and D-190's checks stay as decided. The length limits (title 30, short 80, full 4,000, changelog 500 characters) and the opaque PNGs stay: they satisfy F-Droid and fastlane as well, so the tree is valid for any store.
+  - No Play-only artifact is added: no `bundleRelease` (AAB) task or upload, no upload key, no Play Console, Data safety, content-rating or Play-specific listing files. The committed sideload key stays as decided (D-131).
+  - No tracked text (README, `PRIVACY.md`, `NOTICE`, the store texts, the in-app strings, `signing/README.md`, docs) says or implies that a Google Play listing exists. The README carries no store badges (L10N_STORE_LEGAL.md §4.9). Statements that the sideload key is never used for Google Play or any other store (L10N_STORE_LEGAL.md §5.1, §5.2) stay true and stay.
+  - L10N_STORE_LEGAL.md §5.7 (future real signing) drops its Play-only items: a future release key signs release APKs only (no AAB for Play App Signing), and nothing fills in a Play Console privacy link or a Data safety form. F-Droid signs its own builds (§2.7 item 2).
+- **Rationale:** the owner's distribution choice; D-113's tree is the metadata F-Droid reads from the repository, so keeping it store-neutral costs nothing and keeps the follow-up small.
+- **Rejected:** an AAB or Play upload path; Play Console or Data safety files; dropping the store graphics or the length limits (F-Droid shows the same graphics and texts).
+- **Source:** [USER] owner decision of 2026-10-29, relayed by the orchestrator · [ORCH] O17 (D-173 change control, M5 contracts).
+
+#### D-258 — Locale-file conventions: every `in_progress` overrides compose-ui's private string; no-break spaces are written `\u00A0` (amends D-239; L10N_STORE_LEGAL.md §1.3 rule 6, §1.7 rule 8 and the fr row, §1.8 step 3)
+- **Decision:**
+  - Each `values-xx/strings.xml` starts `<resources xmlns:tools="http://schemas.android.com/tools">` and declares `<string name="in_progress" tools:override="true">…</string>`. `in_progress` stays the only key with `tools:override` (D-239), now in all 21 files.
+  - Locale files stay comment-free (L10N_STORE_LEGAL.md §1.3 rule 6): the reason is the same-line comment on the `values/strings.xml` declaration and this entry. `tools:override` marks an intended override for `PrivateResource`; it suppresses none of the app's own checks (`MissingTranslation`, `ExtraTranslation`, the format and plural checks still apply).
+  - **No-break spaces.** L10N_STORE_LEGAL.md §1.7 rule 8 and its fr row ask for no-break spaces written so that reviewers can see them, but the notation had become a literal U+00A0 in the text. In string resources it is the aapt2 escape `\u00A0` (for example fr `Vous avez gagné\u00A0!`). Store-listing files are plain text without escapes and carry the U+00A0 character itself.
+- **Evidence:** M5 contracts, `./gradlew :app:lintDebug` with `values-de/strings.xml` declaring `<string name="in_progress">Läuft</string>`: `Error: Overriding @string/in_progress which is marked as private in androidx.compose.ui:ui-android:1.12.1. If deliberate, use tools:override="true", otherwise pick a different name. [PrivateResource]`. With `tools:override="true"` the same file passes Lint.
+- **Rationale:** compose-ui ships translations of its private `in_progress` in its own locales, and Lint checks the override in every values folder, not only the default one.
+- **Rejected:** renaming the key (D-239); a `lint.xml` entry or baseline (D-142).
+- **Source:** [ORCH] O17 (D-173 change control, M5 contracts).
+
+#### D-259 — Glossary terms that break the chip-label limit; a length check for chip labels (clarifies D-105; amends L10N_STORE_LEGAL.md §1.3 `in_progress` row, §1.6, §1.9, §1.14 L-AC4)
+- **Decision:**
+  - L10N_STORE_LEGAL.md §1.7 rule 7 (and the `new_best_label` context comment) cap `score_label`, `best_label`, `new_best_label` and `in_progress` at 12 characters, but two §1.6 glossary terms for "New best" were longer: fr "Nouveau record" (14) and lt "Naujas rekordas" (15). The glossary changes, together with the strings, in one commit (§1.6): fr "Record battu" (12, the usual French for a beaten record) and lt "Rekordas!" (9; no 12-character Lithuanian phrase keeps "new", and the exclamation marks the moment while the chip's colour and star mark the state). Upper-cased, they read "RECORD BATTU" and "REKORDAS!".
+  - fa "Keep going" becomes "ادامهٔ بازی": the other fa glossary compounds write the ezafe after a final ه as U+0647 U+0654 ("صفحهٔ بازی", "اندازهٔ صفحه"), and this one did not.
+  - `TranslationQualityTest` gains a tenth method, `chipLabelsAtMostTwelveCharacters`: the four keys have at most 12 code points in each of the 20 locales. L-AC4 covers all 10 methods.
+  - The `in_progress` context (L10N_STORE_LEGAL.md §1.3 row and its `values/strings.xml` comment) says "≤ 12 characters", as §1.7 rule 7 does; it said 14. Every translation was already within 12.
+  - `docs/modernization/i18n-glossary.md` stays a verbatim copy of §1.6, with a note on these three changes.
+- **Evidence:** M5 integration, `./gradlew :app:testDebugUnitTest --tests '*TranslationQualityTest.chipLabelsAtMostTwelveCharacters'` before the change: `2 problems: [fr] new_best_label: "Nouveau record" has 14 characters, at most 12` and `[lt] new_best_label: "Naujas rekordas" has 15 characters, at most 12`. The M5-T2 and M5-T3 handoffs reported the same conflict; both kept the glossary terms, as their briefs required. Scratch captures of `FIX_MID_4` with `newBestAnnounced = true` (not committed) at 412 dp (Pixel 7) and 360 dp: at 412 dp the 12-character labels ("NEUER REKORD", "НОВЫЙ РЕКОРД", "RECORD BATTU") stay on one line and the title keeps its size, while "NOUVEAU RECORD" and "NAUJAS REKORDAS" widened the chip until the title shrank; at 360 dp "REKORDAS!" stays on one line and the 12-character labels wrap to two lines, as D-084 allows.
+- **Rationale:** the label changes when a game beats its best, mid-game; a longer one widens the BEST chip or wraps it (DESIGN_SYSTEM.md §7.2), and the header re-lays out around it. Rule 7's 12 characters is what the de and ru labels ("Neuer Rekord", "Новый рекорд") already use, and the evidence above shows that at Pixel 7 width it leaves the title size and the header rows as they were.
+- **Rejected:** a recorded exception to rule 7 for fr and lt (the title would still shrink at Pixel 7 width when the moment fires); abbreviations such as "Nouv. record" or "Naujas rek."; lt "Naujas!" ("new!", which drops the record).
+- **Source:** [ORCH] O17 (D-173 change control, M5 integration).
 
 ---
 

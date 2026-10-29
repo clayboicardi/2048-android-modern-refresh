@@ -2008,7 +2008,7 @@ Every test class named in §1, plus the motion classes of MOTION_SPEC.md §8.5 a
 | `ImmersiveModeTest` | Robolectric | root | M4 | F19-AC1…AC5 |
 | `KeepScreenOnTest` | Robolectric | root | M4 | F20-AC1…AC5 |
 | `LocalizationTest` | Robolectric | root | M5 | F24-AC8, F28-AC2…AC6 |
-| `TranslationQualityTest` | Robolectric | root | M5 | L-AC4: the 9 methods of L10N_STORE_LEGAL.md §1.9 (class KDoc `/** L-AC4 */`) |
+| `TranslationQualityTest` | Robolectric | root | M5 | L-AC4: the 10 methods of L10N_STORE_LEGAL.md §1.9 (class KDoc `/** L-AC4 */`; D-259) |
 | `GameScreenTest` | Robolectric | `game/` | M3–M4 | M3: F02-AC7, F03-AC11…AC14, F03-AC16, F03-AC19, F04-AC2…AC7, F05-AC10…AC13, F06-AC1…AC6, F06-AC10, F09-AC5, F09-AC6, F10-AC6…AC8, F13-AC9, F13-AC10, F13-AC13, F21-AC2, F21-AC10; F03-AC18 and F04-AC14 for the two portrait windows (M3 part 2's STACKED layout, D-244). M4: F03-AC18 and F04-AC14's `w915dp-h412dp-land` window (D-244), F05-AC17, F17-AC15, F17-AC21, F17-AC23, F17-AC24, F18-AC10, F18-AC12, F18-AC16, F22-AC5, F22-AC6, F22-AC9, F24-AC7 |
 | `TalkBackModeTest` | Robolectric | `game/` | M4 | F17-AC8…AC14, F17-AC19, F17-AC20 |
 | `TileRecompositionTest` | Robolectric | `game/board/` | M3 | F13-AC12 (also AC-PERF-1) |

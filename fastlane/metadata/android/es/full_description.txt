@@ -1,0 +1,32 @@
+2048 es el clásico rompecabezas de fichas deslizantes, reconstruido desde cero como una aplicación nativa y rápida para Android. Desliza para mover todas las fichas a la vez. Dos fichas con el mismo número se combinan en una. Consigue la ficha 2048 y sigue jugando hasta donde puedas.
+
+Privacidad desde el diseño
+• Funciona totalmente sin conexión: la aplicación no tiene acceso a internet.
+• Sin anuncios, sin rastreo, sin analíticas y sin cuentas.
+• Sin permisos de tiempo de ejecución. Tus partidas y estadísticas se quedan en tu dispositivo.
+
+Juega a tu manera
+• Tamaños de tablero de 3×3 a 8×8. Cada tamaño tiene su propia partida guardada, su mejor puntuación y sus estadísticas. En 3×3 el objetivo es 256.
+• Deshacer ilimitado, incluso tras el fin de la partida. Deshacer recupera la misma ficha siguiente, así que corrige despistes sin cambiar tu suerte. Los movimientos deshechos se cuentan, y una mejor puntuación aparte registra las partidas jugadas sin deshacer.
+• Tu partida se guarda tras cada movimiento y continúa exactamente donde la dejaste.
+• Estadísticas para cada tamaño de tablero: partidas jugadas, victorias, mejor ficha, puntuación media, movimientos totales, tiempo jugado y movimientos deshechos.
+
+Aspecto y sensaciones
+• Dos paletas, Classic Refined y Neon Arcade, en temas claro y oscuro, además de una opción de alto contraste.
+• Animaciones fluidas con los ajustes Completas, Reducidas y Desactivadas. Si desactivas las animaciones en los ajustes de Android, también se desactivan aquí.
+• Respuesta háptica opcional, sensibilidad del deslizamiento y momento del movimiento ajustables, y un modo de pantalla completa que oculta las barras del sistema.
+• Diseños para teléfonos, tabletas, plegables, modo horizontal y ventanas de escritorio.
+
+Accesibilidad
+• Compatibilidad total con TalkBack: se puede leer cada casilla, se anuncia cada movimiento y aparece un panel de dirección mientras TalkBack está activado.
+• Juega con teclado, cruceta o mando: teclas de flecha, WASD o HJKL para mover; U, Ctrl+Z o Retroceso para deshacer.
+• Texto que sigue siendo legible con tamaños de fuente grandes y colores de fichas revisados para el contraste y las deficiencias en la visión del color.
+
+Una aplicación nueva
+Esta es una aplicación nueva con un nombre de paquete nuevo (com.clayboicardi.game2048); la aplicación antigua puede seguir instalada al mismo tiempo; las puntuaciones no se transfieren.
+
+Código abierto
+Libre y de código abierto con la licencia MIT: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Créditos
+El juego 2048 original es de Gabriele Cirulli. La aplicación 2048 original para Android es de Paul Sarbinowski (uberspot) y sus colaboradores y traductores. Las traducciones de esta versión se han hecho con ayuda de traducción automática; las correcciones son bienvenidas en GitHub.

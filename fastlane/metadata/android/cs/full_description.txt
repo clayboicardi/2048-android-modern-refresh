@@ -1,0 +1,32 @@
+2048 je klasický hlavolam s posouváním dlaždic, od základu přepracovaný jako rychlá nativní aplikace pro Android. Přejetím prstu posunete všechny dlaždice najednou. Dvě dlaždice se stejným číslem se spojí v jednu. Dosáhněte dlaždice 2048 a pak hrajte dál, jak nejdál to půjde.
+
+Soukromí od základu
+• Funguje zcela offline: aplikace nemá přístup k internetu.
+• Žádné reklamy, žádné sledování, žádná analytika a žádné účty.
+• Žádná oprávnění za běhu. Vaše hry a statistiky zůstávají ve vašem zařízení.
+
+Hrajte po svém
+• Velikosti plochy od 3×3 do 8×8. Každá velikost má vlastní uloženou hru, nejlepší skóre a statistiky. Na ploše 3×3 je cílem 256.
+• Neomezené vracení tahů, i po konci hry. Vrácení tahu přinese stejnou další dlaždici, takže opraví přehmaty, aniž by změnilo vaše štěstí. Každé vrácení tahu se počítá a samostatné nejlepší skóre sleduje hry odehrané bez vracení.
+• Hra se uloží po každém tahu a pokračuje přesně tam, kde byla přerušena.
+• Statistiky pro každou velikost plochy: odehrané hry, výhry, nejlepší dlaždice, průměrné skóre, celkový počet tahů, odehraný čas a použitá vrácení tahu.
+
+Vzhled a dojem
+• Dvě palety, Classic Refined a Neon Arcade, ve světlém i tmavém motivu a navíc vysoce kontrastní režim.
+• Plynulé animace s nastavením Plné, Omezené a Vypnuté. Když vypnete animace v nastavení Androidu, vypnou se i zde.
+• Volitelná haptická odezva, nastavitelná citlivost přejetí prstem a načasování tahu a režim celé obrazovky, který skryje systémové lišty.
+• Rozvržení pro telefony, tablety, skládací zařízení, orientaci na šířku a okna na počítači.
+
+Přístupnost
+• Plná podpora TalkBack: každé pole lze přečíst, každý tah je oznámen a při zapnutém TalkBack se zobrazí směrový ovladač.
+• Hrajte na klávesnici, D-padu nebo herním ovladači: šipky, WASD nebo HJKL pro pohyb; U, Ctrl+Z nebo Backspace pro vrácení tahu.
+• Text, který zůstane čitelný i při velkém písmu, a barvy dlaždic ověřené z hlediska kontrastu a poruch barevného vidění.
+
+Nová aplikace
+Toto je nová aplikace s novým názvem balíčku (com.clayboicardi.game2048); původní aplikace může zůstat nainstalovaná vedle ní; skóre se nepřenáší.
+
+Otevřený zdrojový kód
+Svobodný software s otevřeným zdrojovým kódem pod licencí MIT: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Poděkování
+Původní hru 2048 vytvořil Gabriele Cirulli. Původní aplikaci 2048 pro Android vytvořil Paul Sarbinowski (uberspot) spolu s přispěvateli a překladateli. Překlady této verze vznikly za pomoci strojového překladu; opravy uvítáme na GitHubu.

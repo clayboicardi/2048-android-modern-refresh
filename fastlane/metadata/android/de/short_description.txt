@@ -1,1 +1,1 @@
-2048 Puzzle-Spiel. Dies ist die Open-Source-Android-Port.
+Klassisches Schiebepuzzle 2048. Offline, ohne Werbung, ohne Nachverfolgung.

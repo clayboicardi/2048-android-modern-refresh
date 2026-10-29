@@ -1,0 +1,1 @@
+Klasyczna gra 2048 z przesuwaniem kafelków. Offline, bez reklam i śledzenia.

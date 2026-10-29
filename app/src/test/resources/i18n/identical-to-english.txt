@@ -1,0 +1,31 @@
+# Translations allowed to equal the English value (L10N_STORE_LEGAL.md §1.9, TranslationQualityTest.notIdenticalToEnglish).
+# One pair per line: "<locale or *> <key> # reason". A locale line that no longer matches English fails the test.
+
+# Seed lines (L10N_STORE_LEGAL.md §1.9)
+fr score_label # "Score" is the standard French game term (glossary)
+nl score_label # "Score" is the standard Dutch game term (glossary)
+de setting_palette # German "Palette" is the same word
+fr setting_palette # French "palette" is the same word
+* htp_key_undo_keys # key names only: "U", "Ctrl+Z" and the "Backspace" key label
+* a11y_chip_value # placeholders and a space only; a locale reorders or punctuates it only when its grammar needs that
+
+# region M5-T1 (de ru fa uk el): begin
+de about_version # German "Version" is the same word; the rest is placeholders and parentheses
+de whats_new_version # German "Version" is the same word; the rest is a placeholder
+# region M5-T1: end
+
+# region M5-T2 (cs pl lt sl sr): begin
+# region M5-T2: end
+
+# region M5-T3 (fr es it pt eo): begin
+fr about_version # French "Version" is the same word; the rest is placeholders
+fr whats_new_version # French "Version" is the same word; the rest is a placeholder
+it about_privacy # "Privacy" is the standard Italian term (Android settings and Italian law use it)
+# region M5-T3: end
+
+# region M5-T4 (da nl hu tr ko): begin
+da about_version # Danish "Version" is the same word; the rest is placeholders and parentheses
+da whats_new_version # Danish "Version" is the same word; the rest is a placeholder
+nl a11y_score # "Score" is the Dutch glossary term (nl score_label); the rest is a placeholder and a period
+nl about_privacy # Dutch uses the same word "privacy" for this heading
+# region M5-T4: end

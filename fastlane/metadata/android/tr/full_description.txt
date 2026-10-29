@@ -1,0 +1,32 @@
+2048, hızlı ve yerel bir Android uygulaması olarak sıfırdan yeniden geliştirilen klasik kaydırmalı karo bulmacasıdır. Tüm karoları aynı anda hareket ettirmek için kaydırın. Aynı sayıya sahip iki karo tek bir karoda birleşir. 2048 karosuna ulaşın, ardından gidebildiğiniz kadar devam edin.
+
+Gizlilik odaklı tasarım
+• Tamamen çevrimdışı çalışır: uygulamanın internet erişimi yoktur.
+• Reklam, takip, analitik ve hesap yoktur.
+• Çalışma zamanı izni yoktur. Oyunlarınız ve istatistikleriniz cihazınızda kalır.
+
+Kendi tarzınızda oynayın
+• 3×3'ten 8×8'e kadar tahta boyutları. Her boyutun kendi kayıtlı oyunu, rekoru ve istatistikleri vardır. 3×3'te hedef 256'dır.
+• Oyun bittikten sonra bile sınırsız geri alma. Geri alma aynı sonraki karoyu geri getirir; böylece şansınızı değiştirmeden küçük hataları düzeltebilirsiniz. Geri almalar sayılır ve ayrı bir rekor, geri alma kullanılmadan oynanan oyunları takip eder.
+• Oyununuz her hamleden sonra kaydedilir ve tam bıraktığınız yerden devam eder.
+• Her tahta boyutu için istatistikler: oynanan oyunlar, galibiyetler, en yüksek karo, ortalama puan, toplam hamle, oynama süresi ve kullanılan geri alma sayısı.
+
+Görünüm
+• Açık ve koyu temalarda iki palet, Classic Refined ve Neon Arcade; ayrıca yüksek kontrast seçeneği.
+• Tam, Azaltılmış ve Kapalı ayarlarıyla akıcı animasyonlar. Android ayarlarında animasyonları kapatırsanız burada da kapanır.
+• İsteğe bağlı dokunsal geri bildirim, ayarlanabilir kaydırma hassasiyeti ve hamle zamanlaması, ayrıca sistem çubuklarını gizleyen tam ekran modu.
+• Telefonlar, tabletler, katlanabilir cihazlar, yatay mod ve masaüstü pencereleri için düzenler.
+
+Erişilebilirlik
+• Tam TalkBack desteği: her hücre okunabilir, her hamle duyurulur ve TalkBack açıkken yön düğmeleri belirir.
+• Klavye, D-pad veya oyun kumandasıyla oynayın: hareket için ok tuşları, WASD veya HJKL; geri almak için U, Ctrl+Z veya Backspace.
+• Büyük yazı boyutlarında da okunabilir kalan metinler ile kontrast ve renk görme bozukluklarına göre kontrol edilmiş karo renkleri.
+
+Yeni bir uygulama
+Bu, yeni bir paket adına (com.clayboicardi.game2048) sahip yeni bir uygulamadır; eski uygulama yan yana yüklü kalabilir; puanlar aktarılmaz.
+
+Açık kaynak
+MIT Lisansı altında ücretsiz ve açık kaynak: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Emeği geçenler
+Orijinal 2048 oyunu Gabriele Cirulli tarafından yapılmıştır. Orijinal 2048 Android uygulaması Paul Sarbinowski (uberspot) ile uygulamanın katkıda bulunanları ve çevirmenleri tarafından yapılmıştır. Bu sürümün çevirileri makine desteğiyle hazırlanmıştır; düzeltmeler GitHub'da memnuniyetle karşılanır.

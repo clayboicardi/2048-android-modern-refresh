@@ -1,15 +1,32 @@
-2048 Puzzle Game
+2048 is the classic sliding-tile puzzle, rebuilt from scratch as a fast native Android app. Swipe to move every tile at once. Two tiles with the same number merge into one. Reach the 2048 tile, then keep going as far as you can.
 
--------------------------------
+Private by design
+• Works completely offline: the app has no internet access.
+• No ads, no tracking, no analytics and no accounts.
+• No runtime permissions. Your games and statistics stay on your device.
 
-This is the Android port of the 2048 game made by Gabriele Cirulli https://github.com/gabrielecirulli/2048
-It's just a WebView that loads the locally stored HTML files of the original game.
-No ads, and no permissions required. Just open-source. :)
+Play your way
+• Board sizes from 3×3 to 8×8. Each size keeps its own saved game, best score and statistics. On 3×3 the goal is 256.
+• Unlimited undo, even after game over. Undo brings back the same next tile, so it fixes slips without changing your luck. Undos are counted, and a separate best score tracks games played without undo.
+• Your game is saved after every move and continues exactly where you left it.
+• Statistics for every board size: games played, wins, best tile, average score, total moves, time played and undos used.
 
-I just wanted to make it instantly playable without internet, and with a quick access icon for my smartphone.
-It is a bit slower than native code since everything runs in a WebView.
-If you want, you can contribute fixes/speedups here: https://github.com/uberspot/2048
+Look and feel
+• Two palettes, Classic Refined and Neon Arcade, in light and dark themes, plus a high-contrast option.
+• Smooth animations with Full, Reduced and Off settings. Turning off animations in Android's settings turns them off here too.
+• Optional haptic feedback, adjustable swipe sensitivity and move timing, and an immersive mode that hides the system bars.
+• Layouts for phones, tablets, foldables, landscape and desktop windows.
 
-Long touch for 3+ seconds anywhere on the game if you want to toggle the fullscreen mode.
+Accessibility
+• Full TalkBack support: every cell can be read, each move is announced, and a direction pad appears while TalkBack is on.
+• Play with a keyboard, D-pad or game controller: arrow keys, WASD or HJKL to move; U, Ctrl+Z or Backspace to undo.
+• Text that stays readable at large font sizes, and tile colors checked for contrast and color-vision deficiencies.
 
-You can view the code here: https://github.com/uberspot/2048-android
+A new app
+This is a new app with a new package name (com.clayboicardi.game2048); the old app can stay installed side by side; scores do not carry over.
+
+Open source
+Free and open source under the MIT License: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Credits
+The original 2048 game is by Gabriele Cirulli. The original 2048 Android app is by Paul Sarbinowski (uberspot) and its contributors and translators. This version's translations are machine-assisted; corrections are welcome on GitHub.

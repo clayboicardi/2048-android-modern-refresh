@@ -1,1 +1,1 @@
-2048 Jogo Puzzle. Esta é a porta de código aberto Android.
+Quebra-cabeça 2048 de peças deslizantes. Offline, sem anúncios nem rastreamento.

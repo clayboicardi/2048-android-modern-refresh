@@ -1,0 +1,6 @@
+3.0.0 is a full rewrite as a native app with a new package name. It installs next to the original 2048 app; scores from the original app do not carry over.
+• Board sizes 3×3 to 8×8
+• Unlimited undo, even after game over
+• Neon Arcade, dark and high-contrast themes
+• Statistics, keyboard and TalkBack support
+• Still offline: no ads, no tracking

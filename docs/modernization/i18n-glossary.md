@@ -49,12 +49,12 @@ The key names "Arrow keys", "Backspace" and "D-pad" may be translated or kept, w
 | el | Ρεκόρ | Νέο ρεκόρ | Ρεκόρ χωρίς αναίρεση | Νέο παιχνίδι | Συνέχεια | Τέλος παιχνιδιού | Κερδίσατε! |
 | eo | Rekordo | Nova rekordo | Rekordo sen malfaro | Nova ludo | Daŭrigi | Ludo finiĝis | Vi venkis! |
 | es | Récord | Nuevo récord | Récord sin deshacer | Nueva partida | Seguir jugando | Fin de la partida | ¡Has ganado! |
-| fa | رکورد | رکورد جدید | رکورد بدون واگرد | بازی جدید | ادامه بازی | پایان بازی | برنده شدید! |
-| fr | Record | Nouveau record | Record sans annulation | Nouvelle partie | Continuer | Partie terminée | Vous avez gagné ! |
+| fa | رکورد | رکورد جدید | رکورد بدون واگرد | بازی جدید | ادامهٔ بازی | پایان بازی | برنده شدید! |
+| fr | Record | Record battu | Record sans annulation | Nouvelle partie | Continuer | Partie terminée | Vous avez gagné ! |
 | hu | Rekord | Új rekord | Rekord visszavonás nélkül | Új játék | Folytatás | Vége a játéknak | Győzelem! |
 | it | Record | Nuovo record | Record senza annullamenti | Nuova partita | Continua | Partita finita | Hai vinto! |
 | ko | 최고 | 신기록 | 되돌리기 없는 최고 점수 | 새 게임 | 계속하기 | 게임 오버 | 승리! |
-| lt | Rekordas | Naujas rekordas | Rekordas be atšaukimų | Naujas žaidimas | Tęsti | Žaidimas baigtas | Laimėjote! |
+| lt | Rekordas | Rekordas! | Rekordas be atšaukimų | Naujas žaidimas | Tęsti | Žaidimas baigtas | Laimėjote! |
 | nl | Record | Nieuw record | Record zonder ongedaan maken | Nieuw spel | Doorspelen | Spel voorbij | Je hebt gewonnen! |
 | pl | Rekord | Nowy rekord | Rekord bez cofania | Nowa gra | Graj dalej | Koniec gry | Wygrana! |
 | pt | Recorde | Novo recorde | Recorde sem desfazer | Novo jogo | Continuar | Fim de jogo | Ganhou! |
@@ -96,3 +96,4 @@ Notes:
 - **fr and it:** Android uses "Annuler"/"Annulla" for both Undo and Cancel. They never share a dialog here, so both follow the platform. The How to play heading `htp_undo` uses the noun ("Annulation", "Annullamento").
 - **Best without undo** is the name of a statistic. Write it identically in `stats_best_no_undo`, `undo_hint_no_undo_best` and `htp_undo_body` (inflected only where grammar forces it).
 - **pt** is shared by Brazil and Portugal (§1.7). "Tela cheia" is the legacy Brazilian seed; the pt-PT store listing uses "ecrã" in its own text (§2.4).
+- **Changed during M5 (D-259):** fr and lt "New best" are "Record battu" and "Rekordas!", so the chip label stays within the 12 characters of §1.7 rule 7 ("Nouveau record" and "Naujas rekordas" were longer); fa "Keep going" is "ادامهٔ بازی", with the ezafe written as in the other fa compounds.

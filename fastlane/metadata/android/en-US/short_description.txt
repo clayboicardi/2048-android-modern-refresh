@@ -1,1 +1,1 @@
-Android open-source port of the "2048" puzzle game.
+Classic 2048 sliding-tile puzzle. Offline, no ads, no tracking.
