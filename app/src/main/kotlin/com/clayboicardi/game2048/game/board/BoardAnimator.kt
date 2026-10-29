@@ -15,6 +15,7 @@ import com.clayboicardi.game2048.ui.theme.GameMotion
 import com.clayboicardi.game2048.ui.theme.MotionPlan
 import com.clayboicardi.game2048.ui.theme.NewGameMotion
 import com.clayboicardi.game2048.ui.theme.TilePalette
+import kotlin.math.abs
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -23,8 +24,8 @@ import kotlinx.coroutines.launch
 
 /**
  * One tile's animated values (ARCHITECTURE.md §5.4; MOTION_SPEC.md §3.1). [offset] is in cells (x =
- * column, y = row); every value is read only in layout, layer or draw lambdas (D-025). Main thread
- * only.
+ * column, y = row); every value is read only in layout, layer or draw lambdas (D-025). The drawn
+ * scale is `scale × deflate` (ARCHITECTURE.md §5.3, `effects.deflate(id)`). Main thread only.
  */
 @Stable
 internal class TileAnim(offset: Offset, scale: Float, alpha: Float) {
@@ -38,6 +39,12 @@ internal class TileAnim(offset: Offset, scale: Float, alpha: Float) {
     /** The merge glow pulse, added to the palette's glow alpha. */
     val glowBoost = Animatable(0f, visibilityThreshold = GameMotion.ALPHA_THRESHOLD)
 
+    /**
+     * The game-over deflate ripple, 1 → `GameOver.DEFLATE_SCALE` (MOTION_SPEC.md §3.12, §3.13): a
+     * factor of its own, so it never cancels a spawn or pop still running on [scale].
+     */
+    val deflate = Animatable(1f, visibilityThreshold = GameMotion.SCALE_THRESHOLD)
+
     /** The cell the tile settles in. */
     var target: Offset = offset
 
@@ -50,7 +57,7 @@ internal class TileAnim(offset: Offset, scale: Float, alpha: Float) {
         get() = offset.isRunning || scale.isRunning || alpha.isRunning || effectsRunning
 
     private val effectsRunning: Boolean
-        get() = sheen.isRunning || glowBoost.isRunning
+        get() = sheen.isRunning || glowBoost.isRunning || deflate.isRunning
 }
 
 /**
@@ -173,15 +180,29 @@ internal class BoardAnimator(scope: CoroutineScope) {
     }
 
     /**
-     * Snaps the idle `Static` tiles of [board] to [scale] when the `OVER` end state starts or ends
-     * without a new board (Keep going into `OVER`); tiles still in an entrance keep it.
+     * The game-over deflate ripple of [board] (MOTION_SPEC.md §3.12, §3.13; D-183): every tile goes
+     * to `GameOver.DEFLATE_SCALE` with `delayedSpec(plan.overDeflate, plan.overDeflateDelayMs(m,
+     * mMax) − [sinceT0Ms])`, where m is its Manhattan distance from the cell [originIndex] and mMax
+     * the largest such distance on the board; it snaps where the plan has no deflate (Reduced,
+     * Off). [sinceT0Ms] is 0 for the `OVER` move (delays from its origin) and `plan.overT0Ms` for
+     * Keep going into `OVER` (T0 = Ft). Launched now, so play time 0 is the next frame.
      */
-    fun snapStatic(board: BoardUi, scale: Float) {
+    fun deflate(board: BoardUi, plan: MotionPlan, originIndex: Int, sinceT0Ms: Int) {
+        val n = board.size.n
+        val originRow = originIndex / n
+        val originCol = originIndex % n
+        val mMax = maxOf(originRow, n - 1 - originRow) + maxOf(originCol, n - 1 - originCol)
+        val spec = plan.overDeflate
+        val end = GameMotion.GameOver.DEFLATE_SCALE
         for (tile in board.tiles) {
-            val anim = anims[tile.id]
-            if (tile.kind != TileKind.Static || anim == null) continue
-            if (!anim.scale.isRunning && !anim.alpha.isRunning)
-                launcher.snap(anim, anim.scale, scale)
+            val anim = anims[tile.id] ?: continue
+            if (spec == null) {
+                launcher.snap(anim, anim.deflate, end)
+            } else {
+                val m = abs(tile.row - originRow) + abs(tile.col - originCol)
+                val delay = plan.overDeflateDelayMs(m, mMax) - sinceT0Ms
+                launcher.go(anim) { anim.deflate.animateTo(end, delayedSpec(spec, delay)) }
+            }
         }
     }
 
@@ -331,13 +352,17 @@ private class Launcher(private val scope: CoroutineScope) {
         enter(anim, plan.spawnScale, plan.spawnAlpha, delay)
     }
 
-    /** Snaps [anim] to [at], [scale] and alpha 1: a `Static` tile that existed before. */
+    /**
+     * Snaps [anim] to [at], [scale] and alpha 1, undeflated: a `Static` tile that existed before
+     * (an undo or new game out of `OVER` replaces the deflated tiles, MOTION_SPEC.md §3.12).
+     */
     fun toEnd(anim: TileAnim, at: Offset, scale: Float) {
         anim.slideJob?.cancel()
         anim.slideJob = null
         if (anim.offset.value != at) go(anim) { anim.offset.snapTo(at) }
         snap(anim, anim.scale, scale)
         snap(anim, anim.alpha, 1f)
+        snap(anim, anim.deflate, 1f)
     }
 
     /** [value] jumps to [peak] now and returns to 0 with [spec] from [delay] ms (§3.3). */
@@ -484,7 +509,7 @@ private fun TileAnim.probe(tile: TileUi, outgoing: Boolean): ProbeTile {
         outgoing = outgoing,
         x = at.x,
         y = at.y,
-        scale = scale.value,
+        scale = scale.value * deflate.value,
         alpha = alpha.value,
         sheen = sheen.value,
         glowBoost = glowBoost.value,

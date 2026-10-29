@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -110,6 +111,11 @@ import kotlinx.coroutines.joinAll
  * frame rate High) and once more when every board animation has ended (frame rate Default); the
  * tiles that existed before the move are skipped. Static tiles of an `OVER` board that is not a
  * move render at `GameOver.DEFLATE_SCALE` and `SATURATION_END` (MOTION_SPEC.md §3.13).
+ *
+ * The board side of the cards (D-236; MOTION_SPEC.md §3.11–§3.13) is its `BoardCardSequence`: the
+ * win glow ring in `BoardEffectsCanvas` above the tiles, the `OVER` move's desaturation and deflate
+ * ripple, the saturation restore when the status leaves `OVER`, and Keep going into `OVER`, which
+ * the screen scope's `OverlayController` starts through `LocalBoardOverlayLink` at its Ft.
  */
 @Composable
 fun BoardView(
@@ -142,6 +148,7 @@ fun BoardView(
     val staticScale = if (overEnd) GameMotion.GameOver.DEFLATE_SCALE else 1f
     val saturation = if (overEnd) GameMotion.GameOver.SATURATION_END else 1f
     val effects = remember { BoardEffects(scope, saturation) }
+    val cards = remember { BoardCardSequence(scope, animator, effects) }
     val textCache = rememberTileTextCache()
     remember(board.moveId) { animator.prepare(board, plan, staticScale) }
     val epoch = rememberEpochChange(board, plan)
@@ -150,7 +157,7 @@ fun BoardView(
     val change = BoardChange(board, plan, staticScale, outgoing)
     val firstNudge = remember { nudge?.id }
     var idle by remember { mutableStateOf(IdleMark.initial(board, firstNudge)) }
-    val busy = isAnimating(board, nudge, plan, idle)
+    val busy = isAnimating(board, nudge, plan, idle) || cards.running
     val frameRate = if (busy) FrameRateCategory.High else FrameRateCategory.Default
     val sizeTransition = updateTransition(board.size, label = "boardSize")
     val outer = remember(board.size.n) { mutableStateOf(placeholderGeometry(board.size.n)) }
@@ -159,6 +166,7 @@ fun BoardView(
     LaunchedEffect(board.moveId) {
         animator.onCommit(change, outer.value, palette, flash)
         effects.onCommit()
+        cards.onCommit(board, status, plan)
     }
     LaunchedEffect(board.moveId) {
         val origin = withFrameNanos { it }
@@ -171,12 +179,12 @@ fun BoardView(
         animator.release(epoch.outgoing)
         exitDone = true
     }
-    val handledEnd = remember { Holder(overEnd) }
-    LaunchedEffect(overEnd) {
-        if (handledEnd.value == overEnd) return@LaunchedEffect
-        handledEnd.value = overEnd
-        animator.snapStatic(board, staticScale)
-        effects.snapSaturation(saturation)
+    // Keep going into OVER changes the status without a new board (D-036, MOTION_SPEC.md §3.12).
+    LaunchedEffect(status) { cards.onStatus(status) }
+    val link = LocalBoardOverlayLink.current
+    DisposableEffect(link, cards) {
+        link?.attach(cards)
+        onDispose { link?.detach(cards) }
     }
     LaunchedEffect(nudge?.id) {
         if (nudge != null && nudge.id != firstNudge) {
@@ -197,6 +205,9 @@ fun BoardView(
         live.frameRate = frameRate
         live.density = density
         live.bySize[board.size] = board
+        cards.plan = plan
+        cards.board = board
+        cards.geometry = outer
         counter?.onBoard()
         if (!loading) probe?.boardLoaded = true
     }
@@ -204,12 +215,14 @@ fun BoardView(
     val labels = boardLabels(board, loading)
     val focusShape = remember(outer) { GeometryShape(outer, board = true) }
     val pulseColor = MaterialTheme.colorScheme.primary
+    val ringColor = winRingColor(palette, board.size.targetExp)
     val switchSpec = remember(plan) { sizeSwitch(plan) }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Box(
             modifier
                 .measureGeometry(outer, board.size.n, skin, density)
                 .offset { effects.nudgeOffset() }
+                .onPlaced { cards.coordinates = it }
                 .preferredFrameRate(frameRate)
                 .boardSemantics(labels, canUndo, onMove, onUndo, onNewGame)
                 .testTag(BOARD_TAG)
@@ -232,6 +245,7 @@ fun BoardView(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+            BoardEffectsCanvas(effects.ring, outer, ringColor, Modifier.matchParentSize())
         }
     }
 }

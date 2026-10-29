@@ -197,6 +197,104 @@ class GameViewModelTest {
         assertThat(checkNotNull(rig.fileGame(FIVE)).state.moveCount).isEqualTo(0)
     }
 
+    /** F02-AC7 */
+    @Test
+    fun sizeOptionsReadBestAndInProgressWhenSheetOpens() = runTest {
+        // The sheet's rows (D-236): six sizes in order; best from the records; "In progress" for a
+        // saved unfinished game, never for a finished (`OVER`) or missing one; the current size
+        // from the current game. Empty until the sheet opens, and nothing is written.
+        val rig =
+            rig(tmp.newFolder()) {
+                seedGame(GoldenFixtures.FIX_MID_4)
+                seedGame(GoldenFixtures.FIX_MID_3)
+                seedGame(OVER_6)
+                seedRecords(
+                    Records(
+                        sizes =
+                            mapOf(
+                                "4" to SizeRecord(bestScore = 24_680),
+                                "6" to SizeRecord(bestScore = 5_000),
+                            ),
+                    ),
+                )
+            }
+        val vm = rig.loadedViewModel()
+        rig.awaitIdle()
+        assertThat(vm.sizeOptions.value).isEmpty()
+        val saves = rig.saveCounts()
+
+        vm.onSizeSheetOpened()
+        testScheduler.runCurrent()
+
+        assertThat(vm.sizeOptions.value)
+            .containsExactly(
+                SizeOption(BoardSize.of(3), best = 0, inProgress = true, current = false),
+                SizeOption(FOUR, best = 24_680, inProgress = true, current = true),
+                SizeOption(FIVE, best = 0, inProgress = false, current = false),
+                SizeOption(SIX, best = 5_000, inProgress = false, current = false),
+                SizeOption(BoardSize.of(7), best = 0, inProgress = false, current = false),
+                SizeOption(BoardSize.of(8), best = 0, inProgress = false, current = false),
+            )
+            .inOrder()
+        rig.awaitIdle()
+        assertThat(rig.saveCounts()).isEqualTo(saves)
+    }
+
+    /**
+     * D-245: a reading is ignored while a size switch loads (the screen asks again once it ends),
+     * and a reading first shows, at once, what memory holds: every best, the current game's row and
+     * the other sizes' pills as last read. A sheet reopened after a switch therefore never shows
+     * the previous current size; the peeks then confirm the rows.
+     */
+    @Test
+    fun sizeOptionsWaitForSwitchAndShowCurrentGameAtOnce() = runTest {
+        val rig =
+            rig(tmp.newFolder()) {
+                seedGame(GoldenFixtures.FIX_MID_4)
+                seedGame(GoldenFixtures.FIX_MID_3)
+                seedRecords(Records(sizes = mapOf("4" to SizeRecord(bestScore = 24_680))))
+            }
+        val vm = rig.loadedViewModel()
+        vm.onSizeSheetOpened()
+        testScheduler.runCurrent()
+        val first = vm.sizeOptions.value
+        assertThat(first.map { it.current })
+            .containsExactly(false, true, false, false, false, false)
+            .inOrder()
+
+        vm.onSizeSelected(FIVE)
+        assertThat(vm.uiState.value.busy).isTrue()
+        vm.onSizeSheetOpened()
+        assertWithMessage("while the switch loads")
+            .that(vm.sizeOptions.value)
+            .isSameInstanceAs(first)
+        testScheduler.runCurrent()
+        rig.awaitIdle()
+        assertThat(vm.uiState.value.size).isEqualTo(FIVE)
+        assertThat(vm.sizeOptions.value).isSameInstanceAs(first)
+
+        vm.onSizeSheetOpened()
+        // The fresh 5×5 game has no move yet; the 4×4 game was saved in progress by the switch.
+        val expected =
+            listOf(
+                SizeOption(BoardSize.of(3), best = 0, inProgress = true, current = false),
+                SizeOption(FOUR, best = 24_680, inProgress = true, current = false),
+                SizeOption(FIVE, best = 0, inProgress = false, current = true),
+                SizeOption(SIX, best = 0, inProgress = false, current = false),
+                SizeOption(BoardSize.of(7), best = 0, inProgress = false, current = false),
+                SizeOption(BoardSize.of(8), best = 0, inProgress = false, current = false),
+            )
+        assertWithMessage("before the peeks")
+            .that(vm.sizeOptions.value)
+            .containsExactlyElementsIn(expected)
+            .inOrder()
+        testScheduler.runCurrent()
+        assertWithMessage("after the peeks")
+            .that(vm.sizeOptions.value)
+            .containsExactlyElementsIn(expected)
+            .inOrder()
+    }
+
     /** F03-AC8 */
     @Test
     fun winningMoveShowsWinCard() = runTest {
@@ -205,7 +303,8 @@ class GameViewModelTest {
 
         vm.onMove(Direction.LEFT)
 
-        val won = moved(ONE_MERGE_FROM_2048.state, Direction.LEFT).state
+        val outcome = moved(ONE_MERGE_FROM_2048.state, Direction.LEFT)
+        val won = outcome.state
         val board = vm.board.value
         val event = board.event as BoardEvent.Moved
         assertThat(event.becameWon).isTrue()
@@ -216,11 +315,42 @@ class GameViewModelTest {
                     targetExp = 11,
                     summary = summaryOf(won, best = won.score, elapsedMs = 0),
                     entry = OverlayEntry.Animated(board.moveId),
+                    particleSeed = won.seed xor won.moveCount.toLong(),
+                    spawnIndex = outcome.spawn.index,
                 ),
             )
         assertThat(rig.latest(FOUR).state.status).isEqualTo(GameStatus.WON)
         rig.awaitIdle()
         assertThat(checkNotNull(rig.fileGame(FOUR)).state.status).isEqualTo(GameStatus.WON)
+    }
+
+    /** F03-AC8 */
+    @Test
+    fun restoredWinCarriesTheWinningSpawn() = runTest {
+        // A restored win card carries the winning move's spawn cell, the deflate origin of Keep
+        // going into `OVER` (MOTION_SPEC.md §3.12, D-237): the engine undoes the last move and
+        // plays it again.
+        val outcome = moved(ONE_MERGE_FROM_2048.state, Direction.LEFT)
+        val rig = rig(tmp.newFolder()) { seedGame(ONE_MERGE_FROM_2048.copy(state = outcome.state)) }
+        val vm = rig.loadedViewModel()
+
+        val overlay = vm.overlay.value as OverlayUi.Win
+        assertThat(overlay.entry).isEqualTo(OverlayEntry.Restored)
+        assertThat(overlay.spawnIndex).isEqualTo(outcome.spawn.index)
+    }
+
+    /** F03-AC8 */
+    @Test
+    fun restoredWinWithoutReplayableHistoryKeepsTheGame() = runTest {
+        // A restored win whose history the engine cannot undo (D-216's synthetic fixtures) shows
+        // its card with the target tile's cell as the spawn cell, and the game is kept (D-237).
+        val rig = rig(tmp.newFolder()) { seedGame(WON_LOCKED) }
+        val vm = rig.loadedViewModel()
+
+        val overlay = vm.overlay.value as OverlayUi.Win
+        assertThat(overlay.entry).isEqualTo(OverlayEntry.Restored)
+        assertThat(overlay.spawnIndex).isEqualTo(0)
+        assertThat(vm.board.value.cells).isEqualTo(cellsOf(WON_LOCKED.state))
     }
 
     /** F03-AC9 */

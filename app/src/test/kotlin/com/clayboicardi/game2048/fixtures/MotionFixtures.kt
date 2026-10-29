@@ -102,6 +102,24 @@ object MotionFixtures {
         )
 
     /**
+     * [FIX_WIN_PRE_4] at 896 moves (AC-WIN-8; not in the §8.6 table): a multiple of 32, so an undo
+     * of the winning move restores it exactly ([WIN_PRE_UNDO_LEFT] checks both). 900 moves would
+     * undo through the synthetic history, which does not replay (D-216).
+     */
+    val FIX_WIN_PRE_UNDO_4: SavedGame =
+        fixtureGame(
+            n = 4,
+            cells = listOf(10, 10, 0, 0, 1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1),
+            score = 18_000,
+            best = 24_680,
+            moves = 896,
+            undos = 0,
+            elapsedMs = 0,
+            status = GameStatus.PLAYING,
+            rngState = 0x2048,
+        )
+
+    /**
      * 4×4 `PLAYING`, score 3012, best 24680, `rngState` 0x2048: LEFT moves only row 3 (→
      * `1,2,3,0`), spawns exponent 1 at index 15 and `becameOver`. 32 moves (the table gives none).
      */
@@ -117,6 +135,38 @@ object MotionFixtures {
             status = GameStatus.PLAYING,
             rngState = 0x2048,
         )
+
+    /**
+     * 4×4 `WON` with no move left (MOTION_SPEC.md §8.6): the 2048 at index 0 and no equal
+     * neighbours, so Keep going sets `OVER` at once (D-036; [verifyWonNoMoves]). Score 20480, best
+     * 24680, 992 moves (the table gives none). The table's "last spawn index 15" is not a field a
+     * `SavedGame` has, and no winning move leaves this board with that spawn: the 2048 at index 0
+     * can only have merged in row 0 or column 0, which are full, so that move's spawn was in its
+     * own line. No assertion reads the deflate origin of Keep going into `OVER`.
+     */
+    val FIX_WON_NO_MOVES_4: SavedGame =
+        fixtureGame(
+            n = 4,
+            cells = listOf(11, 1, 2, 1, 1, 2, 1, 2, 2, 1, 2, 1, 1, 2, 1, 2),
+            score = 20_480,
+            best = 24_680,
+            moves = 992,
+            undos = 0,
+            elapsedMs = 0,
+            status = GameStatus.WON,
+        )
+
+    /**
+     * The engine check of [FIX_WON_NO_MOVES_4] (like [ENGINE_SPAWN_CHECK]): no move is left and
+     * Keep going makes it `OVER`.
+     */
+    fun verifyWonNoMoves() {
+        val state = FIX_WON_NO_MOVES_4.state
+        assertWithMessage("FIX_WON_NO_MOVES_4: a move is left").that(Game.canMove(state)).isFalse()
+        assertWithMessage("FIX_WON_NO_MOVES_4: Keep going")
+            .that(Game.keepGoing(state).status)
+            .isEqualTo(GameStatus.OVER)
+    }
 
     /**
      * A losing move with one merge (FEATURES.md F14-AC4, F14-AC9; not in the §8.6 table): 4×4
@@ -262,6 +312,18 @@ object MotionFixtures {
     val WIN_PRE_LEFT: SpawnCheck =
         SpawnCheck("FIX_WIN_PRE_4", FIX_WIN_PRE_4, Direction.LEFT, 3, 1, becameWon = true)
 
+    /** FIX_WIN_PRE_UNDO_4 LEFT, whose undo restores the fixture. */
+    val WIN_PRE_UNDO_LEFT: SpawnCheck =
+        SpawnCheck(
+            "FIX_WIN_PRE_UNDO_4",
+            FIX_WIN_PRE_UNDO_4,
+            Direction.LEFT,
+            3,
+            1,
+            becameWon = true,
+            undoRestores = true,
+        )
+
     /** FIX_OVER_PRE_4 LEFT. */
     val OVER_PRE_LEFT: SpawnCheck =
         SpawnCheck("FIX_OVER_PRE_4", FIX_OVER_PRE_4, Direction.LEFT, 15, 1, becameOver = true)
@@ -292,6 +354,7 @@ object MotionFixtures {
             LONG_SLIDE_RIGHT,
             NEW_BEST_LEFT,
             WIN_PRE_LEFT,
+            WIN_PRE_UNDO_LEFT,
             OVER_PRE_LEFT,
             OVER_MERGE_LEFT,
         )
@@ -306,7 +369,8 @@ object MotionFixtures {
 
 /**
  * One fixture action and the spawn the engine computes for it (MOTION_SPEC.md §8.6). [scoreDelta]
- * `null` leaves the delta unchecked.
+ * `null` leaves the delta unchecked; [undoRestores] also checks that `Game.undo` of the move gives
+ * the fixture's board, score and status back.
  */
 data class SpawnCheck(
     val name: String,
@@ -317,6 +381,7 @@ data class SpawnCheck(
     val scoreDelta: Long? = null,
     val becameWon: Boolean = false,
     val becameOver: Boolean = false,
+    val undoRestores: Boolean = false,
 ) {
     /** Plays [direction] on [game] with the engine and asserts the computed outcome. */
     fun verify(): MoveOutcome.Moved {
@@ -333,6 +398,19 @@ data class SpawnCheck(
         }
         assertWithMessage("$label: becameWon").that(moved.becameWon).isEqualTo(becameWon)
         assertWithMessage("$label: becameOver").that(moved.becameOver).isEqualTo(becameOver)
+        if (undoRestores) {
+            val undone = checkNotNull(Game.undo(moved.state)) { "$label: nothing to undo" }
+            val state = game.state
+            assertWithMessage("$label: undo restores the board")
+                .that(undone.board)
+                .isEqualTo(state.board)
+            assertWithMessage("$label: undo restores the score")
+                .that(undone.score)
+                .isEqualTo(state.score)
+            assertWithMessage("$label: undo restores the status")
+                .that(undone.status)
+                .isEqualTo(state.status)
+        }
         return moved
     }
 }

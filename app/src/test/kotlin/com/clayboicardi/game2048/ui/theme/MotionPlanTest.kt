@@ -28,6 +28,54 @@ class MotionPlanTest {
         assertFullBoardSpecs(plan)
         assertFullHeaderSpecs(plan)
         assertFullOffsets(plan)
+        assertFullWinSpecs(plan)
+        assertFullGameOverAndExitSpecs(plan)
+    }
+
+    /** Full: the win sequence (MOTION_SPEC.md §3.11; D-236). */
+    private fun assertFullWinSpecs(plan: MotionPlan) {
+        assertWithMessage("card").that(plan.card).isEqualTo(CardMotion.SEQUENCE)
+        assertWithMessage("winT0Ms").that(plan.winT0Ms).isEqualTo(80)
+        assertWithMessage("winRingAtMs").that(plan.winRingAtMs).isEqualTo(140)
+        assertTween("winRing", plan.winRing, 700, EmphasizedDecelerate)
+        assertWithMessage("winConfettiAtMs").that(plan.winConfettiAtMs).isEqualTo(200)
+        assertWithMessage("winScrimAtMs").that(plan.winScrimAtMs).isEqualTo(680)
+        assertTween("winScrim", plan.winScrim, 300, Standard)
+        assertWithMessage("winCardAtMs").that(plan.winCardAtMs).isEqualTo(680)
+        assertWithMessage("winInteractiveAtMs").that(plan.winInteractiveAtMs).isEqualTo(880)
+        assertWithMessage("cardStartScale").that(plan.cardStartScale).isEqualTo(0.92f)
+        assertSpring("cardScale", plan.cardScale, 0.8f, 380f, SCALE)
+        assertWithMessage("cardStartAlpha").that(plan.cardStartAlpha).isEqualTo(0f)
+        assertSpring("cardAlpha", plan.cardAlpha, 1f, 3800f, ALPHA)
+        assertSpring("buttonAlpha", plan.buttonAlpha, 1f, 3800f, ALPHA)
+        assertWithMessage("buttonStaggerMs").that(plan.buttonStaggerMs).isEqualTo(50)
+        assertSpring("badgeMorph", plan.badgeMorph, 0.8f, 380f, MORPH)
+        assertSpring("badgeScale", plan.badgeScale, 0.6f, 800f, SCALE)
+        assertTween("badgeRotation", plan.badgeRotation, 5000, LinearEasing)
+    }
+
+    /** Full: the game-over sequence and the card exits (MOTION_SPEC.md §3.12, §3.13; D-236). */
+    private fun assertFullGameOverAndExitSpecs(plan: MotionPlan) {
+        assertWithMessage("overT0Ms").that(plan.overT0Ms).isEqualTo(300)
+        assertTween("overDesaturate", plan.overDesaturate, 600, Standard)
+        assertSpring("overDeflate", plan.overDeflate, 0.9f, 700f, SCALE)
+        assertWithMessage("overScrimAtMs").that(plan.overScrimAtMs).isEqualTo(750)
+        assertTween("overScrim", plan.overScrim, 300, Standard)
+        assertWithMessage("overCardAtMs").that(plan.overCardAtMs).isEqualTo(800)
+        assertWithMessage("overInteractiveAtMs").that(plan.overInteractiveAtMs).isEqualTo(1000)
+        // 4×4 from a corner: mMax 6, step 30; 8×8 from a corner: mMax 14, step 180 / 14.
+        val delays = mapOf((0 to 6) to 300, (3 to 6) to 390, (6 to 6) to 480)
+        val delays8 = mapOf((1 to 14) to 313, (7 to 14) to 390, (14 to 14) to 480)
+        for ((mm, delayMs) in delays + delays8) {
+            assertWithMessage("overDeflateDelayMs$mm")
+                .that(plan.overDeflateDelayMs(mm.first, mm.second))
+                .isEqualTo(delayMs)
+        }
+        assertSpring("exitCardAlpha", plan.exitCardAlpha, 1f, 3800f, ALPHA)
+        assertSpring("exitCardScale", plan.exitCardScale, 0.9f, 1400f, SCALE)
+        assertTween("exitScrim", plan.exitScrim, 200, EmphasizedAccelerate)
+        assertTween("exitSaturation", plan.exitSaturation, 200, Standard)
+        assertTween("keepGoingScrim", plan.keepGoingScrim, 300, Standard)
     }
 
     /** Full: slide, merge, spawn, nudge, undo, new game and size switch (ARCHITECTURE.md §5.6). */
@@ -124,6 +172,54 @@ class MotionPlanTest {
         val plan = GameMotion.plan(MotionLevel.REDUCED)
         assertReducedBoardSpecs(plan)
         assertReducedHeaderSpecs(plan)
+        assertReducedOverlaySpecs(plan)
+    }
+
+    /** Reduced: 150 ms linear fades from the origin, interactive at 150 (MOTION_SPEC.md §3.11). */
+    private fun assertReducedOverlaySpecs(plan: MotionPlan) {
+        assertWithMessage("card").that(plan.card).isEqualTo(CardMotion.FADE)
+        val atOrigin =
+            mapOf(
+                "winT0Ms" to plan.winT0Ms,
+                "winRingAtMs" to plan.winRingAtMs,
+                "winScrimAtMs" to plan.winScrimAtMs,
+                "winCardAtMs" to plan.winCardAtMs,
+                "buttonStaggerMs" to plan.buttonStaggerMs,
+                "overT0Ms" to plan.overT0Ms,
+                "overScrimAtMs" to plan.overScrimAtMs,
+                "overCardAtMs" to plan.overCardAtMs,
+                "overDeflateDelayMs(3, 6)" to plan.overDeflateDelayMs(3, 6),
+            )
+        for ((name, ms) in atOrigin) assertWithMessage(name).that(ms).isEqualTo(0)
+        assertWithMessage("winInteractiveAtMs").that(plan.winInteractiveAtMs).isEqualTo(150)
+        assertWithMessage("overInteractiveAtMs").that(plan.overInteractiveAtMs).isEqualTo(150)
+        val fades =
+            mapOf(
+                "winScrim" to plan.winScrim,
+                "cardAlpha" to plan.cardAlpha,
+                "overDesaturate" to plan.overDesaturate,
+                "overScrim" to plan.overScrim,
+                "exitCardAlpha" to plan.exitCardAlpha,
+                "exitScrim" to plan.exitScrim,
+                "exitSaturation" to plan.exitSaturation,
+                "keepGoingScrim" to plan.keepGoingScrim,
+            )
+        for ((name, spec) in fades) assertTween(name, spec, 150, LinearEasing)
+        val none =
+            mapOf(
+                "winRing" to plan.winRing,
+                "winConfettiAtMs" to plan.winConfettiAtMs,
+                "cardScale" to plan.cardScale,
+                "buttonAlpha" to plan.buttonAlpha,
+                "badgeMorph" to plan.badgeMorph,
+                "badgeScale" to plan.badgeScale,
+                "badgeRotation" to plan.badgeRotation,
+                "overDeflate" to plan.overDeflate,
+                "exitCardScale" to plan.exitCardScale,
+            )
+        for ((name, value) in none) assertWithMessage(name).that(value).isNull()
+        assertWithMessage("cardStartScale").that(plan.cardStartScale).isEqualTo(1f)
+        assertWithMessage("cardStartAlpha").that(plan.cardStartAlpha).isEqualTo(0f)
     }
 
     /**
@@ -210,6 +306,7 @@ class MotionPlanTest {
                 PlusNMotion::class.java,
                 NewBestMotion::class.java,
                 NewGameMotion::class.java,
+                CardMotion::class.java,
                 Float::class.javaPrimitiveType -> Unit
                 Int::class.javaPrimitiveType ->
                     assertWithMessage("delay ${field.name}").that(value).isEqualTo(0)
@@ -224,6 +321,12 @@ class MotionPlanTest {
         assertWithMessage("newGame").that(plan.newGame).isEqualTo(NewGameMotion.INSTANT)
         assertWithMessage("plusN").that(plan.plusN).isEqualTo(PlusNMotion.NONE)
         assertWithMessage("newBest").that(plan.newBest).isEqualTo(NewBestMotion.INSTANT)
+        assertWithMessage("card").that(plan.card).isEqualTo(CardMotion.INSTANT)
+        assertWithMessage("cardStartScale").that(plan.cardStartScale).isEqualTo(1f)
+        assertWithMessage("cardStartAlpha").that(plan.cardStartAlpha).isEqualTo(1f)
+        assertWithMessage("overDeflateDelayMs(3, 6)")
+            .that(plan.overDeflateDelayMs(3, 6))
+            .isEqualTo(0)
         assertWithMessage("popImpulse(11)").that(plan.popImpulse(11, 14f, 100f)).isEqualTo(0f)
         assertWithMessage("spawnDelayMs(7)").that(plan.spawnDelayMs(7)).isEqualTo(0)
         assertWithMessage("newGameStepMs(16)").that(plan.newGameStepMs(16)).isEqualTo(0)
@@ -297,9 +400,12 @@ class MotionPlanTest {
     private companion object {
         const val SCALE = 0.002f
         const val ALPHA = 1f / 255f
+        const val MORPH = 0.001f
         const val NS_PER_MS = 1_000_000L
         const val EASING_SAMPLES = 8
         const val CURVE_TOLERANCE = 1e-4f
         val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+        val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+        val Standard = CubicBezierEasing(0.2f, 0f, 0f, 1f)
     }
 }

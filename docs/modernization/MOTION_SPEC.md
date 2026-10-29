@@ -1122,6 +1122,7 @@ class MotionHarness private constructor(val rule: ComposeContentTestRule, val pr
 - Tests use `createComposeRule(effectContext = …)` (v2, D-146). The v2 signature with `effectContext: CoroutineContext` was verified 2026-10-28 (class files).
 - For system-scale tests, pass `effectContext = object : MotionDurationScale { override val scaleFactor = s }` **and** `systemScale = s`, so Compose's scale and the app's effective level agree.
 - `MainTestClock` provides `autoAdvance`, `advanceTimeByFrame()`, `advanceTimeBy(ms, ignoreFrameDuration = false)` (rounds up to whole 16 ms frames) and `advanceTimeUntil` (verified 2026-10-28).
+- **Snapshot apply notifications.** With `autoAdvance` false, a state write made outside composition (the ViewModel's flows, the back stack, `recreate()`'s content switch) reaches the next frame only once the global snapshot's apply notifications are sent. The harness idles the main looper and then calls `Snapshot.sendApplyNotifications()` after a gesture, after a navigation action, between `recreate()`'s steps and while it waits for an origin, so the frame on which such a write appears does not depend on what earlier test classes in the same JVM left in Compose's notification scheduling. `staticRender()` keeps the event's `originMs`, and each test's cleanup settles the animations still running.
 - **Off-level tests** check F0 itself (T5). They call the ViewModel and then `rule.mainClock.advanceTimeByFrame()` once, instead of `act`. A board change under Off still publishes its origin on F1 (haptics use it), but an invalid move under Off publishes no nudge origin.
 
 ### 8.2 `MotionProbe` (test hook, like D-150's counter)
@@ -1141,7 +1142,7 @@ Components register value readers in a `DisposableEffect` only when the probe is
 | `boardNudgeDp`, `outlinePulseAlpha`, `boardSaturation`, `boardFrameRate` | Board-level values |
 | `floats` | Per "+N": `text`, `alpha`, `translationYDp`, `scale` |
 | `displayedScore`, `displayedBest`, `bestChip` | Odometer values; label key, container fraction, star scale/rotation/alpha, sparkles alive |
-| `ring`, `confettiAlive` | Ring `scale`/`strokeDp`/`alpha`; alive particle count |
+| `ring`, `confettiAlive`, `scrimAlpha` | Ring `scale`/`strokeDp`/`alpha`; alive particle count; the scrim's alpha, also while no card is composed (`null` without a scrim, D-242) |
 | `overlay` | `kind` (WIN/OVER), `scrimAlpha`, `cardAlpha`, `cardScale`, `buttonAlphas`, `interactive` (`OverlayController.interactive`, D-200; buttons are always composed enabled), `badgeMorph`, `badgeScale`, `badgeRotationDeg` |
 | `paletteFraction`, `undoIconRotationDeg` | Theme crossfade fraction; undo icon |
 
@@ -1450,7 +1451,8 @@ Times below are relative to Ft, the exit origin (§3.12; `MotionHarness.tapCardB
   - `SegmentTick` is recorded at t = 160.
 - **AC-SCALE-3** Given scale 2.0 and `FIX_WIN_PRE_4`, then:
   - confetti alive is 0 at t = 384 and 96 at t = 400 (emission at ⌈2 × 200⌉);
-  - at t = 784 (192 ms of simulated time) every particle is within 2 dp of the same particle at scale 1 after 192 ms (t = 400). The only difference is the integration step: 8 ms versus 16 ms of simulated time;
+  - at t = 784 (192 ms of simulated time) every particle is within 4 dp of the same particle at scale 1 after 192 ms (t = 400). The only difference is the integration step: 8 ms versus 16 ms of simulated time (after a first step of 16 and 32 ms that covers the emission frame), which by itself puts up to 3.5 dp between the two with the step scheme of §3.11 (D-243);
+  - on every frame from t = 416 to 4816, confetti alive equals the count of the same burst stepped as the canvas steps it at scale 2: no step on t = 416, 16 ms of simulated time on t = 432, then 8 ms per frame. So the live canvas steps the sequence that the trajectories above use (D-247), and all 96 are alive through t = 2416;
   - confetti alive is 0 by t = 4816.
 - **AC-SCALE-4** (`SettingsScreenTest`, M4) Given system scale 0 (fake `AnimatorScaleSource`), the Settings Motion row is disabled with summary `motion_off_system`.
 
@@ -1527,6 +1529,8 @@ All paths are under `app/src/main/kotlin/com/clayboicardi/game2048/` unless stat
 
 ## Open issues
 
-- **AC-BACK-1 predictive back under Robolectric** (verify at first use). Whether Robolectric can drive `OnBackPressedDispatcher.dispatchOnBackStarted/Progressed` into Nav3 is checked when `PredictiveBackTest` is written. Fallback (§9.9): replace AC-BACK-1 with a unit test of `GameNavTransitions.predictivePop(level, edge)` and record it in the PR body.
+None open.
+
+Resolved in M3: **AC-BACK-1 predictive back under Robolectric.** Robolectric drives `OnBackPressedDispatcher.dispatchOnBackStarted`, `dispatchOnBackProgressed`, `dispatchOnBackCancelled` and `onBackPressed` into Nav3 1.2.0's `NavDisplay` at SDK 36, so `PredictiveBackTest` proves AC-BACK-1 as written and the §9.9 fallback (a unit test of `GameNavTransitions.predictivePop(level, edge)`) was not used.
 
 Resolved during planning: MS-OI-1 → D-182; MS-OI-2, -3, -4, -6, -8, -13, -18, -19 → D-183; MS-OI-5 → D-184; MS-OI-7, -17 → D-185; MS-OI-9 → D-187; MS-OI-10 → not built (§7.6); MS-OI-11 → removed by D-184; MS-OI-12 → D-063 kept (§2.1); MS-OI-14 → TC-7, D-210; MS-OI-15 → D-185; MS-OI-16 → D-204.

@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
 
 /**
  * Effective motion level (D-063): OFF when the system animator scale is 0, else the Motion setting.
@@ -292,6 +293,18 @@ enum class PlusNMotion {
     NONE,
 }
 
+/** How the win and game-over cards enter and exit (MOTION_SPEC.md §3.11–§3.13, §5.1). */
+enum class CardMotion {
+    /** Full: the timed sequences from T0, the ring, confetti, badge and staggered buttons. */
+    SEQUENCE,
+
+    /** Reduced: 150 ms linear fades from the origin, a static badge, interactive at 150. */
+    FADE,
+
+    /** Off: the end state on F0, interactive at once. */
+    INSTANT,
+}
+
 /** How the once-per-game new-best moment shows (MOTION_SPEC.md §3.6). */
 enum class NewBestMotion {
     /** Full: at +80 colours crossfade, the label slides, the star and 8 sparkles run. */
@@ -353,7 +366,9 @@ data class DpSpring(val dampingRatio: Float, val stiffness: Float, val threshold
  * A `null` spec means the element does not animate at this level: under Off every spec is `null`,
  * every delay is 0 and every start value equals its end value (F13-AC7, T5); under Reduced the KDoc
  * of each field says what replaces it. This holds the board and header rows of the §5.6 table (M3
- * part 1); M3.8 adds the overlay rows (win, game over, card exit).
+ * part 1) and its overlay rows: win, game over and card exit (M3.8, D-236; MOTION_SPEC.md
+ * §3.11–§3.13). Overlay specs carry no delay: the `…AtMs` fields give the offsets from the origin
+ * (from Ft for a card exit), played with `delayedSpec` or `MoveTimeline.awaitOffset`.
  */
 @Immutable
 data class MotionPlan(
@@ -483,6 +498,123 @@ data class MotionPlan(
      * Reduced; `null` (instant) under Off.
      */
     val newBestColor: SpringSpec<Color>?,
+    /** SEQUENCE (Full), FADE (Reduced) or INSTANT (Off): how the cards enter and exit. */
+    val card: CardMotion,
+    /** Win T0, the merge reveal: `MERGE_REVEAL_MS` (80) under Full; 0 otherwise. */
+    val winT0Ms: Int,
+    /** The win ring's start, T0 + `Win.RING_AT_MS` (140), under Full; 0 otherwise. */
+    val winRingAtMs: Int,
+    /**
+     * The ring fraction 0 → 1 (scale 1 → 1.8, stroke 6 → 0 dp, alpha 0.9 → 0) from [winRingAtMs]:
+     * `tween(Win.RING_MS, easing = EmphasizedDecelerate)` under Full; `null` (no ring) otherwise.
+     */
+    val winRing: FiniteAnimationSpec<Float>?,
+    /** The confetti emission, T0 + `Win.CONFETTI_AT_MS` (200), under Full; `null` (none) else. */
+    val winConfettiAtMs: Int?,
+    /** The win scrim's start: T0 + `Win.CARD_AT_MS` (680) under Full; 0 otherwise. */
+    val winScrimAtMs: Int,
+    /**
+     * The win scrim 0 → `Win.SCRIM_ALPHA` from [winScrimAtMs]: `tween(Win.SCRIM_MS, easing =
+     * Standard)` under Full; `tween(Card.REDUCED_FADE_MS, easing = LinearEasing)` under Reduced;
+     * `null` (end value at once) under Off.
+     */
+    val winScrim: FiniteAnimationSpec<Float>?,
+    /**
+     * The win card's composition (mechanism B; its overlay origin O is the next frame): T0 +
+     * `Win.CARD_AT_MS` (680) under Full; 0 otherwise (the origin frame; F0 under Off).
+     */
+    val winCardAtMs: Int,
+    /**
+     * The win buttons' interactive flip (D-200): T0 + `Win.INTERACTIVE_AT_MS` (880) under Full;
+     * `Card.REDUCED_FADE_MS` (150) under Reduced; 0 (at once) under Off.
+     */
+    val winInteractiveAtMs: Int,
+    /** A card's scale on its first frame: `Win.CARD_START_SCALE` (0.92) under Full; 1 otherwise. */
+    val cardStartScale: Float,
+    /** Card scale → 1 from O: `overlaySpatial(SCALE_THRESHOLD)` under Full; `null` otherwise. */
+    val cardScale: SpringSpec<Float>?,
+    /** A card's alpha on its first frame: 0 under Full and Reduced; 1 under Off. */
+    val cardStartAlpha: Float,
+    /**
+     * Card alpha → 1 from O: `fastEffects(ALPHA_THRESHOLD)` under Full; `tween(REDUCED_FADE_MS,
+     * easing = LinearEasing)` under Reduced; `null` under Off.
+     */
+    val cardAlpha: FiniteAnimationSpec<Float>?,
+    /**
+     * Each card button's alpha 0 → 1 from O, played as `delayedSpec(buttonAlpha, buttonStaggerMs ·
+     * (i + 1))` in layout order, Share with the first: `fastEffects(ALPHA_THRESHOLD)` under Full;
+     * `null` (alpha 1, with the card) otherwise.
+     */
+    val buttonAlpha: SpringSpec<Float>?,
+    /** The button stagger: `Win.BUTTON_STAGGER_MS` (50) under Full; 0 otherwise. */
+    val buttonStaggerMs: Int,
+    /**
+     * The hero badge's morph progress 0 → 1 from O: `overlaySpatial(MORPH_THRESHOLD)` under Full;
+     * `null` (1) otherwise.
+     */
+    val badgeMorph: SpringSpec<Float>?,
+    /** Badge scale 0 → 1 from O: `popSpatial(SCALE_THRESHOLD)` under Full; `null` (1) otherwise. */
+    val badgeScale: SpringSpec<Float>?,
+    /**
+     * Badge rotation 0° → `Win.BADGE_ROTATION_DEG` from O, then it stops: `tween(Win.
+     * BADGE_ROTATION_MS, easing = LinearEasing)` under Full; `null` (60°) otherwise.
+     */
+    val badgeRotation: FiniteAnimationSpec<Float>?,
+    /** Game-over T0: `GameOver.AT_MS` (300) under Full; 0 otherwise. */
+    val overT0Ms: Int,
+    /**
+     * Saturation 1 → `GameOver.SATURATION_END` from [overT0Ms]: `tween(GameOver.DESATURATE_MS,
+     * easing = Standard)` under Full; `tween(REDUCED_FADE_MS, easing = LinearEasing)` under
+     * Reduced; `null` under Off.
+     */
+    val overDesaturate: FiniteAnimationSpec<Float>?,
+    /**
+     * Tile scale 1 → `GameOver.DEFLATE_SCALE`, played as `delayedSpec(overDeflate,
+     * overDeflateDelayMs(m, mMax))`: `standardSpatial(SCALE_THRESHOLD)` under Full; `null` (tiles
+     * snap to 0.94) otherwise.
+     */
+    val overDeflate: SpringSpec<Float>?,
+    /** The game-over scrim's start: T0 + `GameOver.SCRIM_AT_MS` (750) under Full; 0 otherwise. */
+    val overScrimAtMs: Int,
+    /**
+     * The game-over scrim 0 → `GameOver.SCRIM_ALPHA` from [overScrimAtMs]: `tween(GameOver.
+     * SCRIM_MS, easing = Standard)` under Full; `tween(REDUCED_FADE_MS, easing = LinearEasing)`
+     * under Reduced; `null` under Off.
+     */
+    val overScrim: FiniteAnimationSpec<Float>?,
+    /** The game-over card's composition: T0 + `GameOver.CARD_AT_MS` (800) under Full; 0 else. */
+    val overCardAtMs: Int,
+    /**
+     * The game-over buttons' interactive flip: T0 + `GameOver.INTERACTIVE_AT_MS` (1000) under Full;
+     * `REDUCED_FADE_MS` (150) under Reduced; 0 under Off.
+     */
+    val overInteractiveAtMs: Int,
+    /**
+     * A card exit's alpha → 0 from Ft (MOTION_SPEC.md §3.12): `fastEffects(ALPHA_THRESHOLD)` under
+     * Full; `tween(REDUCED_FADE_MS, easing = LinearEasing)` under Reduced; `null` (removed) under
+     * Off.
+     */
+    val exitCardAlpha: FiniteAnimationSpec<Float>?,
+    /** Its scale 1 → `Card.EXIT_SCALE`: `slide(SCALE_THRESHOLD)` under Full; `null` otherwise. */
+    val exitCardScale: SpringSpec<Float>?,
+    /**
+     * Its scrim → 0: `tween(Card.EXIT_SCRIM_MS, easing = EmphasizedAccelerate)` under Full;
+     * `tween(REDUCED_FADE_MS, easing = LinearEasing)` under Reduced; `null` under Off.
+     */
+    val exitScrim: FiniteAnimationSpec<Float>?,
+    /**
+     * Board saturation → 1 after an exit from `OVER`: `tween(Card.SATURATION_RESTORE_MS, easing =
+     * Standard)` under Full; `tween(REDUCED_FADE_MS, easing = LinearEasing)` under Reduced; `null`
+     * under Off.
+     */
+    val exitSaturation: FiniteAnimationSpec<Float>?,
+    /**
+     * Keep going into `OVER` (MOTION_SPEC.md §3.12): the scrim from its current value →
+     * `GameOver.SCRIM_ALPHA` from Ft: `tween(GameOver.SCRIM_MS, easing = Standard)` under Full;
+     * `tween(REDUCED_FADE_MS, easing = LinearEasing)` under Reduced; `null` under Off. Its other
+     * offsets are the game-over ones less [overT0Ms] (T0 = Ft).
+     */
+    val keepGoingScrim: FiniteAnimationSpec<Float>?,
 ) {
     /**
      * The pop impulse in s⁻¹ for a merged tile of exponent [exp] (MOTION_SPEC.md §3.3, D-183): the
@@ -517,6 +649,23 @@ data class MotionPlan(
     }
 
     /**
+     * The deflate delay from the origin of a tile at Manhattan distance [m] from the final spawn's
+     * cell, where [mMax] is the largest such distance on the board (MOTION_SPEC.md §3.13): T0 +
+     * round(m · min(`DEFLATE_STEP_MS`, `DEFLATE_WINDOW_MS` / mMax)) under Full; 0 otherwise.
+     */
+    fun overDeflateDelayMs(m: Int, mMax: Int): Int =
+        if (level == MotionLevel.FULL) {
+            val step =
+                minOf(
+                    GameMotion.GameOver.DEFLATE_STEP_MS.toFloat(),
+                    GameMotion.GameOver.DEFLATE_WINDOW_MS.toFloat() / mMax.coerceAtLeast(1),
+                )
+            overT0Ms + (m * step).roundToInt()
+        } else {
+            0
+        }
+
+    /**
      * New game's stagger per outgoing tile for [outgoing] ≥ 1 tiles (MOTION_SPEC.md §3.8):
      * `min(NEW_GAME_STEP_MS, NEW_GAME_WINDOW_MS / outgoing)` under Full; 0 otherwise.
      */
@@ -538,6 +687,14 @@ data class MotionPlan(
 private object MotionPlans {
     /** A `Spawned` tile's scale on F0 under Full (MOTION_SPEC.md §3.2). */
     private const val SPAWN_START_SCALE = 0.6f
+
+    /** Win T0 = the merge reveal (D-064); game-over T0 (D-183). */
+    private const val WIN_T0_MS = GameMotion.MERGE_REVEAL_MS
+    private const val OVER_T0_MS = GameMotion.GameOver.AT_MS
+
+    /** Reduced card, scrim and saturation fades (MOTION_SPEC.md §3.11–§3.13). */
+    private val reducedFade: FiniteAnimationSpec<Float> =
+        tween(GameMotion.Card.REDUCED_FADE_MS, easing = LinearEasing)
 
     private val alphaFast: SpringSpec<Float> = GameMotion.fastEffects(GameMotion.ALPHA_THRESHOLD)
     private val alphaDefault: SpringSpec<Float> =
@@ -603,6 +760,38 @@ private object MotionPlans {
             newBest = NewBestMotion.MOMENT,
             newBestAtMs = GameMotion.NewBest.AT_MS,
             newBestColor = GameMotion.defaultEffects(),
+            card = CardMotion.SEQUENCE,
+            winT0Ms = WIN_T0_MS,
+            winRingAtMs = WIN_T0_MS + GameMotion.Win.RING_AT_MS,
+            winRing = tween(GameMotion.Win.RING_MS, easing = GameMotion.EmphasizedDecelerate),
+            winConfettiAtMs = WIN_T0_MS + GameMotion.Win.CONFETTI_AT_MS,
+            winScrimAtMs = WIN_T0_MS + GameMotion.Win.CARD_AT_MS,
+            winScrim = tween(GameMotion.Win.SCRIM_MS, easing = GameMotion.Standard),
+            winCardAtMs = WIN_T0_MS + GameMotion.Win.CARD_AT_MS,
+            winInteractiveAtMs = WIN_T0_MS + GameMotion.Win.INTERACTIVE_AT_MS,
+            cardStartScale = GameMotion.Win.CARD_START_SCALE,
+            cardScale = GameMotion.overlaySpatial(GameMotion.SCALE_THRESHOLD),
+            cardStartAlpha = 0f,
+            cardAlpha = alphaFast,
+            buttonAlpha = alphaFast,
+            buttonStaggerMs = GameMotion.Win.BUTTON_STAGGER_MS,
+            badgeMorph = GameMotion.overlaySpatial(GameMotion.MORPH_THRESHOLD),
+            badgeScale = scalePop,
+            badgeRotation = tween(GameMotion.Win.BADGE_ROTATION_MS, easing = LinearEasing),
+            overT0Ms = OVER_T0_MS,
+            overDesaturate = tween(GameMotion.GameOver.DESATURATE_MS, easing = GameMotion.Standard),
+            overDeflate = GameMotion.standardSpatial(GameMotion.SCALE_THRESHOLD),
+            overScrimAtMs = OVER_T0_MS + GameMotion.GameOver.SCRIM_AT_MS,
+            overScrim = tween(GameMotion.GameOver.SCRIM_MS, easing = GameMotion.Standard),
+            overCardAtMs = OVER_T0_MS + GameMotion.GameOver.CARD_AT_MS,
+            overInteractiveAtMs = OVER_T0_MS + GameMotion.GameOver.INTERACTIVE_AT_MS,
+            exitCardAlpha = alphaFast,
+            exitCardScale = GameMotion.slide(GameMotion.SCALE_THRESHOLD),
+            exitScrim =
+                tween(GameMotion.Card.EXIT_SCRIM_MS, easing = GameMotion.EmphasizedAccelerate),
+            exitSaturation =
+                tween(GameMotion.Card.SATURATION_RESTORE_MS, easing = GameMotion.Standard),
+            keepGoingScrim = tween(GameMotion.GameOver.SCRIM_MS, easing = GameMotion.Standard),
         )
 
     val reduced: MotionPlan =
@@ -639,6 +828,35 @@ private object MotionPlans {
             odometerResize = null,
             newBest = NewBestMotion.CROSSFADE,
             newBestAtMs = 0,
+            card = CardMotion.FADE,
+            winT0Ms = 0,
+            winRingAtMs = 0,
+            winRing = null,
+            winConfettiAtMs = null,
+            winScrimAtMs = 0,
+            winScrim = reducedFade,
+            winCardAtMs = 0,
+            winInteractiveAtMs = GameMotion.Card.REDUCED_FADE_MS,
+            cardStartScale = 1f,
+            cardScale = null,
+            cardAlpha = reducedFade,
+            buttonAlpha = null,
+            buttonStaggerMs = 0,
+            badgeMorph = null,
+            badgeScale = null,
+            badgeRotation = null,
+            overT0Ms = 0,
+            overDesaturate = reducedFade,
+            overDeflate = null,
+            overScrimAtMs = 0,
+            overScrim = reducedFade,
+            overCardAtMs = 0,
+            overInteractiveAtMs = GameMotion.Card.REDUCED_FADE_MS,
+            exitCardAlpha = reducedFade,
+            exitCardScale = null,
+            exitScrim = reducedFade,
+            exitSaturation = reducedFade,
+            keepGoingScrim = reducedFade,
         )
 
     val off: MotionPlan =
@@ -677,5 +895,35 @@ private object MotionPlans {
             newBest = NewBestMotion.INSTANT,
             newBestAtMs = 0,
             newBestColor = null,
+            card = CardMotion.INSTANT,
+            winT0Ms = 0,
+            winRingAtMs = 0,
+            winRing = null,
+            winConfettiAtMs = null,
+            winScrimAtMs = 0,
+            winScrim = null,
+            winCardAtMs = 0,
+            winInteractiveAtMs = 0,
+            cardStartScale = 1f,
+            cardScale = null,
+            cardStartAlpha = 1f,
+            cardAlpha = null,
+            buttonAlpha = null,
+            buttonStaggerMs = 0,
+            badgeMorph = null,
+            badgeScale = null,
+            badgeRotation = null,
+            overT0Ms = 0,
+            overDesaturate = null,
+            overDeflate = null,
+            overScrimAtMs = 0,
+            overScrim = null,
+            overCardAtMs = 0,
+            overInteractiveAtMs = 0,
+            exitCardAlpha = null,
+            exitCardScale = null,
+            exitScrim = null,
+            exitSaturation = null,
+            keepGoingScrim = null,
         )
 }

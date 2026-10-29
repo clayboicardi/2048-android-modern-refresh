@@ -8,14 +8,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.clayboicardi.game2048.data.settings.MotionPreference
 import com.clayboicardi.game2048.engine.Direction
 import com.clayboicardi.game2048.fixtures.GameFixture
 import com.clayboicardi.game2048.fixtures.MotionFixtures
+import com.clayboicardi.game2048.game.overlay.KEEP_GOING_TAG
 import com.clayboicardi.game2048.motion.MotionHarness
 import com.clayboicardi.game2048.motion.MotionRule
+import com.clayboicardi.game2048.motion.TestDurationScale
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.CoroutineScope
@@ -39,7 +44,10 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
 class EffectiveMotionTest {
-    @get:Rule val rule = MotionRule()
+    /** Compose's animation scale, 1 unless a method sets it (MOTION_SPEC.md §8.1). */
+    private val duration = TestDurationScale()
+
+    @get:Rule val rule = MotionRule(duration)
 
     private val context: Context = ApplicationProvider.getApplicationContext()
 
@@ -168,6 +176,31 @@ class EffectiveMotionTest {
             .isAtMost(IDLE_WITHIN_MS)
     }
 
+    /** F13-AC4 */
+    @Test
+    fun delaysScaleWithAnimatorScale() {
+        MotionFixtures.WIN_PRE_LEFT.verify()
+        duration.scaleFactor = DOUBLE
+        val h =
+            MotionHarness.launch(
+                rule,
+                GameFixture(MotionFixtures.FIX_WIN_PRE_4),
+                MotionPreference.FULL,
+                systemScale = DOUBLE,
+            )
+        h.commitMove(Direction.LEFT)
+        val keepGoing = h.rule.onNodeWithTag(KEEP_GOING_TAG)
+
+        h.advanceTo(LOCKED_AT_DOUBLE_MS)
+        val locked = checkNotNull(h.snapshot().overlay) { "t = 1744: no win card" }
+        assertWithMessage("t = 1744: interactive").that(locked.interactive).isFalse()
+        keepGoing.assertIsNotEnabled()
+        h.advanceTo(INTERACTIVE_AT_DOUBLE_MS)
+        val open = checkNotNull(h.snapshot().overlay) { "t = 1760: no win card" }
+        assertWithMessage("t = 1760: interactive").that(open.interactive).isTrue()
+        keepGoing.assertIsEnabled()
+    }
+
     private fun putSystemScale(scale: Float) {
         Settings.Global.putFloat(
             context.contentResolver,
@@ -178,5 +211,10 @@ class EffectiveMotionTest {
 
     private companion object {
         const val IDLE_WITHIN_MS = 6_000L
+        const val DOUBLE = 2f
+
+        /** ⌈2 × 880⌉ − 16 and ⌈2 × 880⌉: the win buttons' flip at animator scale 2. */
+        const val LOCKED_AT_DOUBLE_MS = 1_744L
+        const val INTERACTIVE_AT_DOUBLE_MS = 1_760L
     }
 }

@@ -1305,7 +1305,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 ### 6.7 Board-size picker (D-007; `game/overlay/BoardSizeSheet.kt`)
 
 - A `GameModalSheet` (§7.4) with title `board_size_title` = "Board size" (`titleLarge`, 24 dp start padding, 16 dp top).
-- **Six rows**, 3×3 to 8×8, each a `ListItem(selected = n == current, onClick = …) { headline }` (§7.9) at least 72 dp tall, inside a `selectableGroup()`, with `semantics { role = Role.RadioButton }`:
+- **Six rows**, 3×3 to 8×8, each a `SelectableRow(selected = n == current, onClick = …) { headline }` (`ui/components/ListRows.kt`, over `ListItem(selected, onClick)`; §7.9, D-246) at least 72 dp tall, inside a `selectableGroup()`, with `semantics { role = Role.RadioButton }`:
 
 | Slot | Content |
 |---|---|
@@ -1353,7 +1353,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
      - label `stats_best_score` = "Best score" (`labelLarge`, `onSurfaceVariant`);
      - value (`headlineLarge`, `"tnum"`, `formatCount(bestScore, locale)`);
      - at the end, a `MiniTile(bestTileExp, 56.dp)` labeled `stats_best_tile` = "Best tile". Its a11y text is `a11y_best_tile` = "Best tile, %1$s" with the full decimal value.
-  2. **Rows:** `ListItem(trailingContent = { value }) { headline }` (§7.9), headline `bodyLarge`, trailing value `titleMedium` `"tnum"`:
+  2. **Rows:** the plain row of `ui/components/ListRows.kt`, `ListItem(trailingContent = { value }) { headline }` (§7.9, D-246), headline `bodyLarge`, trailing value `titleMedium` `"tnum"`:
 
 | Key | Headline | Value |
 |---|---|---|
@@ -1400,7 +1400,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
   - Compose's `painterResource` cannot load an `<adaptive-icon>` XML, so the icon is composed from its layers: `Box(Modifier.size(72.dp).clip(CircleShape).background(GameColors.IconBackground /* #E6A11A */)) { Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize()) }`.
   - The foreground's 108-unit viewport puts the glyph band (56/108 of the side) in the centre, so it is 37 dp wide at 72 dp.
 - **Section `about_whats_new` "What's new":** for each versionCode in `Changelog` (descending), a `titleSmall` "3.0.0", then the entries as bullet rows (`bodyMedium`, "•" + 8 dp).
-- **Row `about_source_code` "Source code":** a link row as in §6.8 (`ListItem(…) { headline }` with `onClickLabel` = `a11y_action_open`):
+- **Row `about_source_code` "Source code":** a link row as in §6.8 (`ListItem(…) { headline }` through a `ui/components` wrapper such as `LinkRow`, D-246, with `onClickLabel` = `a11y_action_open`):
   - supporting text `about_source_code_url` = "github.com/clayboicardi/2048-android-modern-refresh" (`translatable="false"`); trailing `ic_open_in_new`;
   - it opens `ACTION_VIEW`. If `ActivityNotFoundException` is thrown, it shows the snackbar `link_open_failed` = "No app can open this link" (D-009).
 - **Section `about_privacy` "Privacy":** `privacy_text` = D-123's text verbatim: "This app collects nothing. It has no network access, no accounts, no ads and no analytics. Game data stays on your device. Android's own backup may copy it to your Google account if you enabled device backup."
@@ -1416,8 +1416,8 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 
 - A `TopAppBar` titled `licenses` = "Open-source licenses". The body is a `LazyColumn` of at most 640 dp, grouped by `licenseId` from `res/raw/third_party_licenses.json` (D-122), in the order MIT, OFL-1.1, Apache-2.0.
 - **Group header:** `license_mit_name` "MIT License", `license_ofl_name` "SIL Open Font License 1.1", `license_apache_name` "Apache License 2.0" (`titleSmallEmphasized`, `primary`).
-- **Entry rows:** `ListItem(supportingContent = { copyright on line 1, groupOrPath on line 2 (bodySmall) }) { Text(name) }` (§7.9).
-- **After each group:** a toggle row, `ListItem(onClick = …, trailingContent = { icon }) { Text(label) }` with `license_show_text` "Show license text" / `license_hide_text` "Hide license text" and `ic_expand_more` / `ic_expand_less`. It expands a `surfaceContainerLow` box (`shapes.medium`, 16 dp padding) with the raw text (`license_mit.txt`, `ofl_google_sans_flex.txt` or `license_apache_2_0.txt`) in `bodySmall` Monospace.
+- **Entry rows:** the plain row of `ui/components/ListRows.kt`, `ListItem(supportingContent = { copyright on line 1, groupOrPath on line 2 (bodySmall) }) { Text(name) }` (§7.9, D-246).
+- **After each group:** a toggle row, `LinkRow(onClick = …, trailingContent = { icon }) { Text(label) }` (over `ListItem(onClick)`, D-246) with `license_show_text` "Show license text" / `license_hide_text` "Hide license text" and `ic_expand_more` / `ic_expand_less`. It expands a `surfaceContainerLow` box (`shapes.medium`, 16 dp padding) with the raw text (`license_mit.txt`, `ofl_google_sans_flex.txt` or `license_apache_2_0.txt`) in `bodySmall` Monospace.
 - **Expansion:** under Full motion it uses `AnimatedVisibility(expandVertically(GameMotion.overlaySpatial()))`; otherwise it is instant.
 
 ### 6.13 What's new sheet (D-009; `about/WhatsNewSheet.kt`)
@@ -1471,6 +1471,7 @@ File names are relative to `ui/components/`; files in other packages are given f
 | `DirectionPad` | `game/input/DirectionPad.kt` | `FilledTonalIconButton` | §6.6 |
 | `StatusLine` | `game/StatusLine.kt` | `Text` | §6.6 |
 | `SectionHeader`, `SettingsSwitchRow`, `SettingsChoiceRow`, `SettingsLinkRow` | `SettingRows.kt` | `ListItem`, `Switch` | §6.8 |
+| `SelectableRow`, `LinkRow` (M3), the plain row (M4.1) | `ListRows.kt` | `ListItem` | §6.7, §6.9, §6.11, §6.12. The only `ListItem` calls outside `SettingRows.kt` and `Dialogs.kt` (D-246) |
 | `OverlayCard` (win/over container, Regular and Compact layouts) + scrim clipped to the board shape | `game/overlay/BoardScrim.kt`; `WinBadge` in `game/overlay/WinCard.kt` | `ElevatedCard` | §6.3, §6.4 |
 
 ### 7.2 `ScoreChip` and the "+N" float
@@ -1559,12 +1560,16 @@ fun scoreLines(text: String, digitsPerLine: Int): List<String>
 // ui/components/GameModalSheet.kt — the ONLY @OptIn(ExperimentalMaterial3Api::class) in the codebase (D-181)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GameModalSheet(onDismissRequest: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun GameModalSheet(onDismissRequest: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.(dismiss: (then: () -> Unit) -> Unit) -> Unit) {
     val state = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
         enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),   // == skipPartiallyExpanded
     )
-    ModalBottomSheet(onDismissRequest = onDismissRequest, modifier = modifier, sheetState = state, content = content)
+    val scope = rememberCoroutineScope()
+    ModalBottomSheet(onDismissRequest = onDismissRequest, modifier = modifier, sheetState = state) {
+        // D-236: a sheet that closes itself hides with the sheet motion first, then runs `then`.
+        content { then -> scope.launch { state.hide() }.invokeOnCompletion { if (!state.isVisible) then() } }
+    }
 }
 ```
 
@@ -1609,7 +1614,8 @@ TalkBack announces snackbars politely by default. No snackbar is used for the wi
 - `Modifier.focusRing(shape: Shape)` draws, while focused in keyboard input mode (`InputMode.Keyboard`, D-227), a 2 dp `primary` stroke **outside** the element. There is a 2 dp gap, and the outset shape's corner radius is the element's radius + 2 + 1 dp.
 - The ring therefore sits on the background (`primary` on `background` ≥ 6.28:1, §2.9) and never on the board or a tile.
 - Applied by every `ui/components` wrapper and to the board (`shape` = board shape). M3 state layers alone are below 3:1.
-- The board requests focus when Game appears (D-053).
+- The game buttons (`GameButton`, `GameIconButton`) show the M3 focused state layer only in keyboard input mode too: focus still moves to a card's primary button (D-081), and a touch player sees no focused tint on it (D-240).
+- The board requests focus when Game appears (D-053), unless a card is shown then: its primary button keeps the focus, and the board takes it back when the card leaves (D-240).
 
 ### 7.8 `MiniTile`, `MiniBoardGlyph`, `PaletteSwatch`
 
@@ -1626,7 +1632,7 @@ TalkBack announces snackbars politely by default. No snackbar is used for the wi
 
 | Status | APIs |
 |---|---|
-| **Use** (public, no opt-in, not deprecated) | `MaterialExpressiveTheme`, `MotionScheme.expressive()` and the `MotionScheme` interface (`gameMotionScheme(level)`, D-184), `lightColorScheme`/`darkColorScheme` (48-parameter overloads), `dynamicLightColorScheme`/`dynamicDarkColorScheme`, `Typography.*Emphasized`, `Button`, `FilledTonalButton`, `OutlinedButton`, `TextButton`, `ButtonDefaults.shapes()`/`MediumContainerHeight`/`contentPaddingFor`/`textStyleFor`/`iconSizeFor`, `FilledTonalIconButton`, `OutlinedIconButton` and `IconButton` (non-deprecated overloads), `IconButtonDefaults.shapes()`/`mediumContainerSize()`, `ElevatedCard`, `Card`, `AssistChip`, `ListItem` through its headline-as-trailing-lambda overloads only: `ListItem(modifier, …, supportingContent, trailingContent) { headline }`, `ListItem(checked, onCheckedChange) { … }`, `ListItem(selected, onClick) { … }` and `ListItem(onClick) { … }`, `Switch`, `RadioButton`, `HorizontalDivider`, `AlertDialog` (android), `TopAppBar`, `Scaffold`, `SnackbarHost`, `PrimaryScrollableTabRow`, `Tab`, `DropdownMenu` + classic `DropdownMenuItem`, `Surface`, `Text(autoSize = …)` + foundation `TextAutoSize.StepBased`, ui `Modifier.dropShadow`/`innerShadow`/`preferredFrameRate` |
+| **Use** (public, no opt-in, not deprecated) | `MaterialExpressiveTheme`, `MotionScheme.expressive()` and the `MotionScheme` interface (`gameMotionScheme(level)`, D-184), `lightColorScheme`/`darkColorScheme` (48-parameter overloads), `dynamicLightColorScheme`/`dynamicDarkColorScheme`, `Typography.*Emphasized`, `Button`, `FilledTonalButton`, `OutlinedButton`, `TextButton`, `ButtonDefaults.shapes()`/`MediumContainerHeight`/`contentPaddingFor`/`textStyleFor`/`iconSizeFor`, `FilledTonalIconButton`, `OutlinedIconButton` and `IconButton` (non-deprecated overloads), `IconButtonDefaults.shapes()`/`mediumContainerSize()`, `ElevatedCard`, `Card`, `AssistChip`, `ListItem` through its headline-as-trailing-lambda overloads only: `ListItem(modifier, …, supportingContent, trailingContent) { headline }`, `ListItem(checked, onCheckedChange) { … }`, `ListItem(selected, onClick) { … }` and `ListItem(onClick) { … }` (all four are material3 1.5-only, so they are called only in `ui/components`, D-026, D-246), `Switch`, `RadioButton`, `HorizontalDivider`, `AlertDialog` (android), `TopAppBar`, `Scaffold`, `SnackbarHost`, `PrimaryScrollableTabRow`, `Tab`, `DropdownMenu` + classic `DropdownMenuItem`, `Surface`, `Text(autoSize = …)` + foundation `TextAutoSize.StepBased`, ui `Modifier.dropShadow`/`innerShadow`/`preferredFrameRate` |
 | **Isolated opt-in** (one file) | `ModalBottomSheet`, `rememberBottomSheetState`, `SheetValue` (`ExperimentalMaterial3Api`) → `GameModalSheet.kt` only (D-181) |
 | **Never use** (opt-in) | `TooltipBox`, `PlainTooltip`, `rememberTooltipState` (`ExperimentalMaterial3Api`); `MaterialShapes`, `LoadingIndicator`, `DropdownMenuItem` checked/selected overloads (`ExperimentalMaterial3ExpressiveApi`); foundation `FlowRow`/`FlowColumn` experimental overloads; Roborazzi `captureScreenRoboImage` and `RoborazziOptions(taskType = …)` (`ExperimentalRoborazziApi`; Roborazzi opt-ins are allowed only in `testing/Accessibility.kt` for ATF, D-174) |
 | **Never use** (deprecated, fatal under D-143) | `rememberModalBottomSheetState`, `TabRow`, `ScrollableTabRow`, old `PrimaryScrollableTabRow`/`SecondaryScrollableTabRow` overloads, old `SegmentedButton`, `BasicText` old overloads, and the deprecated overloads of `IconButton`, `FilterChip`, `AssistChip`, `ListItem`, `TopAppBar`, `CenterAlignedTopAppBar`, `Text` and `AlertDialog`. If a call resolves to one, follow its `ReplaceWith` |

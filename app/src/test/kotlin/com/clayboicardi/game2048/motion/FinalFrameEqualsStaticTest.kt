@@ -22,8 +22,8 @@ import org.robolectric.annotation.GraphicsMode
  * bitmap equals the static render of the same state. The static render is a recreation of the
  * content after the settle bound (`MotionHarness.staticRender`), which composes the ViewModel's
  * settled `Restored` board: the harness's stand-in for AC-CONS-3's `presenter.reemitStatic()`. Win
- * and game over are M3 part 2 (M3.11, D-233). `FIX_RECORDS` is seeded so that no "Undo used"
- * snackbar (D-186) sits over the undo case's final frame.
+ * and game over, with their `Restored` cards, are M3 part 2 (M3.11, D-233). `FIX_RECORDS` is seeded
+ * so that no "Undo used" snackbar (D-186) sits over the undo case's final frame.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -81,6 +81,26 @@ class FinalFrameEqualsStaticTest {
         assertSettlesToStatic(h, "size switch", SIZE_SETTLED_MS)
     }
 
+    /** AC-CONS-3 */
+    @Test
+    fun winEndsOnTheStaticFrame() {
+        MotionFixtures.WIN_PRE_LEFT.verify()
+        val h = launch(GameFixture(MotionFixtures.FIX_WIN_PRE_4))
+        h.commitMove(Direction.LEFT)
+        // The win's settle bound: the badge rotation stops at O + 5000 (MOTION_SPEC.md §3.11).
+        assertSettlesToStatic(h, "win", WIN_SETTLED_MS)
+    }
+
+    /** AC-CONS-3 */
+    @Test
+    fun gameOverEndsOnTheStaticFrame() {
+        MotionFixtures.OVER_PRE_LEFT.verify()
+        val h = launch(GameFixture(MotionFixtures.FIX_OVER_PRE_4))
+        h.commitMove(Direction.LEFT)
+        // After the card's entry (O = 816, its springs end by O + 275) and the 0.78 scrim (1056).
+        assertSettlesToStatic(h, "game over", OVER_SETTLED_MS)
+    }
+
     private fun launch(fixture: GameFixture): MotionHarness =
         MotionHarness.launch(rule, fixture, MotionPreference.FULL)
 
@@ -112,6 +132,8 @@ class FinalFrameEqualsStaticTest {
         const val UNDO_SETTLED_MS = 320L
         const val NEW_GAME_SETTLED_MS = 624L
         const val SIZE_SETTLED_MS = 224L
+        const val WIN_SETTLED_MS = 5712L
+        const val OVER_SETTLED_MS = 1200L
         const val PNG_QUALITY = 100
     }
 }

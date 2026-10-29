@@ -1,6 +1,9 @@
 package com.clayboicardi.game2048.ui.components
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.interaction.FocusInteraction
+import androidx.compose.foundation.interaction.Interaction
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
@@ -18,15 +21,20 @@ import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpSize
 import com.clayboicardi.game2048.ui.theme.GameDimens
+import kotlinx.coroutines.flow.Flow
 
 /**
  * A labelled game button (DESIGN_SYSTEM.md §7.3; D-084): the Material 3 button of [style] with the
@@ -37,7 +45,7 @@ import com.clayboicardi.game2048.ui.theme.GameDimens
  * [interactive] serves the card buttons (D-200): they are composed enabled, so they never flash
  * from disabled to enabled colours, and until the card's entry makes them interactive their clicks
  * are ignored, they carry `disabled()` semantics and they cannot take focus. Every other caller
- * leaves it true.
+ * leaves it true. The focused state layer shows only in keyboard input mode, like the ring (D-240).
  */
 @Composable
 fun GameButton(
@@ -53,10 +61,19 @@ fun GameButton(
     val click = if (interactive) onClick else ({})
     val chrome = modifier.controlModifier(shapes.shape, interactive)
     val padding = ButtonDefaults.contentPaddingFor(GameDimens.ControlHeight, icon != null)
+    val interactions = rememberKeyboardFocusInteractions()
     val content: @Composable RowScope.() -> Unit = { ButtonLabel(text, icon) }
     when (style) {
         GameButtonStyle.FILLED ->
-            Button(click, shapes, chrome, enabled, contentPadding = padding, content = content)
+            Button(
+                click,
+                shapes,
+                chrome,
+                enabled,
+                contentPadding = padding,
+                interactionSource = interactions,
+                content = content,
+            )
         GameButtonStyle.TONAL ->
             FilledTonalButton(
                 click,
@@ -64,6 +81,7 @@ fun GameButton(
                 chrome,
                 enabled,
                 contentPadding = padding,
+                interactionSource = interactions,
                 content = content,
             )
         GameButtonStyle.OUTLINED ->
@@ -73,10 +91,19 @@ fun GameButton(
                 chrome,
                 enabled,
                 contentPadding = padding,
+                interactionSource = interactions,
                 content = content,
             )
         GameButtonStyle.TEXT ->
-            TextButton(click, shapes, chrome, enabled, contentPadding = padding, content = content)
+            TextButton(
+                click,
+                shapes,
+                chrome,
+                enabled,
+                contentPadding = padding,
+                interactionSource = interactions,
+                content = content,
+            )
     }
 }
 
@@ -100,16 +127,70 @@ fun GameIconButton(
     val shapes = IconButtonDefaults.shapes()
     val click = if (interactive) onClick else ({})
     val chrome = modifier.size(containerSize).controlModifier(shapes.shape, interactive)
+    val interactions = rememberKeyboardFocusInteractions()
     val content: @Composable () -> Unit = {
         Icon(painterResource(icon), contentDescription = contentDescription)
     }
     when (style) {
         GameIconButtonStyle.TONAL ->
-            FilledTonalIconButton(click, shapes, chrome, enabled, content = content)
+            FilledTonalIconButton(
+                click,
+                shapes,
+                chrome,
+                enabled,
+                interactionSource = interactions,
+                content = content,
+            )
         GameIconButtonStyle.OUTLINED ->
-            OutlinedIconButton(click, shapes, chrome, enabled, content = content)
-        GameIconButtonStyle.PLAIN -> IconButton(click, shapes, chrome, enabled, content = content)
+            OutlinedIconButton(
+                click,
+                shapes,
+                chrome,
+                enabled,
+                interactionSource = interactions,
+                content = content,
+            )
+        GameIconButtonStyle.PLAIN ->
+            IconButton(
+                click,
+                shapes,
+                chrome,
+                enabled,
+                interactionSource = interactions,
+                content = content,
+            )
     }
+}
+
+/**
+ * The interaction source of a game button (D-240): it passes every interaction to the button's
+ * indication except a `FocusInteraction.Focus` outside keyboard input mode, so the Material 3
+ * focused state layer, like the focus ring (D-227), shows only to a keyboard user. Focus itself
+ * still moves, for example to a card's primary button (D-081); `Unfocus` always passes, so a focus
+ * shown in keyboard mode always ends.
+ */
+@Composable
+private fun rememberKeyboardFocusInteractions(): MutableInteractionSource {
+    val inputMode = LocalInputModeManager.current
+    return remember(inputMode) { KeyboardFocusInteractions(MutableInteractionSource(), inputMode) }
+}
+
+private class KeyboardFocusInteractions(
+    private val source: MutableInteractionSource,
+    private val inputMode: InputModeManager,
+) : MutableInteractionSource {
+    override val interactions: Flow<Interaction>
+        get() = source.interactions
+
+    override suspend fun emit(interaction: Interaction) {
+        if (passes(interaction)) source.emit(interaction)
+    }
+
+    override fun tryEmit(interaction: Interaction): Boolean =
+        !passes(interaction) || source.tryEmit(interaction)
+
+    private fun passes(interaction: Interaction): Boolean =
+        interaction !is FocusInteraction.Focus || inputMode.inputMode == InputMode.Keyboard
 }
 
 /**

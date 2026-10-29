@@ -4,6 +4,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import androidx.activity.BackEventCompat
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.VectorConverter
@@ -17,13 +20,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -31,6 +38,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
+import androidx.navigation3.runtime.NavKey
 import com.clayboicardi.game2048.App
 import com.clayboicardi.game2048.data.game.SavedGame
 import com.clayboicardi.game2048.data.platform.MonotonicClock
@@ -43,6 +51,7 @@ import com.clayboicardi.game2048.engine.BoardSize
 import com.clayboicardi.game2048.engine.Direction
 import com.clayboicardi.game2048.fixtures.GameFixture
 import com.clayboicardi.game2048.game.GameViewModel
+import com.clayboicardi.game2048.game.MORE_TAG
 import com.clayboicardi.game2048.game.board.BoardGeometry
 import com.clayboicardi.game2048.game.board.BoardUi
 import com.clayboicardi.game2048.game.board.LocalRecompositionCounter
@@ -50,11 +59,14 @@ import com.clayboicardi.game2048.game.board.RecompositionCounter
 import com.clayboicardi.game2048.game.board.TileKind
 import com.clayboicardi.game2048.game.board.TileUi
 import com.clayboicardi.game2048.game.board.boardGeometry
+import com.clayboicardi.game2048.game.header.SIZE_CHIP_TAG
 import com.clayboicardi.game2048.game.motion.LocalMotionProbe
 import com.clayboicardi.game2048.game.motion.MotionProbe
 import com.clayboicardi.game2048.game.motion.MotionSnapshot
 import com.clayboicardi.game2048.game.motion.ProbeTile
 import com.clayboicardi.game2048.game.motion.delayedSpec
+import com.clayboicardi.game2048.game.overlay.sizeRowTag
+import com.clayboicardi.game2048.menuItemTag
 import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
 import com.clayboicardi.game2048.testing.FakeHapticFeedback
 import com.clayboicardi.game2048.testing.FixedSeedSource
@@ -225,6 +237,13 @@ object Curves {
  *   and, with `autoAdvance = false`, no frame runs, so its children would never be disposed;
  * - the static render that AC-CONS-3 calls `presenter.reemitStatic()` is [staticRender]: a
  *   [recreate] after the settle bound, which composes the ViewModel's settled (`Restored`) board.
+ *
+ * M3 part 2 (M3-E2) adds, without changing the part 1 members: [tapCardButtonTag] (the card's New
+ * game and Undo share their text with the controls bar), [commitNavigation], [pushFromMenu] and
+ * [pressBack] (origin `navOriginMs`), [backDispatcher], [commitSizeSwitchThroughSheet], an
+ * [advanceTo] from another base, [windowWidthDp], the filmstrip segments and manual frames of
+ * [continueFilmstripOnNextOrigin] and [manualFilmstrip], and a [FilmRegion.ROOT] capture of the
+ * main window while a popup is open.
  */
 class MotionHarness private constructor(private val owner: MotionRule, private val rig: Rig) {
     val rule: ComposeContentTestRule
@@ -341,6 +360,165 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
         }
 
     /**
+     * A card button by its test tag (`KEEP_GOING_TAG`, `CARD_NEW_GAME_TAG`, `CARD_UNDO_TAG`,
+     * `CARD_SHARE_TAG`): "New game" and "Undo" are on the card and on the controls bar, so the
+     * card's are selected by tag. The origin is Ft, as for [tapCardButton] (§3.12). `performClick`
+     * advances the test clock by one frame between its down and up events, so the click lands on
+     * that frame (the tap's frame) and Ft is the frame after it.
+     */
+    fun tapCardButtonTag(tag: String): Long =
+        act(board = false, { rule.onNodeWithTag(tag).performClick() }) {
+            probe.overlayActionOriginMs
+        }
+
+    /**
+     * Runs [action], a change of the back stack (a click, Back), and advances to the transition's
+     * play-time-0 frame, `MotionProbe.navOriginMs` (MOTION_SPEC.md §3.17, §8.2), which becomes the
+     * origin of [advanceTo] and of an armed filmstrip. The main looper's pending work runs after
+     * the action and after each frame, which carries a Back to Navigation 3 (see [backStarted]).
+     */
+    fun commitNavigation(action: () -> Unit): Long {
+        flushRepublish()
+        val before = probe.navOriginMs
+        action()
+        runPendingWork()
+        return awaitOrigin(before, idle = true) { probe.navOriginMs }
+    }
+
+    /**
+     * Pushes [key] the way a player does (FEATURES.md F21 item 2): [openMenu], then taps [key]'s
+     * item. Returns the push's nav origin ([commitNavigation]).
+     */
+    fun pushFromMenu(key: NavKey): Long {
+        openMenu(key)
+        return commitNavigation { rule.onNodeWithTag(menuItemTag(key)).performClick() }
+    }
+
+    /**
+     * Taps More (`MORE_TAG`) and advances until the game menu's popup window shows [key]'s item
+     * (`menuItemTag`) and the menu has finished its entry.
+     */
+    fun openMenu(key: NavKey) {
+        flushRepublish()
+        rule.onNodeWithTag(MORE_TAG).performClick()
+        awaitNode(menuItemTag(key))
+        advanceFrames(MODAL_SETTLE_FRAMES)
+    }
+
+    /**
+     * The host activity's `OnBackPressedDispatcher`, read from the composition: Back and the
+     * predictive-back gesture of MOTION_SPEC.md §3.19 are dispatched to it.
+     */
+    val backDispatcher: OnBackPressedDispatcher
+        get() = checkNotNull(rig.host.backDispatcher) { "no OnBackPressedDispatcherOwner composed" }
+
+    /** A completed Back (key or gesture): returns the pop's nav origin ([commitNavigation]). */
+    fun pressBack(): Long = commitNavigation { backDispatcher.onBackPressed() }
+
+    /**
+     * The start of a predictive-back gesture (MOTION_SPEC.md §3.19), dispatched to
+     * [backDispatcher]. Each gesture helper runs the main looper's pending work after the event and
+     * after each of the frames it advances ([GESTURE_FRAMES]; [GESTURE_SETTLE_FRAMES] after a
+     * cancel or a release): that work carries the event to Navigation 3's handler and its seek.
+     * With the clock advanced by frames alone, the events reach `NavDisplay` late, one event
+     * behind, or not at all (plumbing, M3-E2).
+     */
+    fun backStarted(event: BackEventCompat) {
+        gesture(GESTURE_FRAMES) { backDispatcher.dispatchOnBackStarted(event) }
+    }
+
+    /** A progress step of the gesture ([backStarted]). */
+    fun backProgressed(event: BackEventCompat) {
+        gesture(GESTURE_FRAMES) { backDispatcher.dispatchOnBackProgressed(event) }
+    }
+
+    /** The gesture is cancelled, and its reversal runs to its end ([backStarted]). */
+    fun backCancelled() {
+        gesture(GESTURE_SETTLE_FRAMES) { backDispatcher.dispatchOnBackCancelled() }
+    }
+
+    /** The gesture is released: Back completes and the pop runs to its end ([backStarted]). */
+    fun backCommitted() {
+        gesture(GESTURE_SETTLE_FRAMES) { backDispatcher.onBackPressed() }
+    }
+
+    private fun gesture(frames: Int, dispatch: () -> Unit) {
+        dispatch()
+        runPendingWork()
+        repeat(frames) {
+            step()
+            runPendingWork()
+        }
+    }
+
+    /**
+     * Runs the main looper's pending work, then sends the snapshot apply notifications, so the
+     * state that work wrote outside a composition (Navigation 3's back stack and seek) is seen by
+     * the next frame. Compose's global apply sender is a main-looper post, which a test class that
+     * ends with work pending can leave unsent for the rest of the JVM's test classes.
+     */
+    private fun runPendingWork() {
+        ShadowLooper.idleMainLooper()
+        Snapshot.sendApplyNotifications()
+    }
+
+    /**
+     * Selects the [n]×[n] board through the board-size sheet (D-236; FEATURES.md F02 item 2): taps
+     * the size chip, waits for the sheet's row [sizeRowTag] and lets the sheet settle, taps the
+     * row, advances while the sheet hides (`GameModalSheet`'s `dismiss`), then waits for the switch
+     * and its origin like [commitSizeSwitch].
+     */
+    fun commitSizeSwitchThroughSheet(n: Int): Long {
+        flushRepublish()
+        val before = probe.originMs
+        val previous = vm.board.value.moveId
+        rule.onNodeWithTag(SIZE_CHIP_TAG).performClick()
+        awaitNode(sizeRowTag(n))
+        advanceFrames(MODAL_SETTLE_FRAMES)
+        rule.onNodeWithTag(sizeRowTag(n)).performClick()
+        var frames = 0
+        while (vm.board.value.moveId == previous) {
+            if (vm.uiState.value.busy) {
+                rule.waitUntil(LOAD_TIMEOUT_MS) {
+                    ShadowLooper.idleMainLooper()
+                    vm.board.value.moveId != previous
+                }
+                break
+            }
+            check(frames < MAX_UI_FRAMES) { "the sheet's row selected no size within $frames" }
+            step()
+            frames++
+        }
+        committed = vm.board.value
+        val published = probe.originMs
+        if (published != null && published != before) {
+            originMs = published
+            return published
+        }
+        return awaitOrigin(before) { probe.originMs }
+    }
+
+    /** True while a node tagged [tag] is in any window's semantics tree. */
+    fun exists(tag: String): Boolean =
+        rule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+
+    /** Advances one frame at a time until a node tagged [tag] exists (at most 60 frames). */
+    fun awaitNode(tag: String) {
+        var frames = 0
+        while (!exists(tag)) {
+            check(frames < MAX_UI_FRAMES) { "no node $tag within $frames frames" }
+            step()
+            frames++
+        }
+    }
+
+    /**
+     * The width of the window the app's content sees, in dp: the main window root's width, which
+     * verifies `launch(widthDp = …)` (MOTION_SPEC.md §8.1).
+     */
+    fun windowWidthDp(): Float = mainRoot().fetchSemanticsNode().size.width / rule.density.density
+
+    /**
      * Runs [action] and advances exactly one frame (F0), for Off-level checks of F0 itself
      * (MOTION_SPEC.md §8.1) and invalid moves under Off, which publish no nudge origin.
      */
@@ -353,8 +531,24 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
 
     /** Advances to the first 16 ms grid frame at or after origin + [tMs], one frame at a time. */
     fun advanceTo(tMs: Long) {
-        val target = originMs + (tMs + FRAME_MS - 1) / FRAME_MS * FRAME_MS
+        advanceTo(tMs, originMs)
+    }
+
+    /**
+     * Advances to the first 16 ms grid frame at or after [baseMs] + [tMs]: times from an origin
+     * other than the latest one, such as Ft after a move committed during a card exit.
+     */
+    fun advanceTo(tMs: Long, baseMs: Long) {
+        val target = baseMs + (tMs + FRAME_MS - 1) / FRAME_MS * FRAME_MS
         while (now() < target) step()
+    }
+
+    /**
+     * Test cleanup: advances until nothing runs, at most [SETTLE_LIMIT_MS]. It never fails, so a
+     * test's own failure is the one reported.
+     */
+    internal fun finishAnimations() {
+        runCatching { settle() }
     }
 
     /** Advances [frames] frames. */
@@ -417,10 +611,14 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
     fun recreate() {
         val host = rig.host
         host.saved = host.registry?.performSave().orEmpty()
+        // The host's state is written outside a composition: apply it before each frame, so the
+        // old content leaves on the first frame and the new one composes on the second.
         host.shown = false
+        Snapshot.sendApplyNotifications()
         rule.mainClock.advanceTimeByFrame()
         host.generation++
         host.shown = true
+        Snapshot.sendApplyNotifications()
         rule.mainClock.advanceTimeByFrame()
         r0 = probe.snapshot()
         republishPending = true
@@ -429,14 +627,18 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
     /**
      * The static render of the current state (AC-CONS-3's `presenter.reemitStatic()`, which main
      * code does not have): the full-size [region] after [recreate], once the new composition is
-     * idle.
+     * idle. The harness keeps the origin of the event under test, so [t] and [hapticsFrom] still
+     * read from it afterwards; the recreated board's own publication does not replace it.
      */
     fun staticRender(region: FilmRegion = FilmRegion.ROOT): Bitmap {
+        val eventOrigin = originMs
         recreate()
         flushRepublish()
         settle()
         advanceFrames(2)
-        return capture(region, downscale = false)
+        val render = capture(region, downscale = false)
+        originMs = eventOrigin
+        return render
     }
 
     /** [region] of the current frame; [FilmRegion.ROOT] at 50 % unless [downscale] is false. */
@@ -445,7 +647,7 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
             when (region) {
                 FilmRegion.BOARD -> rule.onNodeWithTag(BOARD_TAG).captureToImage()
                 FilmRegion.HEADER -> rule.onNodeWithTag(SCORES_TAG).captureToImage()
-                FilmRegion.ROOT -> rule.onRoot().captureToImage()
+                FilmRegion.ROOT -> mainRoot().captureToImage()
             }
         val bitmap = image.asAndroidBitmap()
         return if (region == FilmRegion.ROOT && downscale) {
@@ -478,6 +680,53 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
      */
     fun writeFilmstrip(): File = strips.finish(owner.testClass)
 
+    /**
+     * Writes [bitmap] as `app/build/reports/filmstrips/<TestClass>/<name>.png`, next to the
+     * filmstrips: the two sides of a failed bitmap comparison, for inspection.
+     */
+    fun writeReport(bitmap: Bitmap, name: String): File {
+        val dir = File("build/reports/filmstrips/${owner.testClass}").apply { mkdirs() }
+        val file = File(dir, "$name.png")
+        FileOutputStream(file).use {
+            bitmap.compress(Bitmap.CompressFormat.PNG, REPORT_QUALITY, it)
+        }
+        return file
+    }
+
+    /**
+     * Once the armed strip has captured its frames, captures the same frame list again from the
+     * next origin published, each label prefixed with [prefix]: the pop of `nav_push_pop` after its
+     * push (MOTION_SPEC.md §8.4).
+     */
+    fun continueFilmstripOnNextOrigin(prefix: String) {
+        strips.continueOnNextOrigin(prefix)
+    }
+
+    /**
+     * Arms the inspection strip [name] whose frames are not on a time grid: [captureFilmFrame] adds
+     * the current frame with its label, and [writeFilmstrip] writes it (the predictive-back strip,
+     * one frame per gesture step; MOTION_SPEC.md §8.4).
+     */
+    fun manualFilmstrip(name: String, region: FilmRegion) {
+        strips.armManual(name, region)
+    }
+
+    /** Captures the current frame into the strip armed by [manualFilmstrip], labelled [label]. */
+    fun captureFilmFrame(label: String) {
+        strips.captureNow(label)
+    }
+
+    /**
+     * The main window's root: `onRoot()`, or, while a popup or dialog window adds a second root,
+     * the largest one (the activity's content).
+     */
+    private fun mainRoot(): SemanticsNodeInteraction {
+        val roots = rule.onAllNodes(isRoot()).fetchSemanticsNodes()
+        if (roots.size <= 1) return rule.onRoot()
+        val main = roots.indices.maxBy { roots[it].size.width.toLong() * roots[it].size.height }
+        return rule.onAllNodes(isRoot())[main]
+    }
+
     internal fun step() {
         rule.mainClock.advanceTimeByFrame()
         strips.onFrame()
@@ -488,16 +737,17 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
         val before = published()
         action()
         if (board) committed = vm.board.value
-        return awaitOrigin(before, published)
+        return awaitOrigin(before, published = published)
     }
 
     /**
      * Advances one frame at a time (at most 3) until [published] reports a new origin equal to the
      * current frame time. Never edit expectations to fit a different origin.
      */
-    private fun awaitOrigin(before: Long?, published: () -> Long?): Long {
+    private fun awaitOrigin(before: Long?, idle: Boolean = false, published: () -> Long?): Long {
         repeat(MAX_ORIGIN_FRAMES) { frame ->
             step()
+            if (idle) runPendingWork()
             val origin = published()
             if (origin != null && origin != before) {
                 check(origin == now()) { "origin $origin is not the current frame ${now()}" }
@@ -560,6 +810,19 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
         private const val LOAD_TIMEOUT_MS = 10_000L
         private const val MAX_ORIGIN_FRAMES = 3
         private const val MAX_LOAD_FRAMES = 20
+
+        /** A bound on frames until a popup, sheet or dialog shows a node: not a timing. */
+        private const val MAX_UI_FRAMES = 60
+
+        /** Frames a menu or sheet is given to finish its enter motion before it is tapped. */
+        private const val MODAL_SETTLE_FRAMES = 40
+        private const val REPORT_QUALITY = 100
+
+        /** Frames a predictive-back event is given to reach the seek (looper idled each frame). */
+        private const val GESTURE_FRAMES = 2
+
+        /** Frames a cancelled or released gesture is given to run to its end. */
+        private const val GESTURE_SETTLE_FRAMES = 40
         private const val SETTLE_LIMIT_MS = 6_000L
         private const val SEED = 0x2048L
 
@@ -617,7 +880,13 @@ class MotionHarness private constructor(private val owner: MotionRule, private v
                 )
             compose.mainClock.autoAdvance = false
             compose.setContent { rig.Content() }
-            return MotionHarness(rule, rig).also { it.finishLaunch() }
+            val harness = MotionHarness(rule, rig)
+            // Registered last, so it runs first: the test's animations end before the content
+            // is disposed. An animation still running at the end of a test (a move at animator
+            // scale 2 checked only to t = 864) otherwise changes how Navigation 3 seeks a
+            // predictive back and delivers Back in a later test class of the same JVM.
+            rule.onClose { harness.finishAnimations() }
+            return harness.also { it.finishLaunch() }
         }
 
         private suspend fun seed(
@@ -653,6 +922,8 @@ internal data class Rig(
 ) {
     @Composable
     fun Content() {
+        val back = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+        SideEffect { host.backDispatcher = back }
         host.Content {
             CompositionLocalProvider(
                 LocalMotionProbe provides probe,
@@ -685,6 +956,9 @@ internal class RecreationHost {
     /** The current generation's registry; written after composition. */
     var registry: SaveableStateRegistry? = null
 
+    /** The host activity's back dispatcher; written after composition. */
+    var backDispatcher: OnBackPressedDispatcher? = null
+
     @Composable
     fun Content(content: @Composable () -> Unit) {
         val parent = LocalSaveableStateRegistry.current
@@ -711,6 +985,12 @@ internal class FilmstripRecorder(private val harness: MotionHarness) {
         var base: Long?,
     ) {
         val frames = ArrayList<Pair<String, Bitmap>>()
+
+        /** The frame list, kept for [continueOnNextOrigin]. */
+        val framesMs: List<Long> = pending.toList()
+
+        /** Prefixed to the labels of the current segment. */
+        var prefix: String = ""
     }
 
     private var strip: Strip? = null
@@ -719,6 +999,27 @@ internal class FilmstripRecorder(private val harness: MotionHarness) {
         check(strip == null) { "filmstrip ${strip?.name} is still armed" }
         strip = Strip(name, region, ArrayDeque(framesMs.sorted()), withF0, base)
         if (base != null) onFrame()
+    }
+
+    /** A strip with no time grid: frames come from [captureNow]. */
+    fun armManual(name: String, region: FilmRegion) {
+        check(strip == null) { "filmstrip ${strip?.name} is still armed" }
+        strip = Strip(name, region, ArrayDeque(), wantsF0 = false, base = harness.now())
+    }
+
+    /** Adds the current frame, labelled [label]. */
+    fun captureNow(label: String) {
+        val s = checkNotNull(strip) { "no filmstrip armed" }
+        s.frames += label to harness.capture(s.region)
+    }
+
+    /** Captures the frame list again from the next origin, labels prefixed [prefix]. */
+    fun continueOnNextOrigin(prefix: String) {
+        val s = checkNotNull(strip) { "no filmstrip armed" }
+        check(s.pending.isEmpty()) { "filmstrip ${s.name}: frames ${s.pending} not captured yet" }
+        s.pending.addAll(s.framesMs)
+        s.base = null
+        s.prefix = prefix
     }
 
     fun onF0() {
@@ -743,7 +1044,7 @@ internal class FilmstripRecorder(private val harness: MotionHarness) {
         while (s.pending.isNotEmpty() && base + s.pending.first() <= harness.now()) {
             val t = s.pending.removeFirst()
             check(base + t == harness.now()) { "filmstrip ${s.name}: frame t = $t was skipped" }
-            s.frames += "t=${t.toString().padStart(3, '0')}" to harness.capture(s.region)
+            s.frames += "${s.prefix}t=${t.toString().padStart(3, '0')}" to harness.capture(s.region)
         }
     }
 
@@ -956,10 +1257,12 @@ object Invariants {
 
 /**
  * Runs [commit] and checks its F0 (MOTION_SPEC.md §2.3 T5, AC-OFF-1): nothing runs there or on the
- * next 3 frames, and the full-size root bitmap of F0 equals the static render of the resulting
- * state.
+ * next 3 frames, nor on any frame before [quietUntilMs] from the origin, and the full-size root
+ * bitmap of F0 equals the static render of the resulting state. The static render recreates the
+ * content, which drops a haptic still pending (§3.14), so a test that checks a later haptic, such
+ * as the win's second `Confirm` at 160, passes a [quietUntilMs] after it.
  */
-fun MotionHarness.assertEndStateOnF0(event: String, commit: () -> Unit) {
+fun MotionHarness.assertEndStateOnF0(event: String, quietUntilMs: Long = 0, commit: () -> Unit) {
     captureF0Root = true
     commit()
     captureF0Root = false
@@ -969,9 +1272,27 @@ fun MotionHarness.assertEndStateOnF0(event: String, commit: () -> Unit) {
         assertWithMessage("$event t = ${t()}: running").that(snapshot().isAnyRunning).isFalse()
         advanceFrames(1)
     }
-    assertWithMessage("$event F0: the root bitmap equals the static render")
-        .that(f0.sameAs(staticRender()))
-        .isTrue()
+    while (t() < quietUntilMs) {
+        assertWithMessage("$event t = ${t()}: running").that(snapshot().isAnyRunning).isFalse()
+        advanceFrames(1)
+    }
+    val static = staticRender()
+    val same = f0.sameAs(static)
+    if (!same) {
+        writeReport(f0, "$event-f0")
+        writeReport(static, "$event-static")
+    }
+    assertWithMessage("$event F0: the root bitmap equals the static render").that(same).isTrue()
 }
+
+/**
+ * The scrim's alpha on this frame as the probe reports it (MOTION_SPEC.md §8.2): the effects
+ * reader's `scrimAlpha`, which MOTION_SPEC.md §3.12–§3.13 also read while no card is composed
+ * (AC-OVER-3 at t = 752, before the card at 800; Keep going into `OVER` between the two cards;
+ * D-242); `null` while no scrim is composed. The motion tests read the scrim only through this
+ * property.
+ */
+val MotionSnapshot.scrimReading: Float?
+    get() = effects.scrimAlpha
 
 private const val END_STATE_CHECK_FRAMES = 3

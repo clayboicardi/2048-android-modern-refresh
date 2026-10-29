@@ -73,7 +73,7 @@ class MotionProbe {
     /** The header's displayed values and BEST chip (`GameHeader`). */
     fun registerHeader(read: () -> ProbeHeader): ProbeRegistration = header.add(read)
 
-    /** Ring and confetti (`BoardEffectsCanvas`, `ContentEffectsCanvas`; part 2). */
+    /** Ring, confetti and scrim (`OverlayController`'s one effects reader; part 2). */
     fun registerEffects(read: () -> ProbeEffects): ProbeRegistration = effects.add(read)
 
     /** The win or game-over card (`OverlayController`; part 2). */
@@ -109,7 +109,7 @@ class MotionProbe {
         )
 
     private companion object {
-        /** The neutral [MotionSnapshot.effects]: no ring, no confetti. */
+        /** The neutral [MotionSnapshot.effects]: no ring, no confetti, no scrim. */
         val NoEffects = ProbeEffects(ring = null, confettiAlive = 0)
     }
 }
@@ -203,12 +203,17 @@ data class ProbeHeader(
 /** The win glow ring (MOTION_SPEC.md §3.11). */
 @Immutable data class ProbeRing(val scale: Float, val strokeDp: Float, val alpha: Float)
 
-/** Ring and confetti (MOTION_SPEC.md §8.2). */
+/** Ring, confetti and the scrim (MOTION_SPEC.md §8.2). */
 @Immutable
 data class ProbeEffects(
     /** `null` while no ring is drawn. */
     val ring: ProbeRing?,
     val confettiAlive: Int,
+    /**
+     * The scrim's alpha, also while no card is composed (its fade-in before the game-over card,
+     * Keep going into `OVER` between the two cards; D-242); `null` while no scrim is composed.
+     */
+    val scrimAlpha: Float? = null,
 )
 
 /** Which card is shown. */

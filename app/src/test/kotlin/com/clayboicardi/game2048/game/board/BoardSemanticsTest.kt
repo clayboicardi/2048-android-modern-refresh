@@ -324,7 +324,7 @@ internal class BoardHost(
         rule.setContent {
             GameTheme(darkTheme = false) {
                 CompositionLocalProvider(LocalMotionProbe provides probe) {
-                    GameScreen(vm, Settings(), clock)
+                    GameScreen(vm, Settings(), clock, onNavigate = {})
                 }
             }
         }

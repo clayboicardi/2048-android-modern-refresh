@@ -67,9 +67,19 @@ sealed interface OverlayEntry {
 sealed interface OverlayUi {
     data object None : OverlayUi
 
-    /** `summary` feeds Share (D-200). */
-    data class Win(val targetExp: Int, val summary: GameSummary, val entry: OverlayEntry) :
-        OverlayUi
+    /**
+     * `summary` feeds Share (D-200). [particleSeed] is `state.seed xor state.moveCount.toLong()` of
+     * the won state: the seed of the win confetti's `ParticleRandom` (MOTION_SPEC.md §3.11, D-236).
+     * [spawnIndex] is the cell of the winning move's spawn, the deflate origin of Keep going into
+     * `OVER` (MOTION_SPEC.md §3.12, D-237).
+     */
+    data class Win(
+        val targetExp: Int,
+        val summary: GameSummary,
+        val entry: OverlayEntry,
+        val particleSeed: Long,
+        val spawnIndex: Int,
+    ) : OverlayUi
 
     data class GameOver(val summary: GameSummary, val entry: OverlayEntry) : OverlayUi
 }
@@ -94,6 +104,24 @@ data class GameSummary(
     val undos: Int,
     /** Row-major exponents, for the share emoji grid (D-008). */
     val cells: ImmutableList<Int>,
+)
+
+/**
+ * One row of the board-size sheet (DESIGN_SYSTEM.md §6.7; FEATURES.md F02 item 2; D-236), in the
+ * order 3×3 … 8×8.
+ */
+@Immutable
+data class SizeOption(
+    val size: BoardSize,
+    /** The size's `bestScore` in the records; 0 = none ("No best score yet"). */
+    val best: Long,
+    /**
+     * That size's saved game is in progress (`GameState.isInProgress`); a missing file or a game
+     * whose `gameId` is already finalized is not (FEATURES.md F02 edge cases).
+     */
+    val inProgress: Boolean,
+    /** The current size: the check mark and the selected row. */
+    val current: Boolean,
 )
 
 /** An invalid move (D-035): shakes the board; never changes `BoardUi`. */

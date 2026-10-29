@@ -1,5 +1,7 @@
 package com.clayboicardi.game2048.game.input
 
+import android.view.KeyEvent
+import androidx.activity.ComponentDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +17,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.TouchInjectionScope
 import androidx.compose.ui.test.click
@@ -31,6 +34,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.clayboicardi.game2048.App
+import com.clayboicardi.game2048.StatsKey
 import com.clayboicardi.game2048.data.game.SavedGame
 import com.clayboicardi.game2048.data.settings.MoveTiming
 import com.clayboicardi.game2048.data.settings.Settings
@@ -38,15 +42,23 @@ import com.clayboicardi.game2048.data.settings.SwipeSensitivity
 import com.clayboicardi.game2048.di.AppContainer
 import com.clayboicardi.game2048.di.gameViewModelFactory
 import com.clayboicardi.game2048.engine.Direction
+import com.clayboicardi.game2048.engine.GameStatus
 import com.clayboicardi.game2048.fixtures.GoldenFixtures
+import com.clayboicardi.game2048.fixtures.fixtureGame
 import com.clayboicardi.game2048.game.GameViewModel
+import com.clayboicardi.game2048.game.MORE_TAG
 import com.clayboicardi.game2048.game.board.BoardEventKind
+import com.clayboicardi.game2048.game.header.SIZE_CHIP_TAG
+import com.clayboicardi.game2048.game.overlay.SIZE_SHEET_TAG
+import com.clayboicardi.game2048.game.overlay.WIN_CARD_TAG
+import com.clayboicardi.game2048.menuItemTag
 import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
 import com.clayboicardi.game2048.testing.FakeClock
 import com.clayboicardi.game2048.testing.FixedSeedSource
 import com.clayboicardi.game2048.testing.TEST_VERSION_CODE
 import com.clayboicardi.game2048.testing.seedGame
 import com.clayboicardi.game2048.testing.seedSettings
+import com.clayboicardi.game2048.ui.components.DIALOG_DISMISS_TAG
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
@@ -58,6 +70,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowLooper
 
 /**
@@ -240,22 +253,77 @@ class SwipeInputTest {
     fun ignoredWhileModalOpen() {
         GameScreenRig(tmp.newFolder(), GoldenFixtures.FIX_MID_4).use { rig ->
             compose.showGame(rig)
-            // Part 1 has the new-game dialog; the size sheet and win card (M3.9), the menu (M3.10)
-            // and What's new (M4) join this test (D-233).
+            // The size sheet and the game menu (M3.10), the new-game dialog (M3 part 1) and the win
+            // card (M3.9); What's new joins this test in M4 (D-233).
+            // The size sheet; Back on its window closes it again.
+            compose.onNodeWithTag(SIZE_CHIP_TAG).performClick()
+            compose.onNodeWithTag(SIZE_SHEET_TAG).assertExists()
+            assertSwipeIgnored(rig)
+            compose.onNodeWithTag(SIZE_SHEET_TAG).assertExists()
+            (ShadowDialog.getLatestDialog() as ComponentDialog)
+                .onBackPressedDispatcher
+                .onBackPressed()
+            compose.onNodeWithTag(SIZE_SHEET_TAG).assertDoesNotExist()
+
+            // The game menu; the Back key on its popup window closes it again.
+            compose.onNodeWithTag(MORE_TAG).performClick()
+            val menu = compose.onNodeWithTag(menuItemTag(StatsKey)).fetchSemanticsNode()
+            assertSwipeIgnored(rig)
+            compose.onNodeWithTag(menuItemTag(StatsKey)).assertExists()
+            for (action in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+                val popup = (checkNotNull(menu.root) as ViewRootForTest).view.rootView
+                popup.dispatchKeyEvent(KeyEvent(action, KeyEvent.KEYCODE_BACK))
+            }
+            compose.onNodeWithTag(menuItemTag(StatsKey)).assertDoesNotExist()
+
+            // The new-game dialog.
             compose.onNodeWithTag(NEW_GAME).performClick()
             compose.onNode(isDialog()).assertExists()
-            val before = rig.vm.board.value.moveId
-
-            compose.onNodeWithTag(BOARD).performTouchInput {
-                down(center)
-                dragX(-60f)
-                up()
-            }
-            compose.waitForIdle()
-
-            assertThat(rig.vm.board.value.moveId).isEqualTo(before)
+            assertSwipeIgnored(rig)
             compose.onNode(isDialog()).assertExists()
+
+            // The win card: the scrim over the board takes the swipe.
+            compose.onNodeWithTag(DIALOG_DISMISS_TAG).performClick()
+            compose.waitForIdle()
+            showWonGame(rig)
+            compose.onNodeWithTag(WIN_CARD_TAG).assertExists()
+            assertSwipeIgnored(rig)
+            compose.onNodeWithTag(WIN_CARD_TAG).assertExists()
         }
+    }
+
+    /** A left swipe on the board leaves the game unchanged. */
+    private fun assertSwipeIgnored(rig: GameScreenRig) {
+        val before = rig.vm.board.value.moveId
+        compose.onNodeWithTag(BOARD).performTouchInput {
+            down(center)
+            dragX(-60f)
+            up()
+        }
+        compose.waitForIdle()
+        assertThat(rig.vm.board.value.moveId).isEqualTo(before)
+    }
+
+    /** Loads a `WON` 5×5 game by a size switch, so its win card shows (M3.9). */
+    private fun showWonGame(rig: GameScreenRig) {
+        val won =
+            fixtureGame(
+                n = 5,
+                cells = listOf(11, 1, 2) + List(22) { 0 },
+                score = 20_124,
+                best = 24_680,
+                moves = 980,
+                undos = 0,
+                elapsedMs = 1_275_000,
+                status = GameStatus.WON,
+            )
+        runBlocking { rig.container.seedGame(won) }
+        rig.vm.onSizeSelected(won.state.size)
+        compose.waitUntil(timeoutMillis = LOAD_TIMEOUT_MS) {
+            ShadowLooper.idleMainLooper()
+            rig.vm.board.value.size == won.state.size
+        }
+        compose.waitForIdle()
     }
 
     /** F15-AC12 */

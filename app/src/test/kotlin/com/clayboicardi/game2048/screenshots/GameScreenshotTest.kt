@@ -1,5 +1,6 @@
 package com.clayboicardi.game2048.screenshots
 
+import androidx.activity.ComponentDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -25,6 +26,10 @@ import com.clayboicardi.game2048.di.gameViewModelFactory
 import com.clayboicardi.game2048.fixtures.GoldenFixtures
 import com.clayboicardi.game2048.game.GameViewModel
 import com.clayboicardi.game2048.game.NEW_GAME_TAG
+import com.clayboicardi.game2048.game.header.SIZE_CHIP_TAG
+import com.clayboicardi.game2048.game.overlay.GAME_OVER_CARD_TAG
+import com.clayboicardi.game2048.game.overlay.SIZE_SHEET_TAG
+import com.clayboicardi.game2048.game.overlay.WIN_CARD_TAG
 import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
 import com.clayboicardi.game2048.testing.FakeClock
 import com.clayboicardi.game2048.testing.FixedSeedSource
@@ -49,6 +54,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowLooper
 
 /**
@@ -113,6 +119,103 @@ class GameScreenshotTest {
             compose.onNodeWithTag(DIALOG_DISMISS_TAG).performClick()
             compose.waitForIdle()
             compose.assertTouchTargets()
+        }
+    }
+
+    /** F03-AC17 */
+    @Test
+    fun winCardGoldens() {
+        // Row 13; M4 adds the dark row 14 (D-204).
+        GoldenRig(tmp.newFolder(), GoldenFixtures.FIX_WON_4).use { rig ->
+            compose.setContent { rig.Content() }
+            rig.awaitReady(compose)
+            compose.waitForIdle()
+
+            compose.onNodeWithTag(WIN_CARD_TAG).assertExists()
+            compose.onRoot().captureGolden("game_won-4x4_classic-light")
+            compose.assertTouchTargets()
+        }
+    }
+
+    /** F04-AC13 */
+    @Test
+    fun gameOverCardGoldens() {
+        // Row 15; M4 adds the dark row 16 (D-204).
+        GoldenRig(tmp.newFolder(), GoldenFixtures.FIX_OVER_4).use { rig ->
+            compose.setContent { rig.Content() }
+            rig.awaitReady(compose)
+            compose.waitForIdle()
+
+            compose.onNodeWithTag(GAME_OVER_CARD_TAG).assertExists()
+            compose.onRoot().captureGolden("game_over-4x4_classic-light")
+            compose.assertTouchTargets()
+        }
+    }
+
+    /** F02-AC14 */
+    @Test
+    fun boardSizeSheetGolden() {
+        // Row 42's three fixtures, so the container is made here: FIX_MID_4 current, FIX_MID_3
+        // saved in progress, FIX_RECORDS (DESIGN_SYSTEM.md §10.4), with the §10.2 settings.
+        val folder = tmp.newFolder()
+        val container =
+            AppContainer(
+                files = { name -> File(folder, name) },
+                versionCode = TEST_VERSION_CODE,
+                clock = FakeClock(),
+                seedSource = FixedSeedSource(0x2048L),
+                animatorScale = FakeAnimatorScaleSource(),
+            )
+        val store = ViewModelStore()
+        try {
+            runBlocking {
+                container.seedSettings(
+                    Settings(
+                        motion = MotionPreference.OFF,
+                        onboardingDone = true,
+                        lastSeenVersionCode = TEST_VERSION_CODE,
+                    ),
+                )
+                container.seedGame(GoldenFixtures.FIX_MID_4)
+                container.seedGame(GoldenFixtures.FIX_MID_3)
+                container.seedRecords(GoldenFixtures.FIX_RECORDS)
+            }
+            val vm =
+                ViewModelProvider(store, container.gameViewModelFactory())[
+                    GameViewModel::class.java]
+            compose.setContent {
+                App(
+                    vm,
+                    container.settingsRepository.state,
+                    container.animatorScale,
+                    container.clock,
+                )
+            }
+            compose.waitUntil(timeoutMillis = 10_000L) {
+                ShadowLooper.idleMainLooper()
+                vm.ready.value
+            }
+            compose.waitForIdle()
+
+            compose.onNodeWithTag(SIZE_CHIP_TAG).performClick()
+            compose.waitForIdle()
+            val sheet = compose.onNode(isDialog())
+            sheet.captureGolden("sheet_boardsize_classic-light")
+            // ATF and the touch targets of the sheet's own window, while it is open (D-085, D-205).
+            sheet.assertAccessible()
+            compose.assertDialogTouchTargets()
+
+            // The main window's touch targets and atfRule's after-test check, with the sheet
+            // closed.
+            (ShadowDialog.getLatestDialog() as ComponentDialog)
+                .onBackPressedDispatcher
+                .onBackPressed()
+            compose.waitForIdle()
+            compose.onNodeWithTag(SIZE_SHEET_TAG).assertDoesNotExist()
+            compose.assertTouchTargets()
+        } finally {
+            store.clear()
+            container.applicationScope.cancel()
         }
     }
 }

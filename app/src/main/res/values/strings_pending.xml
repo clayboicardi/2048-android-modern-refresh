@@ -63,9 +63,69 @@
     <!-- region M3-D1: end -->
 
     <!-- region M3-D2: begin -->
+    <!-- Title of the win card when the target tile appears. Address the player without grammatical gender. -->
+    <string name="win_title">You win!</string>
+    <!-- Primary button of the win card: continue playing past the target. Glossary term. -->
+    <string name="keep_going">Keep going</string>
+    <!-- Title of the card when no move is left. No exclamation mark. -->
+    <string name="game_over_title">Game over</string>
+    <!-- Label of the box that shows the highest tile of the finished game. -->
+    <string name="best_tile">Best tile</string>
+    <!-- Shares the result as text: a button on the game-over card, and the spoken label of the icon-only share button on the win card. -->
+    <string name="share">Share</string>
+    <!-- Title of the Android share sheet. -->
+    <string name="share_chooser_title">Share result</string>
+    <!-- Number of moves in a game. Quantity = the move count. Arguments: %1$s = the count, already formatted (do not use %d) -->
+    <plurals name="moves_count">
+        <item quantity="one">%1$s move</item>
+        <item quantity="other">%1$s moves</item>
+    </plurals>
+    <!-- Number of undos used in a game. Quantity = the undo count (never 0; see `undos_none`). Arguments: %1$s = the count, already formatted -->
+    <plurals name="undos_count">
+        <item quantity="one">%1$s undo</item>
+        <item quantity="other">%1$s undos</item>
+    </plurals>
+    <!-- Shown instead of a count when the game used no undo. -->
+    <string name="undos_none">No undo</string>
+    <!-- Joins moves, time and undos. Contains no words. Arguments: %1$s = `moves_count`; %2$s = time "m:ss"; %3$s = `undos_count` or `undos_none` -->
+    <string name="game_over_summary" translatable="false">%1$s · %2$s · %3$s</string>
+    <!-- First line of the shared text. Keep "2048" and every " · " separator. Translate only "best tile". Arguments: %1$s = "4×4"; %2$s = score; %3$s = best tile value; %4$s = `moves_count`; %5$s = time; %6$s = `undos_count`/`undos_none`. All Latin digits, no grouping -->
+    <string name="share_summary">2048 · %1$s · %2$s · best tile %3$s · %4$s · %5$s · %6$s</string>
     <!-- region M3-D2: end -->
 
     <!-- region M3-D3: begin -->
+    <!-- Spoken label of the back arrow in every top app bar. -->
+    <string name="navigate_up">Navigate up</string>
+    <!-- Spoken label of the ⋮ button that opens the game menu. -->
+    <string name="more_options">More options</string>
+    <!-- Game-menu item that opens the Statistics screen. Use the same word as `statistics`. -->
+    <string name="menu_statistics">Statistics</string>
+    <!-- Game-menu item that opens the rules screen. Use the same words as `how_to_play`. -->
+    <string name="menu_how_to_play">How to play</string>
+    <!-- Game-menu item that opens the About screen. Use the same word as `about`. -->
+    <string name="menu_about">About</string>
+    <!-- Title of the sheet that lists 3×3 … 8×8. Glossary term. -->
+    <string name="board_size_title">Board size</string>
+    <!-- Target tile of a board size, e.g. "Goal 2048". Short. Arguments: %1$s = "2048" or "256" (game numeral) -->
+    <string name="board_size_goal">Goal %1$s</string>
+    <!-- Best score on that size, e.g. "Best 24,680". Arguments: %1$s = best score from `formatCount` (Latin digits, locale grouping) -->
+    <string name="board_size_best">Best %1$s</string>
+    <!-- Shown instead of the best score when that size has never been scored. -->
+    <string name="board_size_no_best">No best score yet</string>
+    <!-- Joins the goal and best parts of a row. Contains no words. Arguments: %1$s = `board_size_goal`; %2$s = `board_size_best` or `board_size_no_best` -->
+    <string name="board_size_supporting" translatable="false">%1$s · %2$s</string>
+    <!-- Small pill on a size whose saved game is unfinished. ≤ 14 characters. -->
+    <string name="in_progress" tools:override="true">In progress</string><!-- reason: compose-ui has a private in_progress with the same English text (PrivateResource) -->
+    <!-- Title of the Statistics screen. -->
+    <string name="statistics">Statistics</string>
+    <!-- Title of the rules screen. -->
+    <string name="how_to_play">How to play</string>
+    <!-- Title of the About screen. -->
+    <string name="about">About</string>
+    <!-- Row that opens the licenses screen. -->
+    <string name="about_licenses">Open-source licenses</string>
+    <!-- Title of the licenses screen. Same words as `about_licenses`. -->
+    <string name="licenses">Open-source licenses</string>
     <!-- region M3-D3: end -->
 
 </resources>

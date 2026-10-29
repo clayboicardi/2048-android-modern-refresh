@@ -1694,7 +1694,7 @@ sealed interface OverlayEntry {
 @Immutable
 sealed interface OverlayUi {
     data object None : OverlayUi
-    data class Win(val targetExp: Int, val summary: GameSummary, val entry: OverlayEntry) : OverlayUi   // summary feeds Share (D-200)
+    data class Win(val targetExp: Int, val summary: GameSummary, val entry: OverlayEntry, val particleSeed: Long, val spawnIndex: Int) : OverlayUi   // summary feeds Share (D-200); particleSeed = state.seed xor state.moveCount, the confetti seed (D-236); spawnIndex = the winning move's spawn cell, Keep going into OVER's deflate origin (D-237)
     data class GameOver(val summary: GameSummary, val entry: OverlayEntry) : OverlayUi
 }
 
@@ -1731,12 +1731,14 @@ class GameViewModel(/* … */) : ViewModel() {
     val overlay: StateFlow<OverlayUi>
     val nudge: StateFlow<Nudge?>               // invalid moves; never changes BoardUi
     val message: StateFlow<GameMessage?>       // D-186 snackbars, decided in onUndo; null until the first (D-231)
+    val sizeOptions: StateFlow<ImmutableList<SizeOption>>   // the board-size sheet's six rows; empty until onSizeSheetOpened (D-236, D-245)
 
     fun onMove(direction: Direction)
     fun onUndo()
     fun onNewGame()                            // the UI shows the confirm dialog first when uiState.inProgress (D-007)
     fun onKeepGoing()
     fun onSizeSelected(size: BoardSize)
+    fun onSizeSheetOpened()                    // reads every size's best and in-progress state into sizeOptions: memory at once, then peek; ignored until ready and while busy (D-236, D-245)
     fun onHintDismissed()
     fun onResumed()                            // from LifecycleResumeEffect in GameScreen
     fun onPaused()                             // from onPauseOrDispose
@@ -2118,9 +2120,8 @@ maxSlideCells(transitions, n):             // pure; used by GameViewModel for Bo
 
 settled(board):                            // companion, pure; the static form of a presented board (§4.11, D-047)
     if board.event == Restored: return board
-    tiles = board.tiles.filter { it.kind != Ghost }
+    tiles = board.tiles.filter { it.kind != Ghost }               // the presented z-order, Ghosts dropped (D-241)
                        .map { it.copy(fromRow = it.row, fromCol = it.col, kind = Static) }
-                       .sortedBy { it.row * n + it.col }          // the row-major order reset() uses
     return board.copy(tiles = tiles, scoreDelta = 0, event = Restored)   // moveId, epoch, size, cells and ids unchanged
 ```
 
@@ -2128,7 +2129,7 @@ settled(board):                            // companion, pure; the static form o
 
 Epoch rules (D-182): an epoch `BoardUi` never contains `Ghost`, `Moved`, `Merged` or `Spawned` tiles. Only `Undo` keeps ids, and only for cells whose exponent is unchanged; every other epoch assigns new ids. The outgoing tiles of an epoch are the ids present before it and absent after it (§5.5); ids present in both boards neither animate nor recompose.
 
-`BoardPresenterTest` (M2) properties: for random replays, the non-`Ghost` tiles of every emitted `BoardUi` are exactly the non-empty cells of the engine board (position and exponent), with no duplicate IDs, and `Ghost` tiles are exactly the merge sources; every epoch board is all `Static`; after `Undo` a cell keeps its id if and only if its exponent is unchanged, and after `reset(…, Restored)`, `NewGame` and `SizeSwitched` every id is new. `settledKeepsIdentityAndIsStatic` (F07-AC25): for every emitted `b`, `settled(b)` keeps `moveId`, `epoch`, `size`, `cells` and the ids and cells of `b`'s non-`Ghost` tiles, in row-major order, all `Static` with `from == to`, `scoreDelta == 0` and event `Restored`; it is idempotent; and the presenter's next emission is the same with or without the call.
+`BoardPresenterTest` (M2) properties: for random replays, the non-`Ghost` tiles of every emitted `BoardUi` are exactly the non-empty cells of the engine board (position and exponent), with no duplicate IDs, and `Ghost` tiles are exactly the merge sources; every epoch board is all `Static`; after `Undo` a cell keeps its id if and only if its exponent is unchanged, and after `reset(…, Restored)`, `NewGame` and `SizeSwitched` every id is new. `settledKeepsIdentityAndIsStatic` (F07-AC25): for every emitted `b`, `settled(b)` keeps `moveId`, `epoch`, `size`, `cells` and the ids and cells of `b`'s non-`Ghost` tiles, in `b`'s order (D-241), all `Static` with `from == to`, `scoreDelta == 0` and event `Restored`; it is idempotent; and the presenter's next emission is the same with or without the call.
 
 ### 5.3 Composition structure
 
@@ -2573,6 +2574,8 @@ fun AppNavHost(gameViewModel: GameViewModel, appViewModel: AppViewModel, modifie
     )
 }
 ```
+
+**M3 form (D-236).** `AppViewModel` arrives in M4.1, so from M3 part 2 until then the host is `AppNavHost(gameViewModel: GameViewModel, settings: Settings, clock: MonotonicClock, modifier: Modifier = Modifier)` and the Game entry is `GameScreen(gameViewModel, settings, clock, onNavigate = navigate)`; M4.1 replaces `settings` with `appViewModel`.
 
 The explicit `SavedStateConfiguration` overload avoids reflection-based key lookup, so the back stack restores identically in the R8-minified release build (both overloads exist in 1.2.0; verified).
 
@@ -3022,6 +3025,7 @@ Root package:
 | `ui/components/MiniTile.kt` | `MiniTile`, `MiniBoardGlyph`, `PaletteSwatch` (`a11y_best_tile`) | M3 p1 | D-070 |
 | `ui/components/Intents.kt` | `openUrl` with snackbar fallback, `shareText` | M3 p2 | D-002, D-008, D-009 |
 | `ui/components/SubScreenScaffold.kt` | Top app bar with back for sub-screens | M3 p2 | D-023 |
+| `ui/components/ListRows.kt` | `SelectableRow`, `LinkRow` (M3 p2) and the plain row (M4.1): the material3 1.5 `ListItem` overloads behind wrappers | M3 p2 | D-026, D-246 |
 | `ui/components/HintCard.kt` | Hint card container | M4 | D-009 |
 | `ui/components/SettingRows.kt` | `SectionHeader`, switch, choice and link rows with Toggle haptics (`a11y_action_change`, `a11y_action_open`) | M4 | D-006, D-065 |
 | `ui/components/WindowMode.kt` | `enum class LayoutMode { STACKED, THREE_COLUMN, SIDE_PANEL, SCROLL }`, `layoutModeFor(widthDp: Int, heightDp: Int)` and `rememberLayoutMode()` from `currentWindowAdaptiveInfoV2()`: the preferred mode, never SCROLL | M4 | D-091, D-092, D-188 |

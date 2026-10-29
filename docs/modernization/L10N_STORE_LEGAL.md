@@ -194,7 +194,7 @@ Rules:
 | `app_name` ✱ | 2048 | — | Launcher label and the title on the Game screen. Never translated (U2). Lives only in `values/`; the debug source set overrides it with "2048 Debug". | Manifest `android:label`; `GameTitle`; About header | M0 | legacy |
 | `settings` | Settings | — | Name of the Settings screen: game-menu item and top-bar title. The 20 legacy translations are kept verbatim (D-101). | `GameMoreMenu`; Settings `TopAppBar`; M0 placeholder | M0 | legacy `action_settings` |
 | `cancel` | Cancel | — | Dismiss button of every dialog. Never means "undo". | `ConfirmDialog`, `ChoiceDialog` | M3 | web `cancel` |
-| `navigate_up` | Navigate up | — | Spoken label of the back arrow in every top app bar. | Sub-screen `TopAppBar` navigation icon | M4 | DESIGN_SYSTEM §6.8 |
+| `navigate_up` | Navigate up | — | Spoken label of the back arrow in every top app bar. | Sub-screen `TopAppBar` navigation icon | M3 | DESIGN_SYSTEM §6.8 |
 | `more_options` | More options | — | Spoken label of the ⋮ button that opens the game menu. | `GameMoreMenu` icon button | M3 | DESIGN_SYSTEM §6.1 |
 | `got_it` | Got it | — | Button that dismisses an informational card or sheet. Short acknowledgement. | `HintCard`; `WhatsNewSheet` | M4 | DESIGN_SYSTEM §6.2, §6.13 |
 | `link_open_failed` | No app can open this link | — | Snackbar when no browser or settings app can handle a link. No final period (matches English). | About source link; Settings App language | M4 | DESIGN_SYSTEM §7.6 |
@@ -285,7 +285,7 @@ Rules:
 
 | Key | English (source) | Arguments | Context for translators | Used in | M | Origin |
 |---|---|---|---|---|---|---|
-| `statistics` | Statistics | — | Title of the Statistics screen. | Stats `TopAppBar` | M4 | DESIGN_SYSTEM §6.9 |
+| `statistics` | Statistics | — | Title of the Statistics screen. | Stats `TopAppBar` | M3 | DESIGN_SYSTEM §6.9 |
 | `stats_reset` | Reset statistics | — | Spoken label of the trash icon in the Statistics top bar. | Stats top-bar action | M4 | DESIGN_SYSTEM §6.9 |
 | `stats_all_sizes` | All sizes | — | First tab: totals over every board size. Other tabs are "3×3" … "8×8" built in code. | Stats tabs | M4 | DESIGN_SYSTEM §6.9 |
 | `stats_best_score` | Best score | — | Label of the hero value. | Stats hero card | M4 | DESIGN_SYSTEM §6.9 |
@@ -358,7 +358,7 @@ Rules:
 
 | Key | English (source) | Arguments | Context for translators | Used in | M | Origin |
 |---|---|---|---|---|---|---|
-| `how_to_play` | How to play | — | Title of the rules screen. | How to play `TopAppBar` | M4 | DESIGN_SYSTEM §6.10 |
+| `how_to_play` | How to play | — | Title of the rules screen. | How to play `TopAppBar` | M3 | DESIGN_SYSTEM §6.10 |
 | `htp_goal` | Goal | — | Section heading (noun). | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_goal_body` | Slide the tiles to merge equal numbers and build the %1$s tile. On a 3×3 board the goal is %2$s. | %1$s = "2048"; %2$s = "256" | Keep "3×3" exactly (Latin digits, U+00D7). | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_moving` | Moving | — | Section heading (noun or gerund). | How to play | M4 | DESIGN_SYSTEM §6.10 |
@@ -384,17 +384,17 @@ Rules:
 
 | Key | English (source) | Arguments | Context for translators | Used in | M | Origin |
 |---|---|---|---|---|---|---|
-| `about` | About | — | Title of the About screen. | About `TopAppBar` | M4 | DESIGN_SYSTEM §6.11 |
+| `about` | About | — | Title of the About screen. | About `TopAppBar` | M3 | DESIGN_SYSTEM §6.11 |
 | `about_version` | Version %1$s (%2$s) | %1$s = versionName; %2$s = versionCode (Latin digits) | Version line, e.g. "Version 3.0.0 (30000)". | About header | M4 | DESIGN_SYSTEM §6.11 |
 | `about_whats_new` | What's new | — | Section heading listing every release of this app. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `about_source_code` | Source code | — | Row that opens the GitHub repository. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `about_source_code_url` ✱ | github.com/clayboicardi/2048-android-modern-refresh | — | Supporting text of the source row. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `about_privacy` | Privacy | — | Section heading. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `privacy_text` | This app collects nothing. It has no network access, no accounts, no ads and no analytics. Game data stays on your device. Android's own backup may copy it to your Google account if you enabled device backup. | — | The privacy policy shown in the app (D-123). Translate faithfully; do not add or remove claims. Keep "Android" and "Google". | About | M4 | D-123 |
-| `about_licenses` | Open-source licenses | — | Row that opens the licenses screen. | About | M4 | DESIGN_SYSTEM §6.11 |
+| `about_licenses` | Open-source licenses | — | Row that opens the licenses screen. | About | M3 | DESIGN_SYSTEM §6.11 |
 | `about_credits` | Credits | — | Section heading; its rows are English names. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `about_legacy_history` | Legacy history | — | Section heading: release history of the original Android app (shown in English). | About | M4 | DESIGN_SYSTEM §6.11 |
-| `licenses` | Open-source licenses | — | Title of the licenses screen. Same words as `about_licenses`. | Licenses `TopAppBar` | M4 | DESIGN_SYSTEM §6.12 |
+| `licenses` | Open-source licenses | — | Title of the licenses screen. Same words as `about_licenses`. | Licenses `TopAppBar` | M3 | DESIGN_SYSTEM §6.12 |
 | `license_mit_name` ✱ | MIT License | — | Official license name. | Licenses group header | M4 | DESIGN_SYSTEM §6.12 |
 | `license_ofl_name` ✱ | SIL Open Font License 1.1 | — | Official license name. | Licenses group header | M4 | DESIGN_SYSTEM §6.12 |
 | `license_apache_name` ✱ | Apache License 2.0 | — | Official license name. | Licenses group header | M4 | DESIGN_SYSTEM §6.12 |
@@ -471,7 +471,7 @@ Rules:
    ```
 
    Lint 32.4.1 honors `tools:ignore` on `<resources>`: 0 errors with it and 158 without it (verified, §0.3 item 15). If a later Lint stops honoring it, put `tools:ignore="MissingTranslation"` on each element of this file instead, each with the same same-line reason comment.
-2. Nothing else is suppressed. `ExtraTranslation`, `MissingQuantity`, `UnusedQuantity`, `UnusedResources` and the `StringFormat*` checks stay errors throughout. The one exception is D-232's same-line `tools:ignore="UnusedResources"` on `settings` in `values/strings.xml`, from the M3 part 1 commit until the M3 part 2 commit removes it.
+2. Nothing else is suppressed. `ExtraTranslation`, `MissingQuantity`, `UnusedQuantity`, `UnusedResources` and the `StringFormat*` checks stay errors throughout. The one exception was D-232's same-line `tools:ignore="UnusedResources"` on `settings` in `values/strings.xml`, from the M3 part 1 commit until the M3 part 2 commit removed it. `in_progress` carries `tools:override="true"` with a same-line reason, because compose-ui ships a private string of that name (D-239); that marks the intended override for Lint's `PrivateResource` check and suppresses none of the checks above.
 3. M0–M2 add no string beyond the migrated `settings`.
 4. In M5, the commit that adds the 20 translations also moves every entry of `strings_pending.xml` into `strings.xml` (in §1.3 order) and deletes `strings_pending.xml`. The same commit adds `check_strings_final` to `check-metadata.sh` (`QUALITY.md` §1.16, D-190), which fails while the file exists. From then on, a string arrives with all 20 translations in the same commit.
 

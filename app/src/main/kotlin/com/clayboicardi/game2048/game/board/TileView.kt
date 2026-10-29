@@ -59,13 +59,14 @@ internal fun TileView(
 }
 
 /**
- * The tile's size (measure), position (placement) and scale and alpha (its layer), all read in
- * their own phase (ARCHITECTURE.md §5.7). The layer is the placement's own, not a `graphicsLayer`
- * modifier: that modifier is a semantics node in ui 1.12, and tiles carry no semantics (D-080).
+ * The tile's size (measure), position (placement) and scale (its own scale times the game-over
+ * deflate) and alpha (its layer), all read in their own phase (ARCHITECTURE.md §5.3, §5.7). The
+ * layer is the placement's own, not a `graphicsLayer` modifier: that modifier is a semantics node
+ * in ui 1.12, and tiles carry no semantics (D-080).
  */
 private fun Modifier.tilePlacement(anim: TileAnim, geometry: State<BoardGeometry>): Modifier {
     val layer: GraphicsLayerScope.() -> Unit = {
-        val s = anim.scale.value
+        val s = anim.scale.value * anim.deflate.value
         scaleX = s
         scaleY = s
         alpha = anim.alpha.value

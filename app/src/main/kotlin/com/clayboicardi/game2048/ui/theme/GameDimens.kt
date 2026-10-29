@@ -122,6 +122,17 @@ object GameDimens {
     /** `ElevatedCard` default elevation of the win and game-over cards (DESIGN_SYSTEM.md §4.5). */
     val OverlayCardElevation: Dp = 6.dp
 
+    /** The win card's icon-only Share at its top end (DESIGN_SYSTEM.md §6.3, §6.3a). */
+    val CardShareButton: Dp = 48.dp
+    /** The Compact win and game-over cards' padding (DESIGN_SYSTEM.md §6.3a, §6.4a). */
+    val CardPaddingCompact: Dp = 20.dp
+    /** The game-over card's SCORE, BEST and BEST TILE boxes (DESIGN_SYSTEM.md §6.4a). */
+    val CardStatBoxMinHeight: Dp = 64.dp
+    /** The Regular game-over card's SCORE value: `ScoreValue` fitted 14..40 sp (§6.4). */
+    val CardScoreValueMax: TextUnit = 40.sp
+    /** The Compact game-over card's SCORE and BEST values: 14..24 sp (§6.4a). */
+    val CardScoreValueCompactMax: TextUnit = 24.sp
+
     // Win hero badge (DESIGN_SYSTEM.md §6.3, §6.3a).
     val HeroBadge: Dp = 96.dp
     /** Window height < 480 dp. */
@@ -130,6 +141,10 @@ object GameDimens {
     val HeroBadgeExpanded: Dp = 120.dp
     /** The Compact win card. */
     val HeroBadgeCompact: Dp = 64.dp
+
+    // Board-size sheet (DESIGN_SYSTEM.md §6.7).
+    /** A size row's minimum height. */
+    val SizeSheetRowMinHeight: Dp = 72.dp
 
     // Mini tiles (DESIGN_SYSTEM.md §7.8).
     /** Size sheet, statistics, Compact game-over card. */

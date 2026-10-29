@@ -334,7 +334,8 @@ private fun assertSettled(b: BoardUi, label: String) {
     assertWithMessage("$label: identity")
         .that(listOf(s.moveId, s.epoch, s.size, s.cells))
         .isEqualTo(listOf(b.moveId, b.epoch, b.size, b.cells))
-    val kept = b.tiles.filter { it.kind != TileKind.Ghost }.sortedBy { it.row * n + it.col }
+    // b's own z-order, Ghosts dropped (D-241).
+    val kept = b.tiles.filter { it.kind != TileKind.Ghost }
     assertWithMessage("$label: tiles")
         .that(s.tiles.map { Triple(it.id, it.exp, it.row * n + it.col) })
         .isEqualTo(kept.map { Triple(it.id, it.exp, it.row * n + it.col) })

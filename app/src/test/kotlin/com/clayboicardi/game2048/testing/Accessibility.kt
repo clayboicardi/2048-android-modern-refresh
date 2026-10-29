@@ -59,25 +59,39 @@ fun ComposeTestRule.assertTouchTargets() {
 
 /**
  * [assertTouchTargets] for the clickables of the open dialog or sheet window (`isDialog()`), in
- * that window's coordinates, while the main window's are left to [assertTouchTargets].
+ * that window's coordinates, while the main window's are left to [assertTouchTargets]. A clickable
+ * that covers the whole window is the window's scrim (`ModalBottomSheet`'s "Close sheet" target,
+ * drawn under every other clickable of the window): its size is checked, and the targets above it
+ * may overlap it (D-238).
  */
 fun ComposeTestRule.assertDialogTouchTargets() {
-    val checked = touchTargets(hasClickAction() and hasAnyAncestor(isDialog()))
+    val checked = touchTargets(hasClickAction() and hasAnyAncestor(isDialog()), scrimExempt = true)
     check(checked > 0) { "No clickable in an open dialog window" }
 }
 
-/** Checks the clickables that [matcher] selects; returns how many there were. */
-private fun ComposeTestRule.touchTargets(matcher: SemanticsMatcher): Int {
+/**
+ * Checks the clickables that [matcher] selects; returns how many there were. With [scrimExempt], a
+ * clickable that covers its whole window is left out of the overlap check only.
+ */
+private fun ComposeTestRule.touchTargets(
+    matcher: SemanticsMatcher,
+    scrimExempt: Boolean = false,
+): Int {
     val minPx = with(density) { 48.dp.toPx() } - 0.5f
     val nodes = onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes()
     val tooSmall =
         nodes
             .filter { it.touchBoundsInRoot.width < minPx || it.touchBoundsInRoot.height < minPx }
             .map { "too small: ${it.id} ${it.touchBoundsInRoot}" }
-    val problems = tooSmall + overlaps(nodes)
+    val overlapping = if (scrimExempt) nodes.filterNot { it.coversItsWindow() } else nodes
+    val problems = tooSmall + overlaps(overlapping)
     check(problems.isEmpty()) { "Touch-target violations: " + problems.joinToString() }
     return nodes.size
 }
+
+/** Whether this node's touch bounds are its window's whole bounds (a modal scrim). */
+private fun SemanticsNode.coversItsWindow(): Boolean =
+    touchBoundsInRoot == generateSequence(this) { it.parent }.last().boundsInRoot
 
 private fun overlaps(nodes: List<SemanticsNode>): List<String> = nodes.flatMapIndexed { i, a ->
     nodes.drop(i + 1).mapNotNull { b ->

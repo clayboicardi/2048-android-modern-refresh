@@ -1,50 +1,85 @@
 package com.clayboicardi.game2048.game
 
+import android.content.Intent
 import android.view.MotionEvent
 import androidx.activity.ComponentDialog
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.style.ResolvedTextDirection
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.core.content.IntentCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.clayboicardi.game2048.AboutKey
 import com.clayboicardi.game2048.App
 import com.clayboicardi.game2048.Game2048Application
+import com.clayboicardi.game2048.GameKey
+import com.clayboicardi.game2048.HowToPlayKey
 import com.clayboicardi.game2048.MainActivity
+import com.clayboicardi.game2048.NAVIGATE_UP_TAG
+import com.clayboicardi.game2048.SettingsKey
+import com.clayboicardi.game2048.StatsKey
 import com.clayboicardi.game2048.data.AppJson
 import com.clayboicardi.game2048.data.DataStoreFiles
 import com.clayboicardi.game2048.data.game.GameDocument
@@ -62,6 +97,7 @@ import com.clayboicardi.game2048.engine.GameState
 import com.clayboicardi.game2048.engine.GameStatus
 import com.clayboicardi.game2048.engine.MoveOutcome
 import com.clayboicardi.game2048.fixtures.GoldenFixtures
+import com.clayboicardi.game2048.fixtures.MotionFixtures
 import com.clayboicardi.game2048.fixtures.fixtureGame
 import com.clayboicardi.game2048.game.board.BoardEvent
 import com.clayboicardi.game2048.game.board.BoardEventKind
@@ -70,9 +106,22 @@ import com.clayboicardi.game2048.game.header.BEST_STAR_TAG
 import com.clayboicardi.game2048.game.header.BEST_TAG
 import com.clayboicardi.game2048.game.header.HEADER_TAG
 import com.clayboicardi.game2048.game.header.SCORE_TAG
+import com.clayboicardi.game2048.game.header.SIZE_CHIP_TAG
 import com.clayboicardi.game2048.game.motion.LocalMotionProbe
 import com.clayboicardi.game2048.game.motion.MotionProbe
 import com.clayboicardi.game2048.game.motion.MotionSnapshot
+import com.clayboicardi.game2048.game.overlay.CARD_NEW_GAME_TAG
+import com.clayboicardi.game2048.game.overlay.CARD_SHARE_TAG
+import com.clayboicardi.game2048.game.overlay.CARD_UNDO_TAG
+import com.clayboicardi.game2048.game.overlay.GAME_OVER_CARD_TAG
+import com.clayboicardi.game2048.game.overlay.KEEP_GOING_TAG
+import com.clayboicardi.game2048.game.overlay.SCRIM_TAG
+import com.clayboicardi.game2048.game.overlay.SIZE_CHECK_TAG
+import com.clayboicardi.game2048.game.overlay.SIZE_SHEET_TAG
+import com.clayboicardi.game2048.game.overlay.WIN_CARD_TAG
+import com.clayboicardi.game2048.game.overlay.sizeRowTag
+import com.clayboicardi.game2048.menuItemTag
+import com.clayboicardi.game2048.screenTag
 import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
 import com.clayboicardi.game2048.testing.FakeClock
 import com.clayboicardi.game2048.testing.FakeHapticFeedback
@@ -83,11 +132,15 @@ import com.clayboicardi.game2048.testing.seedRecords
 import com.clayboicardi.game2048.testing.seedSettings
 import com.clayboicardi.game2048.ui.components.DIALOG_CONFIRM_TAG
 import com.clayboicardi.game2048.ui.components.DIALOG_DISMISS_TAG
+import com.clayboicardi.game2048.ui.theme.GameTheme
+import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
+import kotlin.math.sqrt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
@@ -95,6 +148,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
@@ -108,6 +162,7 @@ import org.robolectric.shadows.ShadowLooper
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Suppress("LargeClass") // FEATURES.md §8 puts every GameScreen criterion of M3 and M4 in this class
 class GameScreenTest {
     @get:Rule val compose = createComposeRule()
     @get:Rule val tmp = TemporaryFolder()
@@ -328,6 +383,73 @@ class GameScreenTest {
             assertThat(rig.vm.header.value.event).isEqualTo(BoardEventKind.NewGame)
             assertThat(rig.saved().state.seed).isNotEqualTo(GoldenFixtures.FIX_FRESH_4.state.seed)
             assertThat(rig.saved().gameId).isGreaterThan(GoldenFixtures.FIX_FRESH_4.gameId)
+        }
+    }
+
+    /** F06-AC5 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun newGameFromCardsSkipsConfirmation() {
+        // `WON` and `OVER` are not "in progress" (D-007, D-199): New game on the card and on the
+        // controls bar starts a fresh game at once. One rig per case, composed in turn.
+        val cases =
+            listOf(GoldenFixtures.FIX_WON_4, GoldenFixtures.FIX_OVER_4).flatMap { game ->
+                listOf(CARD_NEW_GAME_TAG, NEW_GAME_TAG).map { tag ->
+                    Triple(ScreenRig(tmp.newFolder(), game, SETTINGS), game, tag)
+                }
+            }
+        var shown by mutableStateOf(cases.first().first)
+        compose.setContent { key(shown) { RigContent(shown) } }
+        try {
+            for ((rig, game, tag) in cases) {
+                shown = rig
+                rig.awaitReady(compose)
+                compose.waitForIdle()
+                val won = game.state.status == GameStatus.WON
+                val card = if (won) WIN_CARD_TAG else GAME_OVER_CARD_TAG
+                compose.onNodeWithTag(card).assertExists()
+
+                compose.onNodeWithTag(tag).performClick()
+                compose.waitForIdle()
+
+                val label = "${game.state.status}, $tag"
+                assertWithMessage("$label: dialog")
+                    .that(compose.onAllNodes(isDialog()).fetchSemanticsNodes())
+                    .isEmpty()
+                val fresh = rig.saved()
+                assertWithMessage("$label: moves").that(fresh.state.moveCount).isEqualTo(0)
+                assertWithMessage("$label: status")
+                    .that(fresh.state.status)
+                    .isEqualTo(GameStatus.PLAYING)
+                assertWithMessage("$label: game id").that(fresh.gameId).isGreaterThan(game.gameId)
+                assertWithMessage("$label: card")
+                    .that(compose.onAllNodesWithTag(card).fetchSemanticsNodes())
+                    .isEmpty()
+            }
+        } finally {
+            cases.forEach { it.first.close() }
+        }
+    }
+
+    /** F06-AC6 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun cancelThenWinStillShowsWinCard() {
+        // B5: the legacy game suppressed the win card after a cancelled restart.
+        rig(MotionFixtures.FIX_WIN_PRE_4, SETTINGS.copy(motion = MotionPreference.OFF)).use { rig ->
+            show(rig)
+            compose.onNodeWithTag(NEW_GAME_TAG).performClick()
+            compose.waitForIdle()
+            compose.onNode(isDialog()).assertExists()
+            compose.onNodeWithTag(DIALOG_DISMISS_TAG).performClick()
+            compose.waitForIdle()
+            compose.onNode(isDialog()).assertDoesNotExist()
+
+            rig.vm.onMove(Direction.LEFT)
+            compose.waitForIdle()
+
+            assertThat(rig.vm.uiState.value.status).isEqualTo(GameStatus.WON)
+            compose.onNodeWithTag(WIN_CARD_TAG).assertExists()
         }
     }
 
@@ -619,6 +741,670 @@ class GameScreenTest {
         }
     }
 
+    /** F03-AC11 */
+    @Test
+    fun winCardInteractiveAtT0Plus800Full() {
+        MotionFixtures.WIN_PRE_LEFT.verify()
+        rig(MotionFixtures.FIX_WIN_PRE_4, SETTINGS.copy(motion = MotionPreference.FULL)).use { rig
+            ->
+            val origin = playToOrigin(rig, Direction.LEFT)
+
+            advanceTo(origin + WIN_LOCKED_FULL_MS)
+            assertCardButtons(WIN_BUTTONS, enabled = false, at = "t = 864")
+            advanceTo(origin + WIN_INTERACTIVE_FULL_MS)
+            assertCardButtons(WIN_BUTTONS, enabled = true, at = "t = 880")
+        }
+    }
+
+    /** F03-AC12 */
+    @Test
+    fun winCardInteractiveAt150Reduced() {
+        val settings = SETTINGS.copy(motion = MotionPreference.REDUCED)
+        rig(MotionFixtures.FIX_WIN_PRE_4, settings).use { rig ->
+            val origin = playToOrigin(rig, Direction.LEFT)
+
+            advanceTo(origin + REDUCED_LOCKED_MS)
+            assertCardButtons(WIN_BUTTONS, enabled = false, at = "t = 144")
+            advanceTo(origin + REDUCED_INTERACTIVE_MS)
+            assertCardButtons(WIN_BUTTONS, enabled = true, at = "t = 160")
+            // The confetti draws in the screen's one effects canvas (D-187), which the sparkles
+            // share: under Reduced it never holds a particle (D-247).
+            while (compose.mainClock.currentTime < origin + CARD_WATCH_MS) {
+                assertWithMessage("confetti at t = ${compose.mainClock.currentTime - origin}")
+                    .that(probe.snapshot().effects.confettiAlive)
+                    .isEqualTo(0)
+                compose.mainClock.advanceTimeByFrame()
+            }
+        }
+    }
+
+    /** F03-AC13 */
+    @Test
+    fun winCardInteractiveImmediatelyOff() {
+        rig(MotionFixtures.FIX_WIN_PRE_4, SETTINGS.copy(motion = MotionPreference.OFF)).use { rig ->
+            show(rig)
+            compose.mainClock.autoAdvance = false
+
+            rig.vm.onMove(Direction.LEFT)
+            compose.mainClock.advanceTimeByFrame()
+
+            compose.onNodeWithTag(WIN_CARD_TAG).assertExists()
+            assertCardButtons(WIN_BUTTONS, enabled = true, at = "F0")
+        }
+    }
+
+    /** F03-AC14 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun restoredWinCardInteractiveImmediately() {
+        rig(GoldenFixtures.FIX_WON_4, SETTINGS.copy(motion = MotionPreference.FULL)).use { rig ->
+            compose.mainClock.autoAdvance = false
+            compose.setContent { RigContent(rig) }
+            rig.awaitReady(compose)
+            advanceToLoadedFrame()
+
+            compose.onNodeWithTag(WIN_CARD_TAG).assertExists()
+            assertCardButtons(WIN_BUTTONS, enabled = true, at = "the first loaded frame")
+            repeat(FRAMES_TO_SETTLE) { frame ->
+                val now = probe.snapshot()
+                val overlay = checkNotNull(now.overlay) { "no card at frame $frame" }
+                assertWithMessage("frame $frame: interactive").that(overlay.interactive).isTrue()
+                assertWithMessage("frame $frame: badge morph")
+                    .that(overlay.badgeMorph)
+                    .isEqualTo(1f)
+                assertWithMessage("frame $frame: confetti")
+                    .that(now.effects.confettiAlive)
+                    .isEqualTo(0)
+                assertWithMessage("frame $frame: running").that(now.isAnyRunning).isFalse()
+                compose.mainClock.advanceTimeByFrame()
+            }
+            assertThat(haptics.events).isEmpty()
+        }
+    }
+
+    /** F03-AC16 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun winCardBlocksBoardInput() {
+        rig(GoldenFixtures.FIX_WON_4).use { rig ->
+            show(rig)
+            compose.onNodeWithTag(WIN_CARD_TAG).assertExists()
+            val game = rig.saved()
+            val board = rig.vm.board.value
+
+            assertBoardInputBlocked(rig)
+
+            rig.flush()
+            assertThat(rig.saved()).isEqualTo(game)
+            assertThat(rig.vm.board.value).isEqualTo(board)
+            assertThat(rig.vm.uiState.value.status).isEqualTo(GameStatus.WON)
+            compose.onNodeWithTag(WIN_CARD_TAG).assertExists()
+        }
+    }
+
+    /** F03-AC18 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun winCardFitsBoard() {
+        // The two portrait windows. The `w915dp-h412dp-land` window needs the landscape
+        // arrangements of M4 (DESIGN_SYSTEM.md §5.3), which add it to this test (D-244).
+        assertCardFitsBoard(GoldenFixtures.FIX_WON_4, WIN_CARD_TAG)
+    }
+
+    /** F03-AC19 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun cardButtonsNeverRenderDisabledColors() {
+        rig(MotionFixtures.FIX_WIN_PRE_4, SETTINGS.copy(motion = MotionPreference.FULL)).use { rig
+            ->
+            lateinit var scheme: ColorScheme
+            compose.setContent {
+                RigContent(rig)
+                GameTheme(darkTheme = false) { scheme = MaterialTheme.colorScheme }
+            }
+            rig.awaitReady(compose)
+            compose.waitForIdle()
+            compose.mainClock.autoAdvance = false
+            probe.originMs = null
+            rig.vm.onMove(Direction.LEFT)
+            val origin = advanceToOrigin()
+
+            advanceTo(origin + WIN_LOCKED_FULL_MS)
+            val keepGoing = compose.onNodeWithTag(KEEP_GOING_TAG)
+            keepGoing.assertIsNotEnabled()
+            keepGoing.performSemanticsAction(SemanticsActions.RequestFocus)
+            keepGoing.assertIsNotFocused()
+            val pixel = labelFreePixel(keepGoing.captureToImage())
+            val disabled =
+                scheme.onSurface
+                    .copy(alpha = DISABLED_CONTAINER_ALPHA)
+                    .compositeOver(scheme.surfaceContainerHigh)
+            assertWithMessage("Keep going's container at t = 864 ($pixel)")
+                .that(distance(pixel, scheme.primary))
+                .isLessThan(distance(pixel, disabled))
+
+            advanceTo(origin + WIN_INTERACTIVE_FULL_MS)
+            keepGoing.assertIsEnabled()
+        }
+    }
+
+    /** F04-AC2 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun gameOverCardContent() {
+        rig(GoldenFixtures.FIX_OVER_4, records = GoldenFixtures.FIX_RECORDS).use { rig ->
+            show(rig)
+
+            val inCard = hasAnyAncestor(hasTestTag(GAME_OVER_CARD_TAG))
+            compose.onNodeWithTag(GAME_OVER_CARD_TAG).assertExists()
+            for (text in listOf("Game over", "3012", "24680", "302 moves · 6:41 · No undo")) {
+                compose.onNode(inCard and hasText(text), useUnmergedTree = true).assertExists()
+            }
+            compose
+                .onNode(inCard and hasContentDescription("Best tile, 128"), useUnmergedTree = true)
+                .assertExists()
+        }
+    }
+
+    /** F04-AC3 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun gameOverCardUndoPhrasing() {
+        val rigs =
+            listOf(1, 2).associateWith { undos ->
+                ScreenRig(tmp.newFolder(), overWithUndos(undos), SETTINGS)
+            }
+        var shown by mutableStateOf(rigs.getValue(1))
+        compose.setContent { key(shown) { RigContent(shown) } }
+        try {
+            for ((undos, rig) in rigs) {
+                shown = rig
+                rig.awaitReady(compose)
+                compose.waitForIdle()
+                val ending = if (undos == 1) "1 undo" else "$undos undos"
+                compose
+                    .onNode(
+                        hasAnyAncestor(hasTestTag(GAME_OVER_CARD_TAG)) and
+                            hasText("302 moves · 6:41 · $ending"),
+                        useUnmergedTree = true,
+                    )
+                    .assertExists()
+            }
+        } finally {
+            rigs.values.forEach { it.close() }
+        }
+    }
+
+    /** F04-AC4 */
+    @Test
+    fun gameOverCardInteractiveAtT0Plus700Full() {
+        MotionFixtures.OVER_PRE_LEFT.verify()
+        val settings = SETTINGS.copy(motion = MotionPreference.FULL)
+        rig(MotionFixtures.FIX_OVER_PRE_4, settings).use { rig ->
+            val origin = playToOrigin(rig, Direction.LEFT)
+
+            advanceTo(origin + OVER_LOCKED_FULL_MS)
+            assertCardButtons(OVER_BUTTONS, enabled = false, at = "t = 992")
+            advanceTo(origin + OVER_INTERACTIVE_FULL_MS)
+            assertCardButtons(OVER_BUTTONS, enabled = true, at = "t = 1008")
+        }
+    }
+
+    /** F04-AC5 */
+    @Test
+    fun gameOverCardInteractiveAt150Reduced() {
+        val settings = SETTINGS.copy(motion = MotionPreference.REDUCED)
+        rig(MotionFixtures.FIX_OVER_PRE_4, settings).use { rig ->
+            val origin = playToOrigin(rig, Direction.LEFT)
+
+            advanceTo(origin + REDUCED_LOCKED_MS)
+            assertCardButtons(OVER_BUTTONS, enabled = false, at = "t = 144")
+            advanceTo(origin + REDUCED_INTERACTIVE_MS)
+            assertCardButtons(OVER_BUTTONS, enabled = true, at = "t = 160")
+        }
+    }
+
+    /** F04-AC6 */
+    @Test
+    fun gameOverCardInteractiveImmediatelyOff() {
+        val settings = SETTINGS.copy(motion = MotionPreference.OFF)
+        rig(MotionFixtures.FIX_OVER_PRE_4, settings).use { rig ->
+            show(rig)
+            compose.mainClock.autoAdvance = false
+
+            rig.vm.onMove(Direction.LEFT)
+            compose.mainClock.advanceTimeByFrame()
+
+            compose.onNodeWithTag(GAME_OVER_CARD_TAG).assertExists()
+            assertCardButtons(OVER_BUTTONS, enabled = true, at = "F0")
+        }
+    }
+
+    /** F04-AC7 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun gameOverCardNotDismissible() {
+        rig(GoldenFixtures.FIX_OVER_4).use { rig ->
+            show(rig)
+            compose.onNodeWithTag(GAME_OVER_CARD_TAG).assertExists()
+            val game = rig.saved()
+            val board = rig.vm.board.value
+
+            assertBoardInputBlocked(rig)
+
+            rig.flush()
+            assertThat(rig.saved()).isEqualTo(game)
+            assertThat(rig.vm.board.value).isEqualTo(board)
+            assertThat(rig.vm.uiState.value.status).isEqualTo(GameStatus.OVER)
+            compose.onNodeWithTag(GAME_OVER_CARD_TAG).assertExists()
+        }
+    }
+
+    /** F04-AC14 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun gameOverCardFitsBoard() {
+        // The two portrait windows. The `w915dp-h412dp-land` window needs the landscape
+        // arrangements of M4 (DESIGN_SYSTEM.md §5.3), which add it to this test (D-244).
+        assertCardFitsBoard(GoldenFixtures.FIX_OVER_4, GAME_OVER_CARD_TAG)
+    }
+
+    /** F10-AC6 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun shareLaunchesChooserWithText() {
+        rig(GoldenFixtures.FIX_OVER_4).use { rig ->
+            show(rig)
+
+            compose.onNodeWithTag(CARD_SHARE_TAG).performClick()
+            compose.waitForIdle()
+
+            assertChooser(
+                "2048 · 4×4 · 3012 · best tile 128 · 302 moves · 6:41 · No undo\n" +
+                    "$BROWN$BROWN$BROWN$BROWN\n" +
+                    "$BROWN$BROWN$BROWN$BROWN\n" +
+                    "$YELLOW$YELLOW$YELLOW$ORANGE\n" +
+                    "$BROWN$BROWN$BROWN$BROWN",
+            )
+        }
+    }
+
+    /** F10-AC7 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun shareOnBothCardsNotInMenu() {
+        val won = ScreenRig(tmp.newFolder(), GoldenFixtures.FIX_WON_4, SETTINGS)
+        val over = ScreenRig(tmp.newFolder(), GoldenFixtures.FIX_OVER_4, SETTINGS)
+        var shown by mutableStateOf(won)
+        compose.setContent { key(shown) { RigContent(shown) } }
+        try {
+            for ((rig, card) in listOf(won to WIN_CARD_TAG, over to GAME_OVER_CARD_TAG)) {
+                shown = rig
+                rig.awaitReady(compose)
+                compose.waitForIdle()
+                compose
+                    .onNode(hasTestTag(CARD_SHARE_TAG) and hasAnyAncestor(hasTestTag(card)))
+                    .assertExists()
+
+                // The game menu (M3-D3's GameMoreMenu) opens over the card; no Share outside it.
+                compose.onNodeWithTag(MORE_TAG).performClick()
+                compose.waitForIdle()
+                for (key in listOf(StatsKey, SettingsKey, HowToPlayKey, AboutKey)) {
+                    compose.onNodeWithTag(menuItemTag(key)).assertIsDisplayed()
+                }
+                compose
+                    .onAllNodes(
+                        (hasText(SHARE) or hasContentDescription(SHARE)) and
+                            !hasAnyAncestor(hasTestTag(card)),
+                        useUnmergedTree = true,
+                    )
+                    .assertCountEquals(0)
+            }
+        } finally {
+            won.close()
+            over.close()
+        }
+    }
+
+    /** F10-AC8 */
+    @Test
+    @Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+    fun winCardShareLaunchesChooser() {
+        rig(GoldenFixtures.FIX_WON_4).use { rig ->
+            show(rig)
+
+            compose.onNodeWithTag(CARD_SHARE_TAG).performClick()
+            compose.waitForIdle()
+
+            // FIX_WON_4: 2048 at index 0, 2 and 4 beside it, 8 below, 2s at 8 and 15.
+            assertChooser(
+                "2048 · 4×4 · 20124 · best tile 2048 · 980 moves · 21:15 · No undo\n" +
+                    "$BLUE$BROWN$BROWN$EMPTY\n" +
+                    "$BROWN$EMPTY$EMPTY$EMPTY\n" +
+                    "$BROWN$EMPTY$EMPTY$EMPTY\n" +
+                    "$EMPTY$EMPTY$EMPTY$BROWN",
+            )
+        }
+    }
+
+    /** F21-AC2 */
+    @Test
+    fun menuOpensEveryDestination() {
+        rig(GoldenFixtures.FIX_MID_4).use { rig ->
+            var dispatcher: OnBackPressedDispatcher? = null
+            compose.setContent {
+                dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+                RigContent(rig)
+            }
+            rig.awaitReady(compose)
+            compose.waitForIdle()
+            val destinations =
+                listOf(
+                    StatsKey to "Statistics",
+                    SettingsKey to "Settings",
+                    HowToPlayKey to "How to play",
+                    AboutKey to "About",
+                )
+
+            for ((key, title) in destinations) {
+                compose.onNodeWithTag(MORE_TAG).performClick()
+                compose.waitForIdle()
+                compose.onNodeWithTag(menuItemTag(key)).assert(hasText(title)).performClick()
+                compose.waitForIdle()
+
+                compose.onNodeWithTag(screenTag(key)).assertIsDisplayed()
+                compose
+                    .onNode(hasAnyAncestor(hasTestTag(screenTag(key))) and hasText(title))
+                    .assertIsDisplayed()
+                compose
+                    .onNodeWithTag(NAVIGATE_UP_TAG)
+                    .assertIsDisplayed()
+                    .assert(hasContentDescription("Navigate up"))
+                    .assert(hasClickAction())
+                compose.onNodeWithTag(screenTag(GameKey)).assertDoesNotExist()
+
+                checkNotNull(dispatcher).onBackPressed()
+                compose.waitForIdle()
+                compose.onNodeWithTag(screenTag(key)).assertDoesNotExist()
+                compose.onNodeWithTag(BOARD_TAG).assertIsDisplayed()
+            }
+
+            // The back arrow pops as Back does.
+            compose.onNodeWithTag(MORE_TAG).performClick()
+            compose.waitForIdle()
+            compose.onNodeWithTag(menuItemTag(SettingsKey)).performClick()
+            compose.waitForIdle()
+            compose.onNodeWithTag(NAVIGATE_UP_TAG).performClick()
+            compose.waitForIdle()
+            compose.onNodeWithTag(screenTag(SettingsKey)).assertDoesNotExist()
+            compose.onNodeWithTag(BOARD_TAG).assertIsDisplayed()
+        }
+    }
+
+    /** F21-AC10 */
+    @Test
+    fun navigationIsInstantWhenMotionOff() {
+        rig(GoldenFixtures.FIX_MID_4, SETTINGS.copy(motion = MotionPreference.OFF)).use { rig ->
+            show(rig)
+            compose.onNodeWithTag(MORE_TAG).performClick()
+            compose.waitForIdle()
+            compose.mainClock.autoAdvance = false
+
+            compose.onNodeWithTag(menuItemTag(SettingsKey)).performClick()
+            // The frame after the tap reads the new back stack; `NavDisplay` starts its transition,
+            // and composes Settings, on the frame after that (D-247).
+            val maxFrames = 2
+            val shown = compose.onAllNodesWithTag(screenTag(SettingsKey))
+            var frames = 0
+            while (shown.fetchSemanticsNodes().isEmpty() && frames < maxFrames) {
+                compose.mainClock.advanceTimeByFrame()
+                frames++
+            }
+
+            assertWithMessage("frames from the tap to Settings").that(frames).isAtMost(maxFrames)
+            assertThat(probe.navOriginMs).isEqualTo(compose.mainClock.currentTime)
+            val settings = compose.onNodeWithTag(screenTag(SettingsKey))
+            settings.assertIsDisplayed()
+            assertThat(settings.fetchSemanticsNode().boundsInRoot.left).isEqualTo(0f)
+            compose.onNodeWithTag(screenTag(GameKey)).assertDoesNotExist()
+            val first = settings.captureToImage().asAndroidBitmap()
+            compose.mainClock.advanceTimeBy(SETTLE_MS)
+            val settled = settings.captureToImage().asAndroidBitmap()
+            assertWithMessage("Settings' first frame equals its settled frame")
+                .that(first.sameAs(settled))
+                .isTrue()
+        }
+    }
+
+    /** F02-AC7 */
+    @Test
+    fun sizeSheetRowsShowGoalBestAndInProgress() {
+        // A saved 3×3 game in progress beside the current 4×4 game, seeded with it: the ViewModel's
+        // load reads every size's file, so nothing may write one behind it.
+        val others = listOf(GoldenFixtures.FIX_MID_3)
+        rig(GoldenFixtures.FIX_MID_4, records = GoldenFixtures.FIX_RECORDS, others = others).use {
+            rig ->
+            show(rig)
+            compose.onNodeWithTag(SIZE_CHIP_TAG).performClick()
+            compose.waitForIdle()
+            compose.onNodeWithTag(SIZE_SHEET_TAG).assertExists()
+
+            val tops =
+                (BoardSize.MIN_N..BoardSize.MAX_N).map { n ->
+                    val supporting =
+                        when (n) {
+                            3 -> "Goal 256 · Best 2,100"
+                            4 -> "Goal 2048 · Best 24,680"
+                            else -> "Goal 2048 · No best score yet"
+                        }
+                    val row = compose.onNodeWithTag(sizeRowTag(n))
+                    row.assert(hasText("$n×$n"))
+                        .assert(hasText(supporting))
+                        .assert(
+                            SemanticsMatcher.expectValue(
+                                SemanticsProperties.Role,
+                                Role.RadioButton,
+                            ),
+                        )
+                    if (n == 4) row.assertIsSelected() else row.assertIsNotSelected()
+                    // 3×3 and the current 4×4 game are in progress (FIX_MID_3, FIX_MID_4).
+                    val pill = hasText("In progress")
+                    row.assert(
+                        if (n <= 4) pill else SemanticsMatcher("no pill") { !pill.matches(it) },
+                    )
+                    val checks =
+                        compose.onAllNodes(
+                            hasTestTag(SIZE_CHECK_TAG) and
+                                hasAnyAncestor(hasTestTag(sizeRowTag(n))),
+                            useUnmergedTree = true,
+                        )
+                    checks.assertCountEquals(if (n == 4) 1 else 0)
+                    row.fetchSemanticsNode().positionInRoot.y
+                }
+            assertWithMessage("rows 3×3 … 8×8 from the top").that(tops).isInStrictOrder()
+
+            // A row hides the sheet, then switches to its size.
+            compose.onNodeWithTag(sizeRowTag(3)).performClick()
+            compose.waitForIdle()
+            compose.onNodeWithTag(SIZE_SHEET_TAG).assertDoesNotExist()
+            compose.waitUntil(timeoutMillis = LOAD_TIMEOUT_MS) {
+                ShadowLooper.idleMainLooper()
+                val ui = rig.vm.uiState.value
+                ui.size == BoardSize.of(3) && ui.ready && !ui.busy
+            }
+            assertThat(rig.vm.board.value.size).isEqualTo(BoardSize.of(3))
+        }
+    }
+
+    /**
+     * D-245: the size chip stays enabled while the game loads (DESIGN_SYSTEM.md §6.1, the Loading
+     * state), and a sheet opened then lists nothing until the ViewModel is ready, then its six
+     * rows, read once ready (a sheet restored open after process death takes the same path). The
+     * records file is held back, so the load waits in `records.awaitLoaded()` with the sheet open.
+     */
+    @Test
+    fun sizeSheetOpenedBeforeLoadFillsOnceReady() {
+        val records = CountDownLatch(1)
+        rig(GoldenFixtures.FIX_MID_4, holdRecords = records).use { rig ->
+            try {
+                compose.setContent { RigContent(rig) }
+                compose.waitForIdle()
+                assertWithMessage("ready before the records load")
+                    .that(rig.vm.ready.value)
+                    .isFalse()
+                compose.onNodeWithTag(SIZE_CHIP_TAG).performClick()
+                compose.waitForIdle()
+                compose.onNodeWithTag(SIZE_SHEET_TAG).assertExists()
+                for (n in BoardSize.MIN_N..BoardSize.MAX_N) {
+                    compose.onNodeWithTag(sizeRowTag(n)).assertDoesNotExist()
+                }
+            } finally {
+                records.countDown()
+            }
+
+            rig.awaitReady(compose)
+            compose.waitForIdle()
+
+            compose.onNodeWithTag(SIZE_SHEET_TAG).assertExists()
+            for (n in BoardSize.MIN_N..BoardSize.MAX_N) {
+                val row = compose.onNodeWithTag(sizeRowTag(n)).assert(hasText("$n×$n"))
+                if (n == 4) row.assertIsSelected() else row.assertIsNotSelected()
+            }
+            // FIX_MID_4 is the current game, in progress; no other size has a saved game.
+            compose.onNodeWithTag(sizeRowTag(4)).assert(hasText("In progress"))
+            compose
+                .onAllNodes(hasText("In progress") and hasAnyAncestor(hasTestTag(SIZE_SHEET_TAG)))
+                .assertCountEquals(1)
+        }
+    }
+
+    /** Shows [rig] with a manual clock, commits [direction] and advances to its origin (F1). */
+    private fun playToOrigin(rig: ScreenRig, direction: Direction): Long {
+        show(rig)
+        compose.mainClock.autoAdvance = false
+        probe.originMs = null
+        rig.vm.onMove(direction)
+        return advanceToOrigin()
+    }
+
+    /** Each card button tagged in [tags] is enabled (no `Disabled` semantics) iff [enabled]. */
+    private fun assertCardButtons(tags: List<String>, enabled: Boolean, at: String) {
+        for (tag in tags) {
+            val config = compose.onNodeWithTag(tag).fetchSemanticsNode().config
+            assertWithMessage("$tag at $at: enabled")
+                .that(SemanticsProperties.Disabled !in config)
+                .isEqualTo(enabled)
+        }
+    }
+
+    /**
+     * A swipe on the board, an arrow key and a tap on the scrim beside the card (F03-AC16,
+     * F04-AC7); each is followed by a settle.
+     */
+    private fun assertBoardInputBlocked(rig: ScreenRig) {
+        val moveId = rig.vm.board.value.moveId
+        compose.onNodeWithTag(BOARD_TAG).performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithTag(BOARD_TAG).performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.waitForIdle()
+        compose.onNodeWithTag(SCRIM_TAG).performTouchInput { click(topLeft + Offset(2f, 2f)) }
+        compose.waitForIdle()
+        assertWithMessage("the board after a swipe, an arrow and a scrim tap")
+            .that(rig.vm.board.value.moveId)
+            .isEqualTo(moveId)
+    }
+
+    /**
+     * F03-AC18, F04-AC14: [game]'s card [cardTag] under Motion Off in each portrait window of the
+     * criteria (the window as the arrangement's constraints, at the Pixel 7 density): inside the
+     * board inset by 8 dp, not in a scroll container.
+     */
+    private fun assertCardFitsBoard(game: SavedGame, cardTag: String) {
+        val settings = SETTINGS.copy(motion = MotionPreference.OFF, lastBoardSize = 4)
+        val rigs = FIT_WINDOWS.associateWith { ScreenRig(tmp.newFolder(), game, settings) }
+        var shown by mutableStateOf(FIT_WINDOWS.first())
+        compose.setContent {
+            key(shown) {
+                Box(Modifier.requiredSize(shown)) { RigContent(rigs.getValue(shown)) }
+            }
+        }
+        try {
+            for ((window, rig) in rigs) {
+                shown = window
+                rig.awaitReady(compose)
+                compose.waitForIdle()
+                val inset = with(compose.density) { CARD_BOARD_INSET.toPx() }
+                val board = compose.onNodeWithTag(BOARD_TAG).fetchSemanticsNode().boundsInRoot
+                val card = compose.onNodeWithTag(cardTag).fetchSemanticsNode().boundsInRoot
+                val label = "$cardTag in ${window.width}×${window.height}"
+                assertWithMessage("$label: left").that(card.left).isAtLeast(board.left + inset - PX)
+                assertWithMessage("$label: top").that(card.top).isAtLeast(board.top + inset - PX)
+                assertWithMessage("$label: right")
+                    .that(card.right)
+                    .isAtMost(board.right - inset + PX)
+                assertWithMessage("$label: bottom")
+                    .that(card.bottom)
+                    .isAtMost(board.bottom - inset + PX)
+                compose
+                    .onAllNodes(
+                        hasAnyDescendant(hasTestTag(cardTag)) and
+                            SemanticsMatcher.keyIsDefined(
+                                SemanticsProperties.VerticalScrollAxisRange,
+                            ),
+                    )
+                    .assertCountEquals(0)
+            }
+        } finally {
+            rigs.values.forEach { it.close() }
+        }
+    }
+
+    /** The next started activity is the share chooser over `text/plain` [text] (F10). */
+    private fun assertChooser(text: String) {
+        val app = ApplicationProvider.getApplicationContext<Game2048Application>()
+        val chooser = checkNotNull(shadowOf(app).nextStartedActivity) { "no activity started" }
+        assertThat(chooser.action).isEqualTo(Intent.ACTION_CHOOSER)
+        assertThat(chooser.getCharSequenceExtra(Intent.EXTRA_TITLE)?.toString())
+            .isEqualTo("Share result")
+        val send =
+            checkNotNull(
+                IntentCompat.getParcelableExtra(chooser, Intent.EXTRA_INTENT, Intent::class.java),
+            ) {
+                "the chooser wraps no intent"
+            }
+        assertThat(send.action).isEqualTo(Intent.ACTION_SEND)
+        assertThat(send.type).isEqualTo("text/plain")
+        assertThat(send.getStringExtra(Intent.EXTRA_TEXT)).isEqualTo(text)
+    }
+
+    /** `FIX_OVER_4` with [undos] undos used. */
+    private fun overWithUndos(undos: Int): SavedGame =
+        fixtureGame(
+            n = 4,
+            cells = List(BoardSize.DEFAULT.cellCount) { GoldenFixtures.FIX_OVER_4.state.board[it] },
+            score = 3012,
+            best = 24680,
+            moves = 302,
+            undos = undos,
+            elapsedMs = 401_000,
+            status = GameStatus.OVER,
+        )
+
+    /**
+     * A pixel of [image]'s button container on its vertical centre, a tenth of its width in, clear
+     * of the centred label.
+     */
+    private fun labelFreePixel(image: ImageBitmap): Color =
+        image.toPixelMap()[image.width / LABEL_FREE_DIVISOR, image.height / 2]
+
+    /** The RGB distance of [a] and [b]. */
+    private fun distance(a: Color, b: Color): Float {
+        val r = a.red - b.red
+        val g = a.green - b.green
+        val bl = a.blue - b.blue
+        return sqrt(r * r + g * g + bl * bl)
+    }
+
     /**
      * F13-AC13's frames after an invalid move under [motion]: from the nudge's first frame (or the
      * swipe, under Off), the board offset and outline pulse at 48, 160 and 400 ms.
@@ -660,12 +1446,25 @@ class GameScreenTest {
         }
     }
 
-    /** A rig over [game] in a new folder, with [settings] and, when given, [records]. */
+    /**
+     * A rig over [game] in a new folder, with [settings] and, when given, [records] and the saved
+     * games of other sizes in [others]; [holdRecords] as `ScreenRig`'s.
+     */
     private fun rig(
         game: SavedGame,
         settings: Settings = SETTINGS.copy(lastBoardSize = game.state.size.n),
         records: Records? = null,
-    ) = ScreenRig(tmp.newFolder(), game, settings, records)
+        others: List<SavedGame> = emptyList(),
+        holdRecords: CountDownLatch? = null,
+    ) =
+        ScreenRig(
+            tmp.newFolder(),
+            game,
+            settings,
+            records,
+            others = others,
+            holdRecords = holdRecords,
+        )
 
     /** Composes `App` over [rig] with the fake haptics and the probe, and waits for the load. */
     private fun show(rig: ScreenRig) {
@@ -883,17 +1682,30 @@ class GameScreenTest {
  * them, with a `FakeClock`, `FixedSeedSource` and a fake animator scale. With [seed] false the
  * folder's files are used as they are (a relaunch).
  */
+@Suppress("LongParameterList") // one parameter per seeded file and per load seam (QUALITY.md §1.6)
 private class ScreenRig(
     folder: File,
     game: SavedGame?,
     settings: Settings = Settings(onboardingDone = true, lastSeenVersionCode = TEST_VERSION_CODE),
     records: Records? = null,
     seed: Boolean = true,
+    /** Saved games of other sizes, written with [game] before the ViewModel exists. */
+    others: List<SavedGame> = emptyList(),
+    /**
+     * When given (with no [records]), the records store's first read waits on its I/O thread until
+     * the latch opens, so the ViewModel stays not ready until then.
+     */
+    holdRecords: CountDownLatch? = null,
 ) : AutoCloseable {
     val clock = FakeClock()
     val container =
         AppContainer(
-            files = { name -> File(folder, name) },
+            files = { name ->
+                if (name == DataStoreFiles.RECORDS) {
+                    holdRecords?.await(LOAD_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                }
+                File(folder, name)
+            },
             versionCode = TEST_VERSION_CODE,
             clock = clock,
             seedSource = FixedSeedSource(RIG_SEED),
@@ -908,6 +1720,7 @@ private class ScreenRig(
             runBlocking {
                 container.seedSettings(settings)
                 game?.let { container.seedGame(it) }
+                for (other in others) container.seedGame(other)
                 records?.let { container.seedRecords(it) }
             }
         }
@@ -997,3 +1810,44 @@ private fun writeAppFiles(app: Game2048Application, game: SavedGame, settings: S
     File(dir, DataStoreFiles.SETTINGS)
         .writeText(AppJson.encodeToString(Settings.serializer(), settings))
 }
+
+/** Keep going, New game, Undo and Share: every win-card button (D-200). */
+private val WIN_BUTTONS = listOf(KEEP_GOING_TAG, CARD_NEW_GAME_TAG, CARD_UNDO_TAG, CARD_SHARE_TAG)
+
+/** New game, Undo and Share: every game-over-card button (D-200). */
+private val OVER_BUTTONS = listOf(CARD_NEW_GAME_TAG, CARD_UNDO_TAG, CARD_SHARE_TAG)
+
+/** The last test frame before, and the first at, the cards' interactive flips (§3.11, §3.13). */
+private const val WIN_LOCKED_FULL_MS = 864L
+private const val WIN_INTERACTIVE_FULL_MS = 880L
+private const val OVER_LOCKED_FULL_MS = 992L
+private const val OVER_INTERACTIVE_FULL_MS = 1008L
+private const val REDUCED_LOCKED_MS = 144L
+private const val REDUCED_INTERACTIVE_MS = 160L
+
+/** How long F03-AC12 watches for confetti after the winning move. */
+private const val CARD_WATCH_MS = 1_000L
+
+/** M3's disabled container: `onSurface` at 12 % (F03-AC19). */
+private const val DISABLED_CONTAINER_ALPHA = 0.12f
+
+/** [GameScreenTest.labelFreePixel]'s x: a tenth of the button's width. */
+private const val LABEL_FREE_DIVISOR = 10
+
+/** The portrait windows of F03-AC18 and F04-AC14 (D-244). */
+private val FIT_WINDOWS = listOf(DpSize(360.dp, 640.dp), DpSize(360.dp, 800.dp))
+
+/** How far inside the board the card stays (D-200). */
+private val CARD_BOARD_INSET = 8.dp
+
+/** Half a pixel of layout rounding. */
+private const val PX = 0.5f
+
+private const val SHARE = "Share"
+
+/** The share emoji of FEATURES.md F10 (each one code point). */
+private val EMPTY = String(Character.toChars(0x2B1C))
+private val BROWN = String(Character.toChars(0x1F7EB))
+private val YELLOW = String(Character.toChars(0x1F7E8))
+private val ORANGE = String(Character.toChars(0x1F7E7))
+private val BLUE = String(Character.toChars(0x1F7E6))

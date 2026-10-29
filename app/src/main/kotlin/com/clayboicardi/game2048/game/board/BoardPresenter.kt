@@ -116,17 +116,16 @@ class BoardPresenter {
         /**
          * The static form of a presented board (ARCHITECTURE.md §4.11, D-047): the same `moveId`,
          * `epoch`, `size`, `cells` and tile ids; Ghosts dropped; every tile `Static` with `from ==
-         * to`, in row-major order; `scoreDelta = 0`; event `Restored`. Reads and changes no
-         * presenter state, so it is not an epoch (D-182).
+         * to`, in the presented board's z-order (D-241), so a composition that draws it stacks the
+         * tiles as the presented one ended; `scoreDelta = 0`; event `Restored`. Reads and changes
+         * no presenter state, so it is not an epoch (D-182).
          */
         fun settled(board: BoardUi): BoardUi {
             if (board.event == BoardEvent.Restored) return board
-            val n = board.size.n
             val tiles =
                 board.tiles
                     .filter { it.kind != TileKind.Ghost }
                     .map { it.copy(fromRow = it.row, fromCol = it.col, kind = TileKind.Static) }
-                    .sortedBy { it.row * n + it.col }
             return board.copy(
                 tiles = tiles.toImmutableList(),
                 scoreDelta = 0,

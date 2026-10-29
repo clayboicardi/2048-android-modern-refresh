@@ -28,8 +28,10 @@ import com.clayboicardi.game2048.game.board.BoardUi
 import com.clayboicardi.game2048.game.board.kind
 import com.clayboicardi.game2048.game.feedback.HapticsMap
 import com.clayboicardi.game2048.ui.theme.GameMotion
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,7 +46,7 @@ import kotlinx.coroutines.launch
  * Only the load at start and the load of a size switch suspend, in `viewModelScope`, and only
  * inside the repositories' reads. Every change of the current game submits one save (D-043).
  */
-@Suppress("TooManyFunctions") // §4.7's 11 commands and reports, the §4.8–§4.9 steps, D-186
+@Suppress("TooManyFunctions") // §4.7's 12 commands and reports, the §4.8–§4.9 steps, D-186
 class GameViewModel(
     private val games: GameRepository,
     private val records: RecordsRepository,
@@ -102,6 +104,17 @@ class GameViewModel(
      * Nothing is persisted.
      */
     val message: StateFlow<GameMessage?> = _message.asStateFlow()
+
+    private val _sizeOptions = MutableStateFlow<ImmutableList<SizeOption>>(persistentListOf())
+
+    /**
+     * The board-size sheet's six rows, 3×3 … 8×8 (DESIGN_SYSTEM.md §6.7, F02 item 2; D-236): empty
+     * until the first accepted [onSizeSheetOpened], then its readings (D-245).
+     */
+    val sizeOptions: StateFlow<ImmutableList<SizeOption>> = _sizeOptions.asStateFlow()
+
+    /** The [onSizeSheetOpened] reading still peeking, if any. */
+    private var sizeReading: Job? = null
 
     init {
         viewModelScope.launch { load() }
@@ -198,6 +211,49 @@ class GameViewModel(
             becomeCurrent(loaded, BoardEvent.SizeSwitched, overlayFor(loaded))
         }
     }
+
+    /**
+     * The board-size sheet opened (D-236): reads every size's best and saved game into
+     * [sizeOptions]. The current size uses the current game; the others `GameRepository.peek`,
+     * whose reads run on the stores' own dispatcher (F02 edge cases). Nothing is written. Ignored
+     * until ready and while a size switch loads; the screen calls it again then (D-245).
+     *
+     * D-245: [sizeOptions] first takes, at once, what memory holds: every best, the current game's
+     * row and the other sizes' "In progress" as last read (none before the first reading), so a
+     * reopened sheet never shows the previous current size. The peeks then replace it; a newer
+     * reading cancels an older one still reading.
+     */
+    fun onSizeSheetOpened() {
+        val game = current?.takeIf { acceptsInput() } ?: return
+        val last = _sizeOptions.value.associateBy { it.size }
+        _sizeOptions.value = sizeOptions(game) { size -> last[size]?.inProgress == true }
+        sizeReading?.cancel()
+        sizeReading = viewModelScope.launch {
+            val others = BoardSize.ALL.filter { it != game.state.size }
+            val saved = others.associateWith { size -> games.peek(size) }
+            _sizeOptions.value = sizeOptions(game) { size -> unfinished(saved[size]) }
+        }
+    }
+
+    /** The six rows: [game]'s size from [game], each other size's pill from [otherInProgress]. */
+    private fun sizeOptions(
+        game: SavedGame,
+        otherInProgress: (BoardSize) -> Boolean,
+    ): ImmutableList<SizeOption> =
+        BoardSize.ALL.map { size ->
+                val isCurrent = size == game.state.size
+                SizeOption(
+                    size = size,
+                    best = records.best(size),
+                    inProgress = if (isCurrent) unfinished(game) else otherInProgress(size),
+                    current = isCurrent,
+                )
+            }
+            .toImmutableList()
+
+    /** F02 edge cases: a saved game that is in progress and not already finalized. */
+    private fun unfinished(saved: SavedGame?): Boolean =
+        saved != null && saved.state.isInProgress && !records.isFinalized(saved)
 
     /** D-201 "Got it". */
     fun onHintDismissed() {
@@ -301,7 +357,14 @@ class GameViewModel(
             )
         val entry = OverlayEntry.Animated(moved.moveId)
         if (outcome.becameWon) {
-            _overlay.value = OverlayUi.Win(next.state.size.targetExp, summary(next), entry)
+            _overlay.value =
+                OverlayUi.Win(
+                    next.state.size.targetExp,
+                    summary(next),
+                    entry,
+                    particleSeed(next.state),
+                    outcome.spawn.index,
+                )
         } else if (outcome.becameOver) {
             _overlay.value = OverlayUi.GameOver(summary(next), entry)
         }
@@ -433,7 +496,13 @@ class GameViewModel(
     private fun overlayFor(game: SavedGame): OverlayUi =
         when (game.state.status) {
             GameStatus.WON ->
-                OverlayUi.Win(game.state.size.targetExp, summary(game), OverlayEntry.Restored)
+                OverlayUi.Win(
+                    game.state.size.targetExp,
+                    summary(game),
+                    OverlayEntry.Restored,
+                    particleSeed(game.state),
+                    winSpawnIndex(game.state),
+                )
             GameStatus.OVER -> OverlayUi.GameOver(summary(game), OverlayEntry.Restored)
             GameStatus.PLAYING,
             GameStatus.KEEP_PLAYING -> OverlayUi.None
@@ -511,6 +580,25 @@ private fun emptyBoard(size: BoardSize): BoardUi =
 
 /** The seed of the particles a state's effects emit (MOTION_SPEC.md §3.6, §3.11; D-222). */
 private fun particleSeed(state: GameState): Long = state.seed xor state.moveCount.toLong()
+
+/**
+ * The cell of the spawn of a `WON` [state]'s winning move, which is its last move (a `WON` board
+ * takes no move, D-036): the engine undoes that move and plays it again (MOTION_SPEC.md §3.12,
+ * D-237). A history the engine cannot undo (D-214; the synthetic fixture histories of D-216) gives
+ * the cell of the first target tile instead.
+ */
+private fun winSpawnIndex(state: GameState): Int {
+    val replayed =
+        try {
+            Game.undo(state)?.let { Game.move(it, state.moveLog[state.moveCount - 1]) }
+        } catch (ignoredCorruption: IllegalStateException) {
+            null
+        }
+    val target = state.size.targetExp
+    return (replayed as? MoveOutcome.Moved)?.spawn?.index
+        ?: (0 until state.board.cellCount).firstOrNull { state.board[it] == target }
+        ?: 0
+}
 
 /** The exponent produced by each merge, in the engine's processing order. */
 private fun MoveOutcome.Moved.mergedExps() =

@@ -1,6 +1,8 @@
 package com.clayboicardi.game2048.game.feedback
 
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.clayboicardi.game2048.data.game.SavedGame
 import com.clayboicardi.game2048.data.records.Records
@@ -14,10 +16,14 @@ import com.clayboicardi.game2048.engine.Spawn
 import com.clayboicardi.game2048.fixtures.GameFixture
 import com.clayboicardi.game2048.fixtures.GoldenFixtures
 import com.clayboicardi.game2048.fixtures.MotionFixtures
+import com.clayboicardi.game2048.game.NEW_GAME_TAG
+import com.clayboicardi.game2048.game.UNDO_TAG
 import com.clayboicardi.game2048.game.board.BoardEvent
 import com.clayboicardi.game2048.game.board.MoveHaptic
+import com.clayboicardi.game2048.game.overlay.KEEP_GOING_TAG
 import com.clayboicardi.game2048.motion.MotionHarness
 import com.clayboicardi.game2048.motion.MotionRule
+import com.clayboicardi.game2048.ui.components.DIALOG_CONFIRM_TAG
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Rule
@@ -269,6 +275,61 @@ class HapticsMapTest {
             .isEmpty()
     }
 
+    /** F14-AC7 */
+    @Test
+    fun buttonsAreSilent() {
+        MotionFixtures.FILM_LEFT.verify()
+        val win = MotionFixtures.pairGame(8, 10, 18_000, 24_680)
+        val fixture =
+            GameFixture(
+                GoldenFixtures.FIX_FILM,
+                saved = listOf(win),
+                records = GoldenFixtures.FIX_RECORDS,
+            )
+        val h = MotionHarness.launch(rule, fixture, MotionPreference.FULL)
+        h.commitMove(Direction.LEFT)
+        h.advanceTo(QUIET_MS)
+
+        silent(h, "Undo") { h.commit { h.rule.onNodeWithTag(UNDO_TAG).performClick() } }
+        silent(h, "New game, confirmed through the dialog") {
+            h.rule.onNodeWithTag(NEW_GAME_TAG).performClick()
+            h.awaitNode(DIALOG_CONFIRM_TAG)
+            h.commit { h.rule.onNodeWithTag(DIALOG_CONFIRM_TAG).performClick() }
+        }
+        silent(h, "New game, immediate") {
+            h.commit { h.rule.onNodeWithTag(NEW_GAME_TAG).performClick() }
+        }
+        silent(h, "a size switch through the sheet") {
+            h.commitSizeSwitchThroughSheet(win.state.size.n)
+        }
+        h.commitMove(Direction.LEFT)
+        h.advanceTo(WIN_INTERACTIVE_MS)
+        silent(h, "Keep going with moves left") { h.tapCardButtonTag(KEEP_GOING_TAG) }
+    }
+
+    /** AC-EXIT-2 */
+    @Test
+    fun keepGoingIntoOverRejectsOnce() {
+        MotionFixtures.verifyWonNoMoves()
+        val h = launchSingle(MotionFixtures.FIX_WON_NO_MOVES_4, MotionPreference.FULL)
+        assertWithMessage("haptics of the restored win card").that(h.haptics.events).isEmpty()
+
+        val ft = h.tapCardButtonTag(KEEP_GOING_TAG)
+        h.advanceTo(CARD_QUIET_MS)
+
+        assertWithMessage("Keep going into OVER: the game-over Reject on Ft, the tap silent")
+            .that(h.hapticsFrom(ft))
+            .containsExactly(REJECT to 0L)
+    }
+
+    /** Runs [action] and checks that nothing fires within [QUIET_MS] of its origin (F14 item 3). */
+    private fun silent(h: MotionHarness, what: String, action: () -> Unit) {
+        val before = h.haptics.events.size
+        action()
+        h.advanceTo(QUIET_MS)
+        assertWithMessage("haptics of $what").that(h.haptics.events.drop(before)).isEmpty()
+    }
+
     /** One accepted move of the timing suites and its expected haptics. */
     private data class Case(val game: SavedGame, val direction: Direction, val haptic: MoveHaptic) {
         /** Full timings (MOTION_SPEC.md §6.1): from the origin, on the 16 ms grid. */
@@ -371,6 +432,12 @@ class HapticsMapTest {
         const val GAME_OVER_AT_MS = 304L
         const val QUIET_MS = 500L
         const val QUIET_FRAMES = 30
+
+        /** The win buttons' interactive frame ⌈880⌉ (MOTION_SPEC.md §3.11). */
+        const val WIN_INTERACTIVE_MS = 880L
+
+        /** Past the game-over card of Keep going into `OVER` (Ft + 704). */
+        const val CARD_QUIET_MS = 1200L
         const val INTERRUPT_AT_MS = 48L
         const val SECOND_INVALID_MS = 100L
         const val THIRD_INVALID_MS = 450L

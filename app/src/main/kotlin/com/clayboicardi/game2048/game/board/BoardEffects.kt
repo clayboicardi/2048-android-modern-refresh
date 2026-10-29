@@ -10,7 +10,9 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
@@ -21,15 +23,20 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import com.clayboicardi.game2048.data.platform.MonotonicClock
 import com.clayboicardi.game2048.engine.Direction
+import com.clayboicardi.game2048.engine.GameStatus
 import com.clayboicardi.game2048.game.motion.MotionProbe
+import com.clayboicardi.game2048.game.motion.ProbeRing
+import com.clayboicardi.game2048.game.motion.delayedSpec
 import com.clayboicardi.game2048.ui.theme.GameDimens
 import com.clayboicardi.game2048.ui.theme.GameMotion
 import com.clayboicardi.game2048.ui.theme.InvalidMoveMotion
+import com.clayboicardi.game2048.ui.theme.MotionLevel
 import com.clayboicardi.game2048.ui.theme.MotionPlan
 import com.clayboicardi.game2048.ui.theme.TilePalette
 import com.clayboicardi.game2048.ui.theme.TileSkin
@@ -41,16 +48,19 @@ import kotlinx.coroutines.launch
 
 /**
  * The board-level animated values of one `BoardView` (ARCHITECTURE.md §5.3, §5.7; MOTION_SPEC.md
- * §3.7, §3.13): the invalid-move nudge (Full) or outline pulse (Reduced), and the tile
- * [saturation]. All of them are read only in layout and draw lambdas. Main thread only.
- *
- * M3 part 1 holds the `OVER` end state as a snapped saturation; the animated game-over (deflate,
- * desaturation, scrim) and the win ring are M3 part 2.
+ * §3.7, §3.11–§3.13): the invalid-move nudge (Full) or outline pulse (Reduced), the tile
+ * [saturation] (the game-over desaturation and the restore of a card exit) and the win glow [ring].
+ * All of them are read only in layout and draw lambdas. Main thread only.
  */
 @Stable
 internal class BoardEffects(private val scope: CoroutineScope, initialSaturation: Float) {
     /** 1 = full colour; `GameOver.SATURATION_END` at the `OVER` end state (MOTION_SPEC.md §7.3). */
     val saturation = Animatable(initialSaturation, GameMotion.FRACTION_THRESHOLD)
+
+    /** The win glow ring of `BoardEffectsCanvas` (MOTION_SPEC.md §3.11, D-187). */
+    val ring = WinRing(scope)
+
+    private var saturationJob: Job? = null
 
     private var nudgeX by mutableFloatStateOf(0f)
     private var nudgeY by mutableFloatStateOf(0f)
@@ -69,20 +79,39 @@ internal class BoardEffects(private val scope: CoroutineScope, initialSaturation
     /** The nudge offset in dp (`ProbeBoard.nudgeDp`). */
     fun nudgeDp(density: Float): Offset = Offset(nudgeX / density, nudgeY / density)
 
-    /** A board change: the nudge snaps to zero on its F0 (MOTION_SPEC.md §3.7, §4.1 step 5). */
+    /**
+     * A board change: the nudge snaps to zero on its F0 (MOTION_SPEC.md §3.7, §4.1 step 5) and a
+     * running ring is removed (§4.2: undo, new game and size switch remove it on F0).
+     */
     fun onCommit() {
         nudgeJob?.cancel()
         nudgeJob = null
         nudgeX = 0f
         nudgeY = 0f
+        ring.clear()
     }
 
-    /** Snaps [saturation] to [target] (the `OVER` end state, or its reversal). */
-    fun snapSaturation(target: Float) {
-        if (saturation.value != target || saturation.isRunning) {
-            scope.launch(start = CoroutineStart.UNDISPATCHED) { saturation.snapTo(target) }
-        }
+    /**
+     * Takes [saturation] to [target] with [spec] from the next frame (play time 0 there), or snaps
+     * it now when [spec] is `null` (Off, or an end state). A running change is replaced.
+     */
+    fun saturateTo(target: Float, spec: FiniteAnimationSpec<Float>?) {
+        saturationJob?.cancel()
+        saturationJob =
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                if (spec == null) {
+                    if (saturation.value != target || saturation.isRunning) {
+                        saturation.snapTo(target)
+                    }
+                } else {
+                    saturation.animateTo(target, spec)
+                }
+            }
     }
+
+    /** True while [saturation] runs towards full colour (a card exit's restore). */
+    val restoring: Boolean
+        get() = saturation.isRunning && saturation.targetValue == 1f
 
     /**
      * An invalid move along [direction] (MOTION_SPEC.md §3.7): Full restarts the `NUDGE` spring
@@ -106,14 +135,20 @@ internal class BoardEffects(private val scope: CoroutineScope, initialSaturation
         }
     }
 
-    /** True while the nudge, the pulse or a saturation change runs. */
+    /** True while the nudge, the pulse, a saturation change or the ring runs. */
     val isRunning: Boolean
-        get() = nudgeJob?.isActive == true || pulseJob?.isActive == true || saturation.isRunning
+        get() =
+            nudgeJob?.isActive == true ||
+                pulseJob?.isActive == true ||
+                saturation.isRunning ||
+                ring.isRunning
 
-    /** Suspends until the nudge and the pulse have ended. */
+    /** Suspends until the nudge, the pulse, a saturation change and the ring have ended. */
     suspend fun awaitIdle() {
         nudgeJob?.join()
         pulseJob?.join()
+        saturationJob?.join()
+        ring.awaitIdle()
     }
 
     private fun startNudge(
@@ -166,6 +201,192 @@ internal class BoardEffects(private val scope: CoroutineScope, initialSaturation
                 }
                 outlinePulseAlpha = 0f
             }
+    }
+}
+
+/**
+ * What the screen scope's `OverlayController` asks of the live `BoardView` (D-236; ARCHITECTURE.md
+ * §4.11 item 2, §5.3): the board side of the card sequences that the controller times from a card
+ * action's Ft, and the values its one effects probe reader reports.
+ */
+internal interface BoardCardHandle {
+    /** The win ring now (`MotionProbe`'s `ProbeEffects.ring`), `null` while none is drawn. */
+    fun ring(): ProbeRing?
+
+    /** The win target tile's centre in root px, where the confetti bursts from. */
+    fun targetCenterInRoot(): Offset?
+
+    /**
+     * Keep going on a board with no moves left (D-036; MOTION_SPEC.md §3.12): the desaturation and
+     * the deflate ripple of §3.13 with T0 = the next frame (Ft), from the winning move's spawn cell
+     * [originIndex] (`OverlayUi.Win.spawnIndex`, D-237), or, when it is `null`, from the cell the
+     * board itself gives.
+     */
+    fun keepGoingIntoOver(originIndex: Int?)
+
+    /** A card exit leaves `OVER` (MOTION_SPEC.md §3.12): the saturation restore from Ft. */
+    fun restoreSaturation()
+}
+
+/**
+ * The screen scope's link between `OverlayController`, the live `BoardView` and the screen's
+ * [effects] (D-236): `GameScreen` creates one and provides it as [LocalBoardOverlayLink]; each
+ * `BoardView` attaches its [BoardCardHandle] while it is composed, so a board composed anew
+ * (recreation, M4's arrangement switch) takes over. Main thread only.
+ */
+@Stable
+internal class BoardOverlayLink(
+    /** The screen scope's particles: `OverlayController` emits the win confetti into them. */
+    val effects: ContentEffects,
+) {
+    /** The live board's handle, `null` while no `BoardView` is composed. */
+    var board: BoardCardHandle? = null
+        private set
+
+    fun attach(handle: BoardCardHandle) {
+        board = handle
+    }
+
+    fun detach(handle: BoardCardHandle) {
+        if (board === handle) board = null
+    }
+}
+
+/** The screen scope's [BoardOverlayLink]; `null` (no link) outside the Game screen. */
+@Suppress("ComposeCompositionLocalUsage") // D-236: the screen scope's link to the live board
+internal val LocalBoardOverlayLink = staticCompositionLocalOf<BoardOverlayLink?> { null }
+
+/**
+ * The board side of the win and game-over sequences of one `BoardView` (D-236; MOTION_SPEC.md
+ * §3.11–§3.13; ARCHITECTURE.md §5.3, §5.6): the win ring of a winning move, the `OVER` move's
+ * desaturation `delayedSpec(overDesaturate, overT0Ms)` and deflate ripple from its spawn cell (both
+ * from the origin, mechanism A), the `OVER` end state of a board that arrives in `OVER`, the
+ * saturation restore when the status leaves `OVER`, and Keep going into `OVER` from Ft. `BoardView`
+ * writes [plan], [board], [geometry] and [coordinates] and calls [onCommit] from its
+ * `LaunchedEffect(board.moveId)` and [onStatus] from its `LaunchedEffect(status)`. Main thread
+ * only.
+ */
+@Stable
+internal class BoardCardSequence(
+    private val scope: CoroutineScope,
+    private val animator: BoardAnimator,
+    private val effects: BoardEffects,
+) : BoardCardHandle {
+    /** The plan of the live composition's level. */
+    var plan: MotionPlan = GameMotion.plan(MotionLevel.FULL)
+
+    /** The live (presented) board, written from `SideEffect`. */
+    var board: BoardUi? = null
+
+    /** The board's geometry holder (`BoardView`'s outer geometry). */
+    var geometry: State<BoardGeometry>? = null
+
+    /** The board's layout coordinates, from `onPlaced`. */
+    var coordinates: LayoutCoordinates? = null
+
+    /**
+     * True while Keep going into `OVER` animates this board without a new `BoardUi`: it holds the
+     * D-183 frame-rate vote at High (read by `BoardView`'s composition).
+     */
+    var running by mutableStateOf(false)
+        private set
+
+    /** The status this sequence has handled last; `null` before the first commit. */
+    private var handledStatus: GameStatus? = null
+
+    private var keepGoingStarted = false
+
+    /** A board change, on its F0, after the tiles' commit (MOTION_SPEC.md §4.1). */
+    fun onCommit(board: BoardUi, status: GameStatus, plan: MotionPlan) {
+        val leavingOver = handledStatus == GameStatus.OVER
+        handledStatus = status
+        keepGoingStarted = false
+        val moved = board.event as? BoardEvent.Moved
+        when {
+            moved?.becameOver == true -> {
+                val desaturate = plan.overDesaturate?.let { delayedSpec(it, plan.overT0Ms) }
+                effects.saturateTo(GameMotion.GameOver.SATURATION_END, desaturate)
+                animator.deflate(board, plan, moved.spawnIndex, sinceT0Ms = 0)
+            }
+            status == GameStatus.OVER ->
+                effects.saturateTo(GameMotion.GameOver.SATURATION_END, null)
+            leavingOver || effects.saturation.value != 1f -> restoreSaturation()
+        }
+        if (moved?.becameWon == true) {
+            winTile(board)?.let { effects.ring.start(it.row, it.col, plan) }
+        }
+    }
+
+    /**
+     * A status change without a new board: `WON` → `OVER` is Keep going on a board with no moves
+     * left (D-036), unless the controller has started it already at Ft.
+     */
+    fun onStatus(status: GameStatus) {
+        val previous = handledStatus
+        if (previous == status) return
+        handledStatus = status
+        if (previous == GameStatus.WON && status == GameStatus.OVER) keepGoingIntoOver(null)
+    }
+
+    override fun keepGoingIntoOver(originIndex: Int?) {
+        val live = board
+        if (keepGoingStarted || live == null) return
+        keepGoingStarted = true
+        handledStatus = GameStatus.OVER
+        effects.saturateTo(GameMotion.GameOver.SATURATION_END, plan.overDesaturate)
+        val origin = originIndex ?: winSpawnIndex(live)
+        animator.deflate(live, plan, origin, sinceT0Ms = plan.overT0Ms)
+        if (plan.level != MotionLevel.OFF) {
+            running = true
+            scope.launch {
+                animator.awaitIdle()
+                effects.awaitIdle()
+                running = false
+            }
+        }
+    }
+
+    override fun restoreSaturation() {
+        if (!effects.restoring && effects.saturation.value != 1f) {
+            effects.saturateTo(1f, plan.exitSaturation)
+        }
+    }
+
+    override fun ring(): ProbeRing? = effects.ring.probe()
+
+    override fun targetCenterInRoot(): Offset? {
+        val coords = coordinates?.takeIf { it.isAttached }
+        val target = board?.let(::winTile)
+        val g = geometry?.value
+        if (coords == null || target == null || g == null) return null
+        val at = g.cellTopLeft(target.col.toFloat(), target.row.toFloat())
+        val half = g.tilePx / 2f
+        return coords.localToRoot(Offset(at.x + half, at.y + half))
+    }
+}
+
+/**
+ * The target tile of a winning [board]: its merged tile of the size's target exponent, else (a
+ * restored `WON` board) its first tile of that exponent.
+ */
+private fun winTile(board: BoardUi): TileUi? {
+    val target = board.size.targetExp
+    return board.tiles.firstOrNull { it.kind == TileKind.Merged && it.exp == target }
+        ?: board.tiles.firstOrNull { it.kind != TileKind.Ghost && it.exp == target }
+}
+
+/**
+ * The origin cell of Keep going into `OVER`'s deflate ripple when the controller gives none
+ * (MOTION_SPEC.md §3.12): the winning move's spawn cell when [board] is that move, else its target
+ * tile's cell. `OverlayController` passes `OverlayUi.Win.spawnIndex` (D-237).
+ */
+private fun winSpawnIndex(board: BoardUi): Int {
+    val moved = (board.event as? BoardEvent.Moved)?.takeIf { it.becameWon }
+    val tile = winTile(board)
+    return when {
+        moved != null -> moved.spawnIndex
+        tile != null -> tile.row * board.size.n + tile.col
+        else -> 0
     }
 }
 

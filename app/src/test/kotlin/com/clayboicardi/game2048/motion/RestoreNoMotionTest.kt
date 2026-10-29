@@ -8,10 +8,13 @@ import com.clayboicardi.game2048.engine.Direction
 import com.clayboicardi.game2048.fixtures.GameFixture
 import com.clayboicardi.game2048.fixtures.GoldenFixtures
 import com.clayboicardi.game2048.fixtures.MotionFixtures
+import com.clayboicardi.game2048.game.OverlayEntry
+import com.clayboicardi.game2048.game.OverlayUi
 import com.clayboicardi.game2048.game.board.BoardPresenter
 import com.clayboicardi.game2048.game.board.BoardUi
 import com.clayboicardi.game2048.game.board.TileKind
 import com.clayboicardi.game2048.game.motion.MotionSnapshot
+import com.clayboicardi.game2048.game.motion.ProbeOverlayKind
 import com.clayboicardi.game2048.game.motion.delayedSpec
 import com.clayboicardi.game2048.ui.theme.GameMotion
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
@@ -101,6 +104,85 @@ class RestoreNoMotionTest {
         assertWithMessage("haptics")
             .that(h.hapticsFrom())
             .containsExactly(HapticFeedbackType.SegmentTick to REVEAL_MS)
+    }
+
+    /** AC-RESTORE-1 */
+    @Test
+    fun restoredWinCardIsInItsEndState() {
+        assertRestoredCard(
+            GoldenFixtures.FIX_WON_4,
+            ProbeOverlayKind.WIN,
+            GameMotion.Win.SCRIM_ALPHA,
+        )
+    }
+
+    /** AC-RESTORE-1 */
+    @Test
+    fun restoredGameOverCardIsInItsEndState() {
+        assertRestoredCard(
+            GoldenFixtures.FIX_OVER_4,
+            ProbeOverlayKind.OVER,
+            GameMotion.GameOver.SCRIM_ALPHA,
+        )
+    }
+
+    /** AC-RESTORE-2 */
+    @Test
+    fun reportsDoNotDisturbLiveWinCard() {
+        MotionFixtures.WIN_PRE_LEFT.verify()
+        val h = MotionHarness.launch(rule, GameFixture(MotionFixtures.FIX_WIN_PRE_4), FULL)
+
+        h.commitMove(Direction.LEFT)
+
+        val overlay = h.vm.overlay.value
+        assertWithMessage("t = 0: vm.overlay").that(overlay).isInstanceOf(OverlayUi.Win::class.java)
+        assertWithMessage("t = 0: vm.overlay's entry")
+            .that((overlay as OverlayUi.Win).entry)
+            .isEqualTo(OverlayEntry.Restored)
+        h.assertWinCardEntry()
+        h.assertWinButtonsGate()
+    }
+
+    /**
+     * AC-RESTORE-1's card case: on the first frame and on R0 after a recreation, [kind]'s card is
+     * in its end state (MOTION_SPEC.md §3.11–§3.14) with interactive buttons, no ring, no confetti,
+     * no haptic and nothing running.
+     */
+    private fun assertRestoredCard(game: SavedGame, kind: ProbeOverlayKind, scrim: Float) {
+        val h = MotionHarness.launch(rule, GameFixture(game), FULL)
+        assertCardEnd(h.firstFrame, "first frame", kind, scrim)
+        assertWithMessage("first frame: haptics").that(h.haptics.events).isEmpty()
+
+        h.recreate()
+
+        assertCardEnd(checkNotNull(h.r0), "R0", kind, scrim)
+        assertWithMessage("R0: haptics").that(h.haptics.events).isEmpty()
+    }
+
+    private fun assertCardEnd(
+        frame: MotionSnapshot,
+        label: String,
+        kind: ProbeOverlayKind,
+        scrim: Float,
+    ) {
+        val card = checkNotNull(frame.overlay) { "$label: no card" }
+        assertWithMessage("$label: overlay kind").that(card.kind).isEqualTo(kind)
+        assertWithMessage("$label: interactive").that(card.interactive).isTrue()
+        assertWithMessage("$label: card alpha").that(card.cardAlpha).isWithin(Tol.ALPHA).of(1f)
+        assertWithMessage("$label: card scale").that(card.cardScale).isWithin(Tol.SCALE).of(1f)
+        assertWithMessage("$label: scrim").that(card.scrimAlpha).isWithin(Tol.ALPHA).of(scrim)
+        for ((i, alpha) in card.buttonAlphas.withIndex()) {
+            assertWithMessage("$label: button $i alpha").that(alpha).isWithin(Tol.ALPHA).of(1f)
+        }
+        if (kind == ProbeOverlayKind.WIN) {
+            assertWithMessage("$label: badge morph").that(card.badgeMorph).isEqualTo(1f)
+            assertWithMessage("$label: badge rotation")
+                .that(card.badgeRotationDeg)
+                .isEqualTo(GameMotion.Win.BADGE_ROTATION_DEG)
+        }
+        assertWithMessage("$label: ring").that(frame.effects.ring).isNull()
+        assertWithMessage("$label: confetti").that(frame.effects.confettiAlive).isEqualTo(0)
+        assertWithMessage("$label: running").that(frame.isAnyRunning).isFalse()
     }
 
     private fun assertRestoredStatic(game: SavedGame, scale: Float, saturation: Float) {

@@ -4,6 +4,7 @@ import android.view.InputDevice
 import android.view.KeyCharacterMap
 import android.view.KeyEvent as NativeKeyEvent
 import android.view.KeyboardShortcutGroup
+import androidx.activity.ComponentDialog
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -20,14 +21,23 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.withKeyDown
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.clayboicardi.game2048.App
 import com.clayboicardi.game2048.MainActivity
 import com.clayboicardi.game2048.R
+import com.clayboicardi.game2048.data.settings.MotionPreference
+import com.clayboicardi.game2048.data.settings.Settings
 import com.clayboicardi.game2048.engine.Direction
+import com.clayboicardi.game2048.engine.GameStatus
 import com.clayboicardi.game2048.fixtures.GoldenFixtures
+import com.clayboicardi.game2048.fixtures.MotionFixtures
 import com.clayboicardi.game2048.game.board.BoardEventKind
+import com.clayboicardi.game2048.game.header.SIZE_CHIP_TAG
+import com.clayboicardi.game2048.game.overlay.GAME_OVER_CARD_TAG
+import com.clayboicardi.game2048.game.overlay.SIZE_SHEET_TAG
+import com.clayboicardi.game2048.game.overlay.WIN_CARD_TAG
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Rule
@@ -35,6 +45,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 
 /**
  * Keyboard, D-pad and gamepad input (D-053, D-199, D-203; ARCHITECTURE.md §6.3, §6.6).
@@ -200,7 +211,35 @@ class KeyboardInputTest {
     fun ignoredWhileModalOpen() {
         GameScreenRig(tmp.newFolder(), GoldenFixtures.FIX_MID_4).use { rig ->
             compose.showGame(rig)
-            // Part 1 has the new-game dialog; the size sheet and What's new join in M3 part 2, M4.
+            // The size sheet (M3 part 2) and the new-game dialog (part 1); What's new joins in M4.
+            // The size sheet: every game key, U, N and R included, is ignored behind it, and Back
+            // on its window closes it again.
+            compose.onNodeWithTag(SIZE_CHIP_TAG).performClick()
+            compose.onNodeWithTag(SIZE_SHEET_TAG).assertExists()
+            val beforeSheet = rig.saved()
+            val sheetMoveId = rig.vm.board.value.moveId
+            val gameKeys =
+                listOf(Key.W, Key.A, Key.S, Key.D, Key.H, Key.J, Key.K, Key.L) +
+                    listOf(Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft) +
+                    listOf(Key.DirectionRight, Key.U, Key.Backspace, Key.N, Key.R)
+            for (key in gameKeys) {
+                compose.onNodeWithTag(BOARD).performKeyInput { pressKey(key) }
+                compose.waitForIdle()
+            }
+            compose.onNodeWithTag(BOARD).performKeyInput {
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) }
+            }
+            compose.waitForIdle()
+            assertThat(rig.saved()).isEqualTo(beforeSheet)
+            assertThat(rig.vm.board.value.moveId).isEqualTo(sheetMoveId)
+            compose.onAllNodes(isDialog()).assertCountEquals(1)
+            compose.onNodeWithTag(SIZE_SHEET_TAG).assertExists()
+            (ShadowDialog.getLatestDialog() as ComponentDialog)
+                .onBackPressedDispatcher
+                .onBackPressed()
+            compose.onNodeWithTag(SIZE_SHEET_TAG).assertDoesNotExist()
+
+            // The new-game dialog.
             compose.onNodeWithTag(NEW_GAME_BUTTON).performClick()
             compose.onNode(isDialog()).assertExists()
             val game = rig.saved()
@@ -292,6 +331,73 @@ class KeyboardInputTest {
                         Triple(activity.getString(R.string.new_game), NativeKeyEvent.KEYCODE_N, 0),
                     )
                     .inOrder()
+            }
+        }
+    }
+
+    /** F16-AC11 */
+    @Test
+    fun cardKeysActLikeChrome() {
+        val win = MotionFixtures.FIX_WIN_PRE_4
+        val over = MotionFixtures.FIX_OVER_PRE_4
+        // Motion Off: each card is shown and interactive on the frame of its move.
+        val settings =
+            Settings(lastBoardSize = 4, onboardingDone = true, motion = MotionPreference.OFF)
+        GameScreenRig(tmp.newFolder(), win, settings).use { winRig ->
+            GameScreenRig(tmp.newFolder(), over, settings).use { overRig ->
+                var shown by mutableStateOf(winRig)
+                compose.setContent {
+                    key(shown) {
+                        App(
+                            gameViewModel = shown.vm,
+                            settings = shown.container.settingsRepository.state,
+                            animatorScale = shown.container.animatorScale,
+                            clock = shown.container.clock,
+                        )
+                    }
+                }
+                for ((rig, card) in listOf(winRig to WIN_CARD_TAG, overRig to GAME_OVER_CARD_TAG)) {
+                    shown = rig
+                    rig.awaitReady(compose)
+                    compose.waitForIdle()
+                    val moves = rig.saved().state.moveCount
+                    rig.vm.onMove(Direction.LEFT)
+                    compose.waitForIdle()
+                    compose.onNodeWithTag(card).assertExists()
+                    val moveId = rig.vm.board.value.moveId
+                    val game = rig.saved()
+
+                    for (key in listOf(Key.W, Key.DirectionLeft)) {
+                        compose.onNodeWithTag(BOARD).performKeyInput { pressKey(key) }
+                        compose.waitForIdle()
+                    }
+                    assertWithMessage("$card: W and ← move nothing")
+                        .that(rig.vm.board.value.moveId)
+                        .isEqualTo(moveId)
+                    assertThat(rig.saved()).isEqualTo(game)
+                    compose.onNodeWithTag(card).assertExists()
+
+                    compose.onNodeWithTag(BOARD).performKeyInput { pressKey(Key.U) }
+                    compose.waitForIdle()
+                    assertWithMessage("$card: U undoes the move")
+                        .that(rig.saved().state.moveCount)
+                        .isEqualTo(moves)
+                    assertThat(rig.vm.uiState.value.status).isEqualTo(GameStatus.PLAYING)
+                    compose.onNodeWithTag(card).assertDoesNotExist()
+
+                    rig.vm.onMove(Direction.LEFT)
+                    compose.waitForIdle()
+                    compose.onNodeWithTag(card).assertExists()
+                    val epoch = rig.vm.board.value.epoch
+                    compose.onNodeWithTag(BOARD).performKeyInput { pressKey(Key.N) }
+                    compose.waitForIdle()
+                    compose.onNode(isDialog()).assertDoesNotExist()
+                    assertWithMessage("$card: N starts a new game")
+                        .that(rig.vm.board.value.epoch)
+                        .isGreaterThan(epoch)
+                    assertThat(rig.vm.header.value.event).isEqualTo(BoardEventKind.NewGame)
+                    compose.onNodeWithTag(card).assertDoesNotExist()
+                }
             }
         }
     }

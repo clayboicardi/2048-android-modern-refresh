@@ -41,3 +41,29 @@ val NavKeysConfiguration: SavedStateConfiguration = SavedStateConfiguration {
         }
     }
 }
+
+/**
+ * The test tag of [key]'s destination root (`SubScreenScaffold` for the sub-screens, D-236), relied
+ * on by the navigation and motion tests.
+ */
+fun screenTag(key: NavKey): String = "screen:${tagName(key)}"
+
+/** The test tag of the game-menu item that pushes [key] (Stats, Settings, How to play, About). */
+fun menuItemTag(key: NavKey): String = "menu:${tagName(key)}"
+
+/** The back arrow of every sub-screen's top app bar (`navigate_up`). */
+const val NAVIGATE_UP_TAG = "nav:up"
+
+/** The About row that pushes `LicensesKey`. */
+const val ABOUT_LICENSES_TAG = "about:licenses"
+
+private fun tagName(key: NavKey): String =
+    when (key) {
+        GameKey -> "game"
+        StatsKey -> "stats"
+        SettingsKey -> "settings"
+        HowToPlayKey -> "howToPlay"
+        AboutKey -> "about"
+        LicensesKey -> "licenses"
+        else -> key.toString()
+    }
