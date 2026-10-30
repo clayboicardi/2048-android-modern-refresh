@@ -1,6 +1,6 @@
 # AGENTS.md
 
-2048 for Android. This repository is being rewritten from a 2014 WebView shell into a native Kotlin + Jetpack Compose + Material 3 app: package `com.clayboicardi.game2048`, label "2048", version 3.0.0 (30000). The app is fully offline, has no runtime permissions, and keeps no data off the device. The rewrite is specified in `docs/modernization/`; `docs/modernization/DECISIONS.md` is canonical and `docs/modernization/PLAN.md` is the execution plan.
+2048 for Android. This repository is being rewritten from a 2014 WebView shell into a native Kotlin + Jetpack Compose + Material 3 app: package `com.clayboicardi.game2048`, label "2048", version 1.0.0 (10000; D-271). The app is fully offline, has no runtime permissions, and keeps no data off the device. The rewrite is specified in `docs/modernization/`; `docs/modernization/DECISIONS.md` is canonical and `docs/modernization/PLAN.md` is the execution plan.
 
 - Default branch: `master`. This repository is a fork of `uberspot/2048-android`: every GitHub operation targets `clayboicardi/2048-android-modern-refresh` (API tools: `owner`/`repo`; gh: `-R clayboicardi/2048-android-modern-refresh`), and pull requests target `master` of this repository only.
 - Status: until the M0 milestone commit lands, the tree still holds the legacy WebView project (root `build.gradle`, `src/`, `res/`, the `assets/2048` submodule). It does not build with current tools and is not a gate; CI reports it and passes. From M0 on, the layout is `docs/modernization/ARCHITECTURE.md` §1. Progress is tracked in the execution PR body (`docs/modernization/PLAN.md` §6.9).
@@ -49,7 +49,7 @@
 
 ## Commits and pull requests
 
-- Subjects of at most 72 characters, imperative: `M<n>: …` for milestone work, `review(r<k>): …` for fixes in Codex round k, `ci: …`, `docs: …`.
+- Subjects of at most 72 characters, imperative: `M<n>: …` for milestone work, `review(r<k>): …` for fixes in Codex round k, `release: …` for a version bump (D-271), `ci: …`, `docs: …`.
 - Body: `D-IDs: …`; `Gates: scripts/verify.sh passed (engine=<n> tests, app=<m> tests)`; `Screenshots: <names> (all inspected)` or `Screenshots: none`.
 - A change to decided behavior carries its D-173 entry in `docs/modernization/DECISIONS.md` in the same commit.
 - No AI model names or model identifiers in tracked files (code, docs, resources, test names, golden metadata). Commit trailers and PR footers are exactly what the execution environment supplies, kept verbatim (D-164, D-180).
