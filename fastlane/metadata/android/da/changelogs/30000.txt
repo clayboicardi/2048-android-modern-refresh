@@ -1,0 +1,6 @@
+3.0.0 er en komplet omskrivning som native app med et nyt pakkenavn. Den installeres ved siden af den oprindelige 2048-app; resultater fra den oprindelige app overføres ikke.
+• Brætstørrelser fra 3×3 til 8×8
+• Ubegrænset fortryd, også når spillet er slut
+• Temaer: Neon Arcade, mørkt og høj kontrast
+• Statistik samt understøttelse af tastatur og TalkBack
+• Stadig offline: ingen reklamer, ingen sporing

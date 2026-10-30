@@ -1,0 +1,1 @@
+Klasikinis 2048 plytelių stumdymo galvosūkis. Be interneto, reklamų ir sekimo.

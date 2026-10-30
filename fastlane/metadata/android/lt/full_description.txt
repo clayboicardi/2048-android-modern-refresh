@@ -1,0 +1,32 @@
+2048 – klasikinis plytelių stumdymo galvosūkis, iš naujo sukurtas kaip greita vietinė Android programa. Braukite, kad pastumtumėte visas plyteles iš karto. Dvi plytelės su tuo pačiu skaičiumi susijungia į vieną. Pasiekite plytelę 2048 ir tęskite tiek, kiek pavyks.
+
+Privatumas pirmiausia
+• Veikia visiškai neprisijungus: programa neturi prieigos prie interneto.
+• Jokių reklamų, jokio sekimo, jokios analitikos ir jokių paskyrų.
+• Jokių vykdymo laiko leidimų. Jūsų žaidimai ir statistika lieka jūsų įrenginyje.
+
+Žaiskite savaip
+• Lentos dydžiai nuo 3×3 iki 8×8. Kiekvienas dydis turi savo išsaugotą žaidimą, rekordą ir statistiką. 3×3 lentoje tikslas yra 256.
+• Neribotas atšaukimas, net žaidimui pasibaigus. Atšaukus grąžinama ta pati kita plytelė, todėl ištaisote klaidas nepakeisdami savo sėkmės. Atšaukimai skaičiuojami, o atskiras rekordas fiksuoja žaidimus be atšaukimų.
+• Žaidimas išsaugomas po kiekvieno ėjimo ir tęsiamas tiksliai nuo ten, kur sustojote.
+• Kiekvieno lentos dydžio statistika: sužaisti žaidimai, laimėjimai, geriausia plytelė, vidutinis rezultatas, iš viso ėjimų, žaidimo laikas ir panaudoti atšaukimai.
+
+Išvaizda ir pojūtis
+• Dvi paletės, Classic Refined ir Neon Arcade, šviesioje ir tamsioje temoje, taip pat didelio kontrasto parinktis.
+• Sklandžios animacijos su nustatymais „Visa“, „Sumažinta“ ir „Išjungta“. Išjungus animacijas Android nustatymuose, jos išjungiamos ir čia.
+• Pasirenkamas haptinis atsakas, reguliuojamas braukimo jautrumas ir ėjimo momentas bei viso ekrano režimas, kuris paslepia sistemos juostas.
+• Išdėstymai telefonams, planšetiniams kompiuteriams, sulankstomiems įrenginiams, gulsčiam režimui ir kompiuterių langams.
+
+Pritaikymas neįgaliesiems
+• Visiškas TalkBack palaikymas: galima perskaityti kiekvieną langelį, apie kiekvieną ėjimą pranešama, o įjungus TalkBack atsiranda krypčių valdiklis.
+• Žaiskite klaviatūra, kryptiniu valdikliu (D-pad) arba žaidimų pultu: rodyklės, WASD arba HJKL ėjimams; U, Ctrl+Z arba Backspace atšaukimui.
+• Tekstas išlieka įskaitomas net naudojant didelį šriftą, o plytelių spalvos patikrintos dėl kontrasto ir spalvų matymo sutrikimų.
+
+Nauja programa
+Tai nauja programa su nauju paketo pavadinimu (com.clayboicardi.game2048); senoji programa gali likti įdiegta šalia; rezultatai neperkeliami.
+
+Atvirasis kodas
+Laisva atvirojo kodo programa pagal MIT licenciją: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Kūrėjai
+Originalų žaidimą 2048 sukūrė Gabriele Cirulli. Originalią 2048 Android programą sukūrė Paul Sarbinowski (uberspot) kartu su bendraautoriais ir vertėjais. Šios versijos vertimai atlikti padedant mašininiam vertimui; pataisymų laukiame GitHub platformoje.

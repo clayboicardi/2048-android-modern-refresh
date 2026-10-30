@@ -1,0 +1,51 @@
+2048 for Android (com.clayboicardi.game2048)
+https://github.com/clayboicardi/2048-android-modern-refresh
+Copyright (c) 2026 clayboicardi. Licensed under the MIT License; see LICENSE.
+
+This app is a native rewrite. It contains or is derived from the third-party
+material below. Each item keeps its own license and copyright notice.
+
+1. 2048, the original web game
+   https://github.com/gabrielecirulli/2048
+   Copyright (c) 2014 Gabriele Cirulli. MIT License (text in LICENSE).
+   "A small clone of 1024, based on Saming's 2048 (also a clone)."
+   Used: the game rules, reproduced as golden test vectors, and the tile
+   palette from which the Classic Refined palette is derived. No source code
+   of the web game is included.
+
+2. 2048-android, the original Android app, and its web-game fork
+   https://github.com/uberspot/2048-android
+   https://github.com/uberspot/2048
+   Copyright (c) 2014 Paul Sarbinowski. MIT License (text in LICENSE).
+   The web-game fork carries the MIT notice Copyright (c) 2014 Gabriele Cirulli.
+   Used: the "Settings" translations in 20 languages, the Russian and
+   Ukrainian game strings, the vector paths of the "2048" glyphs in the
+   launcher icon, and the release history shown under About > Legacy history.
+   Translators of the reused strings: Mongata (cs), dark159123 (da),
+   uberspot and alexara (de), uberspot (el, pl), Robin van der Vliet
+   (eo, nl), Laura Arjona Reina (es), SMahdiFaghih (fa), pierre (fr),
+   Balázs Meskó (hu), RyuzakiKK (it), amoseui (ko), zygimantus (lt),
+   Caio Melo (pt), Igor A (ru; Russian and Ukrainian game strings),
+   Matej (sl), djura-san (sr), TeknoCepni (tr), Vladyslav Pohrebniakov (uk).
+   Every legacy contributor is credited in the app under About > Credits.
+
+3. Google Sans Flex (numeral subset)
+   https://github.com/googlefonts/googlesans-flex
+   Copyright 2015 The Google Sans Flex Authors.
+   SIL Open Font License, Version 1.1 (OFL-1.1), with no Reserved Font Name.
+   The full license text is app/src/main/res/raw/ofl_google_sans_flex.txt and
+   is shown in the app. The app bundles a subset of digits and a few capital
+   letters. Google Sans is a trademark of Google.
+
+4. Material Symbols (Rounded) icons
+   https://github.com/google/material-design-icons
+   Copyright Google LLC. Apache License, Version 2.0 (Apache-2.0).
+
+5. AndroidX, Jetpack Compose, Kotlin, kotlinx, and their dependencies
+   Guava ListenableFuture, Okio, JSpecify and JetBrains Java Annotations.
+   Copyright The Android Open Source Project; Copyright JetBrains s.r.o. and
+   contributors; Copyright The Guava Authors; Copyright Square, Inc.;
+   Copyright The JSpecify Authors.
+   Apache License, Version 2.0 (Apache-2.0):
+   https://www.apache.org/licenses/LICENSE-2.0
+   The full list is shown in the app under About > Open-source licenses.

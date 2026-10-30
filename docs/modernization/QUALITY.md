@@ -206,7 +206,7 @@ The bodies marked `/* … */` are the implementer's to write exactly as their KD
 | P12 | History bytes round-trip | `playedGame` | `MoveLog.fromPackedBytes(log.toPackedBytes(), log.size) == log`; `Snapshot.fromBytes(s.toBytes(), size) == s` for every snapshot |
 | P13 | Spawn validity | `playedGame` × `direction` | The spawn lands on a cell that was empty after the slide, with `exp ∈ {1, 2}` |
 
-Every engine test that produces a state also asserts `GameInvariants.violations(state).isEmpty()` (I1–I8).
+Every engine test that produces a state also asserts `GameInvariants.violations(state).isEmpty()` (I1–I8 and I10–I12, D-214).
 
 Other engine suites (`ARCHITECTURE.md` §10.2):
 
@@ -238,7 +238,7 @@ There are no separate binary fixture files. The two engine byte layouts are pinn
 
 Downgrade and forward-compatibility cases are built in code from the v1 fixtures, so the committed files stay minimal:
 - an extra unknown key at the top level and inside a `SizeRecord` → ignored;
-- an unknown enum name (`"palette": "PLASMA"`) → coerced to the default, not treated as corruption;
+- an unknown enum name (`"palette": "SEPIA"`, `"motion": "SUPER"`) → coerced to the default, not treated as corruption;
 - a missing field whose default is a valid value → that default, not treated as corruption. The cases remove `keepScreenOn` from `settings.json` (→ `false`; every other non-default value intact) and `newBestAnnounced` and `elapsedMs` from `game-4.json` (→ `false` and 0; `gameId` 7, the cells, history and `pendingFinalizations` as in the fixture) (F07-AC15).
 
 A default is what a missing key decodes to; it is not always a valid value. `gameId` has **no valid default**: its default 0 exists only so that `GameDocument()` (`size = 0`, "no saved game") decodes, and a game document with `size != 0` and no `gameId` key decodes to `gameId = 0`, fails the D-044 identity check (`gameId ≥ 1`, `ARCHITECTURE.md` §4.4) and is corrupt, so it falls back to a fresh game like any other invalid document (D-045). `PersistenceCorruptionTest` covers that case (F07-AC23, §1.6), and no compatibility case removes `gameId`.
@@ -252,12 +252,12 @@ All use the real `DataStoreFactory.create(…)` of `ARCHITECTURE.md` §4.2 over 
 | `PersistenceFixturesTest` | M2 | §1.5 |
 | `PersistenceCorruptionTest` | M2 | Table below |
 | `PersistenceBudgetTest` | M2 | D-046: the 10,000-move 8×8 document encodes to ≤ 262,144 bytes (expected ≈ 40 KB) both in memory (`GameDocumentSerializer.writeTo` into a `ByteArrayOutputStream`) and on disk after `updateData` (`file.length()`); encode + decode ≤ 50 ms as the median of 5 runs after 3 warm-ups; `records.json` with all six sizes populated (every counter at 10⁹, `tileReach` of 40 entries) ≤ 65,536 bytes; `settings.json` ≤ 4,096 bytes |
-| `ConflatedWriterTest` | M2 | (a) 1,000 submissions while one write is suspended produce exactly 2 writes, the in-flight one and the latest; (b) a write gated by a `CompletableDeferred` completes even after newer submissions (never cancelled, D-024); (c) a write lambda that throws `IOException` increments `failures`, and the next submission writes the full document; (d) `reportsWrittenValuesAndRetriesFailedOne` (F07-AC31): `onWritten` reports exactly the writes that returned normally, `retryFailed()` resubmits the failed value once and is a no-op after a success or when a newer value is queued (D-044) |
+| `ConflatedWriterTest` | M2 | (a) 1,000 submissions while one write is suspended produce exactly 2 writes, the in-flight one and the latest, and `submissions` counts all of them (D-221); (b) a write gated by a `CompletableDeferred` completes even after newer submissions (never cancelled, D-024); (c) a write lambda that throws `IOException` increments `failures`, and the next submission writes the full document; (d) `reportsWrittenValuesAndRetriesFailedOne` (F07-AC31): `onWritten` reports exactly the writes that returned normally, `retryFailed()` resubmits the failed value once and is a no-op after a success or when a newer value is queued (D-044) |
 | `SettingsRepositoryTest` | M2 | Defaults on a missing file; `lastBoardSize` outside 3..8 → 4; updates before load are applied after load in call order |
-| `RecordsMathTest` | M2 | D-044 finalization arithmetic with the D-198 readings. The D-044 identity: `finalize` of a `gameId` at or below `lastFinalizedGameId` returns the same instance; `reset` keeps only `lastFinalizedGameId`; `nextGameId`; `displayed` applies the recovery entries, oldest first, before the `OVER` game (F08-AC19, F08-AC20). The no-best-decreases property over 1,000 seeded sequences of 50 random `progress`/`finalize` calls, each `finalize` with a random `gameId` in 1..60 so that repeats occur; it also asserts that `lastFinalizedGameId` never decreases and that a `finalize` with a `gameId` at or below it changes nothing. The sequences come from `SplitMix64(0x2048 + i)` because `:app` has no kotest dependency: D-016 is exact, and adding `kotest-property` to `:app` would need a D-173 entry and buys little |
+| `RecordsMathTest` | M2 | D-044 finalization arithmetic with the D-198 readings. `coerceBestTiles` (F08-AC26, D-270): a `bestTileExp` outside 0..N² + 1 reads as 0, everything else is kept, and an in-range document is returned as the same instance. The D-044 identity: `finalize` of a `gameId` at or below `lastFinalizedGameId` returns the same instance; `reset` keeps only `lastFinalizedGameId`; `nextGameId`; `displayed` applies the recovery entries, oldest first, before the `OVER` game (F08-AC19, F08-AC20). The no-best-decreases property over 1,000 seeded sequences of 50 random `progress`/`finalize` calls, each `finalize` with a random `gameId` in 1..60 so that repeats occur; it also asserts that `lastFinalizedGameId` never decreases and that a `finalize` with a `gameId` at or below it changes nothing. The sequences come from `SplitMix64(0x2048 + i)` because `:app` has no kotest dependency: D-016 is exact, and adding `kotest-property` to `:app` would need a D-173 entry and buys little |
 | `DataMigrationSeamTest` | M2 | A test-only `DataMigration<Settings>` (`shouldMigrate = schemaVersion < 2`, `migrate = copy(schemaVersion = 2)`) passed to a store over a copy of `fixtures/v1/settings.json`: first read returns `schemaVersion = 2` with every other v1 value intact; the file is rewritten; a second store instance (after the first scope is cancelled) does not call `migrate` again. v1.0 ships no migrations (`migrations = emptyList()`, `ARCHITECTURE.md` §4.4), so this added test proves now the D-041 path that later versions will use; it changes no decision |
 
-`PersistenceCorruptionTest` cases. For each case: the named file gets the bytes shown; the store's corruption handler yields that document's defaults; the file is rewritten with the defaults; every **other** file under the temp folder is byte-identical before and after (sha256); nothing throws out of the repository API.
+`PersistenceCorruptionTest` cases. For each case: the named file gets the bytes shown; the store's corruption handler yields that document's defaults; the file is rewritten with the defaults; every **other** file under the temp folder is byte-identical before and after (sha256); nothing throws out of the repository API. For a game file, the install's settings select that size, and a `GameViewModel` over the same container then becomes ready on it with a fresh game (`moveCount 0`, `gameId == nextGameId(size, null)`), saved once into that file, with no settings or records save (F02-AC12, F07-AC17, F07-AC23).
 
 | File | Bytes written | Expected |
 |---|---|---|
@@ -272,15 +272,17 @@ All use the real `DataStoreFactory.create(…)` of `ARCHITECTURE.md` §4.2 over 
 | `game-4.json` | … with `keepGoingAtMove = 99` (I4) | Same |
 | `game-4.json` | … with `status = "OVER"` on a board that can move (I8) | Same |
 | `game-4.json` | … with `gameId = 0`; separately without the `gameId` key (it decodes to 0: no valid default, §1.5); with `pendingFinalizations[0].gameId = 7` (equal to `gameId`); with `pendingFinalizations[0].score = -1`; with `pendingFinalizations[0].maxExp = 128`; with the fixture's entry twice (ids 6, 6: not strictly increasing); with 17 copies of the entry, ids 1..17, and `gameId = 18` (over `MAX_PENDING_FINALIZATIONS`) (D-044 identity checks, D-046 cap, F07-AC23) | Same; nothing is counted from the rejected entries |
+| `game-4.json` | … with its empty last cell at exponent 18 (one above 4×4's reachable maximum N² + 1 = 17), 70, 100 or 127; with `pendingFinalizations[0].maxExp` = 18 or 70; F07-AC17's valid 40-move game with one cell of `snapshots[1]`, its undo base, at 18, 70, 100 or 127. Controls at 17 load (D-270, F07-AC34, F07-AC35) | Same |
+| `game-8.json` | An 8×8 new game with one cell at 66 (one above 65); the control at 65 loads (D-270, F07-AC34) | `GameDocument()` → a fresh 8×8 game; `records.json` untouched |
 | `game-4.json` | A stray `game-4.json.tmp` full of garbage next to a valid file (a write interrupted by process death) | The valid file loads; the `.tmp` file is ignored |
 
 ### 1.7 ViewModel tests (Turbine)
 
-Conventions (`ARCHITECTURE.md` §4.10): `runTest` with `StandardTestDispatcher`; flows observed with Turbine (`vm.board.test { … }`); assertions on transitions, never on emission counts (`StateFlow` conflates); `advanceUntilIdle()` before reading repositories; `awaitIdle()` on writers before reading files.
+Conventions (`ARCHITECTURE.md` §4.10): `runTest` with `StandardTestDispatcher`; flows observed with Turbine (`vm.board.test { … }`); assertions on transitions, never on emission counts (`StateFlow` conflates); `testScheduler.runCurrent()` before reading repositories, because the `TestAppContainer` scope is a child of `backgroundScope` and `testScheduler.advanceUntilIdle()` does not run background work (D-220; the `TestScope` extensions are experimental, D-215); `awaitIdle()` on writers before reading files. Saves are counted with the repositories' `submissions` (D-221), never with `FaultyDataStore.writeAttempts`: the writer conflates saves made in one action into one file write.
 
 | Class | `[M]` | Key assertions (full AC list: `FEATURES.md` §8) |
 |---|---|---|
-| `GameViewModelTest` | M2 | Accepted move: one new `BoardUi` (`moveId + 1`, event `BoardEvent.Moved` carrying its `haptic`), header score and `+N`, persisted `game-N.json` equals `Game.move`'s state after `awaitIdle()`. Invalid move: only `nudge` changes; no file write (file mtime and bytes unchanged). `Blocked`: nothing changes. Undo: `BoardEvent.Undo`, overlay `None`, file updated. New game (`vm.onNewGame()`): finalizes per D-044 only when `OVER` or `score > 0`; `bestAtStart` read after finalization; the fresh game's `gameId` is `max(old, lastFinalizedGameId) + 1` and its `pendingFinalizations` end with the old game's finalization input exactly when it was counted (F06-AC13), and a New game drops exactly the entries the records file is known to hold (`newGameDropsOnlyWrittenEntries`, F06-AC23). Keep going: `KEEP_PLAYING`, or the game-over overlay at once. Size switch: saves the old size, loads or creates the new one, `lastBoardSize` persisted, no finalization. New best fires once per game and survives process death (`newBestAnnounced`). Records update live on best increases only. `ready` becomes true after settings, records and game load. First-launch hint (D-201): `hintShownWhileStartingGameHasNoMove` (F22-AC2), `hintHiddenAfterAMove` (F22-AC10). One-shot presentations (D-047, ARCHITECTURE.md §4.11): `presentationReportsSettleWithoutStateChange` (F07-AC24): after a winning move, `onBoardPresented`, `onHeaderPresented` and `onOverlayPresented` with its `moveId` settle board, header and card entry, change no game state, history, clock or records, submit no save, and a repeated or stale report changes nothing. Header event and epoch (D-062, ARCHITECTURE.md §4.8): `headerCarriesBoardEventAndEpoch` (F13-AC14): every header emitted with a `BoardUi` carries its `moveId`, `event.kind` and `epoch`, and the reports leave the header's `event` and `epoch` unchanged |
+| `GameViewModelTest` | M2 | Accepted move: one new `BoardUi` (`moveId + 1`, event `BoardEvent.Moved` carrying its `haptic`), header score and `+N`, persisted `game-N.json` equals `Game.move`'s state after `awaitIdle()`. Invalid move: only `nudge` changes; no file write (file mtime and bytes unchanged). `Blocked`: nothing changes. Undo: `BoardEvent.Undo`, overlay `None`, file updated. New game (`vm.onNewGame()`): finalizes per D-044 only when `OVER` or `score > 0`; `bestAtStart` read after finalization; the fresh game's `gameId` is `max(old, lastFinalizedGameId) + 1` and its `pendingFinalizations` end with the old game's finalization input exactly when it was counted (F06-AC13), and a New game drops exactly the entries the records file is known to hold (`newGameDropsOnlyWrittenEntries`, F06-AC23). Keep going: `KEEP_PLAYING`, or the game-over overlay at once. Size switch: saves the old size, loads or creates the new one, `lastBoardSize` persisted, no finalization. New best fires once per game and survives process death (`newBestAnnounced`). Records update live on best increases only. `ready` becomes true after settings, records and game load. First-launch hint (D-201): `hintShownWhileStartingGameHasNoMove` (F22-AC2), `hintHiddenAfterAMove` (F22-AC10). One-shot presentations (D-047, ARCHITECTURE.md §4.11): `presentationReportsSettleWithoutStateChange` (F07-AC24): after a winning move, `onBoardPresented`, `onHeaderPresented` and `onOverlayPresented` with its `moveId` settle board, header and card entry, change no game state, history, clock or records, submit no save, and a repeated or stale report changes nothing. Header event and epoch (D-062, ARCHITECTURE.md §4.8): `headerCarriesBoardEventAndEpoch` (F13-AC14): every header emitted with a `BoardUi` carries its `moveId`, `event.kind` and `epoch`, and the reports leave the header's `event` and `epoch` unchanged. Engine check failure (D-214, ARCHITECTURE.md §9.1): `engineCheckFailureIsCorruption` (F07-AC32): an `IllegalStateException` from `Game.undo` or `Game.move` on a restored game escapes nowhere and replaces the game like a corrupt file, finalizing nothing |
 | `InputBurstOrderingTest` | M2 | Three `onMove` calls with no clock advance in between: the three outcomes apply to successive states; the final state equals `Game.replay` of the same directions; the persisted file after `awaitIdle()` equals that state (D-052) |
 | `PlayClockTest` | M2 | Time accrues only while resumed, in progress and after the first move; pause folds time into the save |
 | `BoardPresenterTest` | M2 | Epoch `BoardUi`s (`Restored`, `Undo`, `NewGame`, `SizeSwitched`) contain only `Static` tiles; `reset(state, Undo)` keeps the id of every cell whose exponent is unchanged, every other epoch assigns new ids (D-182; F05-AC9, F06-AC11). `settledKeepsIdentityAndIsStatic` (F07-AC25): `settled(b)` keeps `moveId`, `epoch`, `cells` and the non-`Ghost` tile ids, is all `Static` with event `Restored`, is idempotent, and leaves the presenter's next emission unchanged (D-047) |
@@ -357,7 +359,7 @@ In verify mode a mismatch fails the test and writes `<name>_actual.png` and `<na
 
 ```text
 Screenshots (all inspected):
-- game_mid-4x4_classic-dark.png (new): Classic dark board, 14 tiles 2…2048, score 10220, best 24680; nothing clipped.
+- game_mid-4x4_classic-dark.png (new): Classic dark board, 13 tiles 2…1024, score 10220, best 24680; nothing clipped.
 - settings_classic-light_de.png (changed): "Wischempfindlichkeit" now wraps to two lines; switches aligned.
 - launch_placeholder.png (deleted): replaced by game_new-4x4_classic-light.png.
 ```
@@ -402,7 +404,7 @@ Inspection strips are under `build/reports`, so CI uploads them in the reports a
 
 `FinalizationRecoveryTest` (`[M2]`, JVM, no Robolectric; D-044, `ARCHITECTURE.md` §4.9 finalization protocol). Each method simulates a process killed partway through New game's two writes, then relaunches:
 1. **Failing writer.** Container A is a `TestAppContainer`. The test builds A's `GameViewModel` directly, from a `RecordsRepository(store, …)` and a `GameRepository(storeFor, …)` constructed over A's own stores (`ARCHITECTURE.md` §4.2, §4.6). Either the records store or the 4×4 game store is wrapped in `testing/FaultyDataStore` with `failWrites = true`. The repositories already take their stores, so no production seam is added. The wrapped file's writes throw `IOException`, which `ConflatedWriter` swallows (`ARCHITECTURE.md` §9.3). The other file is written normally. After `onNewGame()`, `awaitIdle()` on every writer, then cancel A's `applicationScope`. Exactly one of the two New game writes has landed.
-2. **Relaunch.** Container B (no faults, `FixedSeedSource(0x2048)` again, so seeds repeat on purpose and only `gameId` can tell games apart) loads over the same folder, then `advanceUntilIdle()`. Assert `records.json`, B's current game and `game-4.json` as F06-AC14–AC17 state. Then `onNewGame()` in B, `awaitIdle()`, and container C: the old game is still counted once.
+2. **Relaunch.** Container B (no faults, `FixedSeedSource(0x2048)` again, so seeds repeat on purpose and only `gameId` can tell games apart) loads over the same folder, then `testScheduler.runCurrent()` (D-220). Assert `records.json`, B's current game and `game-4.json` as F06-AC14–AC17 state. Then `onNewGame()` in B, `awaitIdle()`, and container C: the old game is still counted once.
 3. **All four disk outcomes** (`everyDiskOutcomeCountsExactlyOnce`, F06-AC18). A runs without faults. The bytes of `records.json` and `game-4.json` are captured before `onNewGame()` and after it plus `awaitIdle()`. Each of the four (records, game) combinations is copied into a fresh `TemporaryFolder`, and the B/C steps above run over it. This is done for an `OVER` and for an abandoned old game.
 4. **Other sizes** (`otherSizesRecoveredAfterLoad`, F06-AC19): the interrupted New game is on 5×5 and B starts on 4×4. R1 updates the records after `ready`, and `game-5.json` stays byte-identical.
 5. **Reset** (`resetIsNotUndoneByRecovery`, F08-AC22): `records.resetAll()` after a New game, then relaunch. `sizes` stays empty.
@@ -419,16 +421,16 @@ Complements: `RecreateNoReplayTest` (Robolectric `ActivityScenario.recreate()` a
 
 | Check | Where | Rule |
 |---|---|---|
-| ATF (D-085, D-204) | `atfRule(compose)` from `testing/Accessibility.kt` (below), applied with `RuleChain.outerRule(compose).around(atfRule(compose))` in every screen-level screenshot class (`GameScreenshotTest`, `ScreensScreenshotTest`, `LocaleScreenshotTest`, `LayoutScreenshotTest`) and in `PlaceholderScreenshotTest` from M0. It therefore runs on every `game_*`, `layout_*`, `settings_*`, `stats_*`, `howtoplay_*`, `about_*`, `licenses_*`, `sheet_*` and `dialog_*` golden; only `motion_*` (`MotionFilmstripTest`) is exempt | `AccessibilityCheckPreset.LATEST`, `CheckLevel.Error`, after every test. The rule captures no images of its own (verified). The opt-in it needs is D-174 |
-| Touch targets (D-084, D-205) | `assertTouchTargets()` called after every screen-level capture, in the same classes | A gate, like ATF: every clickable's touch bounds ≥ 48 × 48 dp, and no two clickables' touch bounds overlap (V6). ATF's size-only check is vacuous under Compose's 48 dp touch-bounds expansion |
+| ATF (D-085, D-204) | `atfRule(compose)` from `testing/Accessibility.kt` (below), applied with `RuleChain.outerRule(compose).around(atfRule(compose))` in every screen-level screenshot class (`GameScreenshotTest`, `ScreensScreenshotTest`, `LocaleScreenshotTest`, `LayoutScreenshotTest`) and in `PlaceholderScreenshotTest` from M0. The rule checks the main window's root after the test, so a `dialog_*` or `sheet_*` test also calls `onNode(isDialog()).assertAccessible()` while that window is open, with the same options. ATF therefore runs on every `game_*`, `layout_*`, `settings_*`, `stats_*`, `howtoplay_*`, `about_*`, `licenses_*`, `sheet_*` and `dialog_*` golden; only `motion_*` (`MotionFilmstripTest`) is exempt | `AccessibilityCheckPreset.LATEST`, `CheckLevel.Error`, after every test and on each open dialog or sheet window. The rule captures no images of its own (verified). The opt-in it needs is D-174. Seeded once in M3 part 1: a 20 dp unlabeled clickable in the new-game dialog fails `assertAccessible()` with `SpeakableTextPresentCheck`, which the after-test check alone never saw |
+| Touch targets (D-084, D-205) | `assertTouchTargets()` called after every screen-level capture, in the same classes; for a dialog or sheet golden, `assertDialogTouchTargets()` while its window is open, and `assertTouchTargets()` once it is closed | A gate, like ATF: every clickable's touch bounds ≥ 48 × 48 dp, and no two clickables' touch bounds overlap (V6), each window in its own coordinates; in a dialog or sheet window, the clickable that covers the whole window (`ModalBottomSheet`'s "Close sheet" scrim, under the sheet) is checked for size only (D-238); a clickable scrolled entirely out of its container's viewport is skipped until it scrolls in (D-252), and the test that captures it scrolls it in after the capture and checks it then, as `statisticsGolden` does for the seven Statistics tabs (D-262). ATF's size-only check is vacuous under Compose's 48 dp touch-bounds expansion |
 | Semantics | `BoardSemanticsTest`, `TalkBackModeTest` | D-080–D-082, D-202: `CollectionInfo(N, N)`, cell labels, custom actions, live regions, status lines, direction pad |
 | Contrast and CVD | `PaletteContrastTest` (JVM) | `DESIGN_SYSTEM.md` §2.13 with the unquantized contrast and CVD ΔE method (D-205): the D-083 ink floors for exponents 1–17, the ΔE gates, every quoted contrast ratio, the chrome pairs of §2.9, HC ink rule |
-| Font scale 2.0 | `GameScreenTest.chromeTextNotTruncatedAtFontScale2` + goldens 27–28 | No text node reports `hasVisualOverflow` (`FEATURES.md` F17-AC15) |
+| Font scale 2.0 | `GameScreenTest.chromeTextNotTruncatedAtFontScale2` + goldens 27–28; `TalkBackModeTest.padNewGameLabelFitsAtFontScale2…` | No text node reports `hasVisualOverflow` (`FEATURES.md` F17-AC15); the pad row's New game neither overflows nor breaks a word (F17-AC27, D-266) |
 | Long scores (D-084) | `ScoreFitTest.fallbackChainTable` (JVM) + `GameScreenTest.longScoresFitHeaderWithoutTruncation` + `GameScreenTest.longScoresFitGameOverCard` (F17-AC24) | The `DESIGN_SYSTEM.md` §7.2 fit chain table (F17-AC22). With Score 999,999,999 and Best 9,999,999,999 on 8×8, at `fontScale` 1.0 and 2.0 in two 360 dp windows and two THREE_COLUMN windows: no overflow, every digit shown at 14–28 sp, unchanged content descriptions, no chip overlapping chrome or the board, and the board equal to the resolved one (F17-AC23). F17-AC23 fails if a chip keeps the earlier "stay at 14 sp and widen up to the slot" rule (overflow or overlap at `fontScale` 2.0) or if the probe measures scores of 0 (the stacked header then overlaps the board) |
-| Focus | `KeyboardInputTest` | Board focus on entry; Tab order; visible focus ring (D-053, D-084) |
+| Focus | `KeyboardInputTest`, `FocusRingTest` | Board focus on entry; Tab order; visible focus ring (D-053, D-084); the list rows' ring in keyboard input mode, drawn over the next row, and the Statistics tabs' and the game menu items' ring, pixel checks (F16-AC12, F16-AC13; D-267, D-269) |
 
 ```kotlin
-// app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt (verified in the scratch build)
+// app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt (verified in the scratch build); window helpers added in M3 part 1
 // The only opt-in in the test source set (D-174): every Roborazzi ATF API is
 // @ExperimentalRoborazziApi in 1.77.0.
 @file:OptIn(ExperimentalRoborazziApi::class)
@@ -436,7 +438,11 @@ Complements: `RecreateNoReplayTest` (Robolectric `ActivityScenario.recreate()` a
 package com.clayboicardi.game2048.testing
 
 import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
@@ -445,25 +451,34 @@ import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RoborazziATFAccessibilityCheckOptions
 import com.github.takahirom.roborazzi.RoborazziATFAccessibilityChecker
 import com.github.takahirom.roborazzi.RoborazziRule
+import com.github.takahirom.roborazzi.checkRoboAccessibility
 import com.google.android.apps.common.testing.accessibility.framework.AccessibilityCheckPreset
 
-/** D-085: ATF after every test, LATEST preset, Error level. */
+/** D-085: ATF after every test, LATEST preset, Error level, on the main window. */
 fun atfRule(compose: ComposeTestRule): RoborazziRule =
     RoborazziRule(
         composeRule = compose,
         captureRoot = compose.onRoot(),
         options =
             RoborazziRule.Options(
-                roborazziAccessibilityOptions =
-                    RoborazziATFAccessibilityCheckOptions(
-                        checker =
-                            RoborazziATFAccessibilityChecker(
-                                preset = AccessibilityCheckPreset.LATEST,
-                            ),
-                        failureLevel = RoborazziATFAccessibilityChecker.CheckLevel.Error,
-                    ),
+                roborazziAccessibilityOptions = atfOptions(),
                 accessibilityCheckStrategy = AccessibilityCheckAfterTestStrategy(),
             ),
+    )
+
+/**
+ * D-085 on the window of this node while it is open, with [atfRule]'s preset and level: a dialog or
+ * a sheet (`onNode(isDialog())`), which the after-test check on the main window never sees.
+ */
+fun SemanticsNodeInteraction.assertAccessible() {
+    checkRoboAccessibility(atfOptions())
+}
+
+/** The LATEST preset at the Error level (D-085). */
+private fun atfOptions() =
+    RoborazziATFAccessibilityCheckOptions(
+        checker = RoborazziATFAccessibilityChecker(preset = AccessibilityCheckPreset.LATEST),
+        failureLevel = RoborazziATFAccessibilityChecker.CheckLevel.Error,
     )
 
 /**
@@ -472,15 +487,62 @@ fun atfRule(compose: ComposeTestRule): RoborazziRule =
  * failure that matters). Nested clickables (one an ancestor of the other) are exempt.
  */
 fun ComposeTestRule.assertTouchTargets() {
+    touchTargets(hasClickAction())
+}
+
+/**
+ * [assertTouchTargets] for the clickables of the open dialog or sheet window (`isDialog()`), in
+ * that window's coordinates, while the main window's are left to [assertTouchTargets]. A clickable
+ * that covers the whole window is the window's scrim (`ModalBottomSheet`'s "Close sheet" target,
+ * drawn under every other clickable of the window): its size is checked, and the targets above it
+ * may overlap it (D-238).
+ */
+fun ComposeTestRule.assertDialogTouchTargets() {
+    val checked =
+        touchTargets(hasClickAction() and hasAnyAncestor(isDialog()), scrimExempt = true)
+    check(checked > 0) { "No clickable in an open dialog window" }
+}
+
+/**
+ * Checks the clickables that [matcher] selects; returns how many there were. With [scrimExempt],
+ * a clickable that covers its whole window is left out of the overlap check only.
+ */
+private fun ComposeTestRule.touchTargets(
+    matcher: SemanticsMatcher,
+    scrimExempt: Boolean = false,
+): Int {
     val minPx = with(density) { 48.dp.toPx() } - 0.5f
-    val nodes = onAllNodes(hasClickAction(), useUnmergedTree = true).fetchSemanticsNodes()
+    val nodes =
+        onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().filterNot {
+            it.isScrolledAway()
+        }
     val tooSmall =
         nodes
             .filter { it.touchBoundsInRoot.width < minPx || it.touchBoundsInRoot.height < minPx }
-            .map { "too small: ${it.id} ${it.touchBoundsInRoot}" }
-    val problems = tooSmall + overlaps(nodes)
+            .map { "too small: ${it.id} ${it.describe()} ${it.touchBoundsInRoot}" }
+    val overlapping = if (scrimExempt) nodes.filterNot { it.coversItsWindow() } else nodes
+    val problems = tooSmall + overlaps(overlapping)
     check(problems.isEmpty()) { "Touch-target violations: " + problems.joinToString() }
+    return nodes.size
 }
+
+/**
+ * Whether this node has a laid-out size but none of it is visible: a clickable scrolled out of its
+ * container's viewport (a tab of a scrollable tab row past the screen edge), which no touch can
+ * reach until it scrolls in, and is checked then (D-252).
+ */
+private fun SemanticsNode.isScrolledAway(): Boolean =
+    size.width > 0 && size.height > 0 && (boundsInRoot.width <= 0f || boundsInRoot.height <= 0f)
+
+/** The node's text or content description, for a failure message. */
+private fun SemanticsNode.describe(): String =
+    (config.getOrNull(SemanticsProperties.Text)?.joinToString()
+            ?: config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString())
+        .orEmpty()
+
+/** Whether this node's touch bounds are its window's whole bounds (a modal scrim). */
+private fun SemanticsNode.coversItsWindow(): Boolean =
+    touchBoundsInRoot == generateSequence(this) { it.parent }.last().boundsInRoot
 
 private fun overlaps(nodes: List<SemanticsNode>): List<String> = nodes.flatMapIndexed { i, a ->
     nodes.drop(i + 1).mapNotNull { b ->
@@ -504,6 +566,17 @@ private val compose = createComposeRule()
 fun midGameLight() {
     compose.setContent { /* GameTheme + GameScreen over FIX_MID_4 */ }
     compose.onRoot().captureGolden("game_mid-4x4_classic-light")
+    compose.assertTouchTargets()
+}
+
+@Test
+fun newGameDialog() {
+    // … open the dialog …
+    val dialog = compose.onNode(isDialog())
+    dialog.captureGolden("dialog_newgame_classic-light")
+    dialog.assertAccessible()            // ATF on the dialog's window
+    compose.assertDialogTouchTargets()   // its clickables, in its coordinates
+    // … close it; the main window's checks follow …
     compose.assertTouchTargets()
 }
 ```
@@ -630,7 +703,7 @@ Notes:
 | Engine | 100,000 accepted 8×8 moves ≤ 2 s | `EnginePerformanceTest` | Time in the test output |
 | Tile recompositions during a slide | 0 | `TileRecompositionTest` | — |
 | Board / screen recompositions per move | ≤ 2 / 0 | `BoardRecompositionBudgetTest` (`MOTION_SPEC.md` §7.2) | — |
-| Confetti step | 10,000 steps of 160 particles ≤ 200 ms, ≤ 1 KiB allocated | `ConfettiSystemTest` | — |
+| Confetti step | Fastest of 5 batches of 10,000 steps of 160 particles ≤ 200 ms of thread CPU time, after 20,000 warm-up steps (D-230, D-235); ≤ 1 KiB allocated | `ConfettiSystemTest` | Every batch's CPU time and the wall time in the test output |
 | Device frame budgets | P95 ≤ 6 ms, P99 overrun ≤ 0 | Not gated (D-150, D-153) | `MOTION_SPEC.md` §7.6 recipe, optional |
 
 A budget is never raised to make a change pass. Raising one needs an execution-time D-173 entry with the measurement.
@@ -863,15 +936,16 @@ check_license_file() {
     err "LICENSE copyright lines differ from D-120"
 }
 
-# [M0] D-143, D-174, D-181: opt-ins appear only in the two allowed files.
+# [M0] D-143, D-174, D-181 (+ D-215 in M2): opt-ins appear only in the three allowed files.
 check_optin_allowlist() {
   local allowed='app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt
-app/src/main/kotlin/com/clayboicardi/game2048/ui/components/GameModalSheet.kt'
+app/src/main/kotlin/com/clayboicardi/game2048/ui/components/GameModalSheet.kt
+app/src/test/kotlin/com/clayboicardi/game2048/testing/MainDispatcherRule.kt'
   local hits extra
   hits="$(git grep -l -E '@(file:)?OptIn\(|^[[:space:]]*@Experimental[A-Za-z0-9]*Api\b|optIn\.add|-opt-in' \
     -- '*.kt' '*.kts' ':(exclude)docs' || true)"
   extra="$(comm -23 <(sort -u <<< "$hits" | sed '/^$/d') <(sort -u <<< "$allowed"))"
-  [[ -z "$extra" ]] || err "opt-in outside the D-174/D-181 allowlist (a new one needs a D-173 entry): $extra"
+  [[ -z "$extra" ]] || err "opt-in outside the D-174/D-181/D-215 allowlist (a new one needs a D-173 entry): $extra"
 }
 
 # [M0] D-179 (L10N_STORE_LEGAL.md §1.2): no tracked file starts with a UTF-8 BOM. Lint's
@@ -1223,7 +1297,7 @@ Root `build.gradle.kts`, exactly `ARCHITECTURE.md` §2.5: `kotlin { target("**/*
 
 - Run `./gradlew spotlessApply` (under the build lock, §3.1) before every commit; `spotlessCheck` is part of every gate level.
 - ktfmt kotlinlang style wraps at 100 columns.
-- Fallback (D-141; DECISIONS verification-pending item 6, checked in M1 and M3 by running `spotlessApply` twice, then `spotlessCheck`): if 0.65 fails to resolve or is not idempotent, set `ktfmt = "0.64"` in the catalog and record it.
+- Fallback (D-141; DECISIONS verification-pending item 6, checked in M1, M3 and M6 by running `spotlessApply` twice, then `spotlessCheck`, and resolved in M6, D-260): if 0.65 fails to resolve or is not idempotent, set `ktfmt = "0.64"` in the catalog and record it.
 
 ### 2.2 Android Lint
 
@@ -1243,6 +1317,7 @@ Root `build.gradle.kts`, exactly `ARCHITECTURE.md` §2.5: `kotlin { target("**/*
 |---|---|---|---|
 | `app/src/test/kotlin/com/clayboicardi/game2048/testing/Accessibility.kt` | `@file:OptIn(ExperimentalRoborazziApi::class)` | Every Roborazzi ATF API is experimental (V5) | D-174 |
 | `app/src/main/kotlin/com/clayboicardi/game2048/ui/components/GameModalSheet.kt` | `@OptIn(ExperimentalMaterial3Api::class)` | `ModalBottomSheet`, `rememberBottomSheetState`, `SheetValue` (`DESIGN_SYSTEM.md` §7.4) | D-181 |
+| `app/src/test/kotlin/com/clayboicardi/game2048/testing/MainDispatcherRule.kt` | `@file:OptIn(ExperimentalCoroutinesApi::class)` | `Dispatchers.setMain` and `resetMain` (§1.7); tests use only the stable `testScheduler.advanceUntilIdle()` and `runCurrent()` | D-215 |
 
 A new opt-in anywhere else needs an execution-time D-173 entry and a matching change to `check_optin_allowlist` in the same commit.
 
@@ -1259,7 +1334,7 @@ Configuration: `ARCHITECTURE.md` §2.7–§2.8 (`buildUponDefaultConfig`, one ro
 
 - `@Suppress("Id") // <reason>` and `tools:ignore="Id"` with an adjacent `<!-- reason -->` comment, at the narrowest scope (statement or declaration), never file-level for deprecations.
 - No `lint-baseline.xml` or detekt baseline (§1.16).
-- M6 lists every suppression in the PR body: `git grep -n -E '@Suppress\(|tools:ignore=' -- app core`.
+- M6 lists every suppression in the PR body: `git grep -n -E '@([a-z]+:)?Suppress\(|tools:ignore=' -- app core` (the optional use-site target also lists file-level `@file:Suppress(`, D-260).
 - `AGENTS.md` `## Code Review Rules` → "Verification integrity" (D-171, D-192) asks Codex to flag new suppressions without a reason.
 
 ### 2.6 Gradle test-task integrity rules
@@ -1277,11 +1352,11 @@ The snippets are part of `ARCHITECTURE.md` §2.6 and §2.7 (D-176); they are add
 
 ### 3.1 Levels and listing
 
-D-140's command list is unchanged; it is the `full` level, the only push gate. `quick`, `--record` and `full --record` are local conveniences around it and never replace `full` before a push (D-178).
+D-140's command list is unchanged; it is the `full` level, the only push gate. Since D-223 it runs in two Gradle invocations: the engine tests and their Kover check alone first, then every other task. `quick`, `--record` and `full --record` are local conveniences around it and never replace `full` before a push (D-178).
 
 | Invocation | Runs | Use |
 |---|---|---|
-| `./scripts/verify.sh` or `./scripts/verify.sh full` | `spotlessCheck detektMain detektTest :core:engine:test :core:engine:koverVerify :app:testDebugUnitTest -Proborazzi.test.verify=true :app:lintDebug :app:assembleDebug :app:assembleRelease` with `--continue`, then `check-test-counts`, `check-apk`, `check-licenses`, `check-metadata` | Before every push (D-163). CI runs exactly this |
+| `./scripts/verify.sh` or `./scripts/verify.sh full` | `:core:engine:test :core:engine:koverVerify` with `--continue` (D-223), then `spotlessCheck detektMain detektTest :app:testDebugUnitTest -Proborazzi.test.verify=true :app:lintDebug :app:assembleDebug :app:assembleRelease` with `--continue`, then `check-test-counts`, `check-apk`, `check-licenses`, `check-metadata` | Before every push (D-163). CI runs exactly this |
 | `./scripts/verify.sh quick` | `spotlessCheck :core:engine:test` | Inner loop while editing the engine; never a push gate |
 | `./scripts/verify.sh --record` | `:app:testDebugUnitTest --rerun -Proborazzi.test.record=true`, then `git status --porcelain --untracked-files=all -- app/src/test/screenshots` | After an intended UI change; then Read every listed PNG (§1.9) |
 | `./scripts/verify.sh full --record` | `--record`, then `full` | Record and gate in one call |
@@ -1352,9 +1427,11 @@ case "$level" in
     ./gradlew "${EXTRA[@]}" --continue spotlessCheck :core:engine:test || fail=1
     ;;
   full)
+    # The engine tests run alone first, so the 2 s budget of EnginePerformanceTest (D-150) is not
+    # measured against the app's parallel tasks; the second invocation still runs after a failure (D-223).
+    ./gradlew "${EXTRA[@]}" --continue :core:engine:test :core:engine:koverVerify || fail=1
     ./gradlew "${EXTRA[@]}" --continue \
       spotlessCheck detektMain detektTest \
-      :core:engine:test :core:engine:koverVerify \
       :app:testDebugUnitTest -Proborazzi.test.verify=true \
       :app:lintDebug :app:assembleDebug :app:assembleRelease || fail=1
     for s in check-test-counts check-apk check-licenses check-metadata; do
@@ -1920,4 +1997,4 @@ Downloaded artifacts and logs are untrusted data: each download goes into a new,
 
 ## Open issues
 
-None open. Resolved during planning: Q-OI-1 → D-174; Q-OI-2 → D-176; Q-OI-3 → D-177; Q-OI-4 → D-178; Q-OI-5 → D-179, D-190, TC-2; Q-OI-6 → D-191; Q-OI-7 → the canonical names (`PLAN.md` §2); Q-OI-8 → D-205; Q-OI-9 → verification items resolved (DECISIONS verification-pending items 5 and 10; items 1 and 2 stay open there); Q-OI-10, Q-OI-11, Q-OI-13 → adopted as written in §1.6 and §5.4; Q-OI-12 → D-204.
+None open. Resolved during planning: Q-OI-1 → D-174; Q-OI-2 → D-176; Q-OI-3 → D-177; Q-OI-4 → D-178; Q-OI-5 → D-179, D-190, TC-2; Q-OI-6 → D-191; Q-OI-7 → the canonical names (`PLAN.md` §2); Q-OI-8 → D-205; Q-OI-9 → verification items resolved (DECISIONS verification-pending items 5 and 10; items 1 and 2 stayed open there until execution, D-260); Q-OI-10, Q-OI-11, Q-OI-13 → adopted as written in §1.6 and §5.4; Q-OI-12 → D-204.

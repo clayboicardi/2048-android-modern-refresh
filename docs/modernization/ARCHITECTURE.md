@@ -141,11 +141,11 @@ M0 (D-162, D-211) leaves a buildable, gated skeleton. `.github/workflows/ci.yml`
 - `app/` with:
   - `Game2048Application` (an empty `Application` subclass in M0; it creates `AppContainer` from M2);
   - `MainActivity`, which calls `installSplashScreen()`, `super.onCreate`, `enableEdgeToEdge()` and then only `setContent { App() }`;
-  - `App.kt`, which holds the M0 placeholder: `GameTheme` around a centered `Text(stringResource(R.string.settings))` with test tag `placeholder`, so the migrated string is used;
+  - `App.kt`, which holds the M0 placeholder: `GameTheme` around a centered `Text(stringResource(R.string.settings), color = MaterialTheme.colorScheme.onBackground)` with test tag `placeholder`, so the migrated string is used. The color role is explicit (D-083) because the theme provides no content color and nothing draws a background over the light or dark window background;
   - a minimal `ui/theme/GameTheme.kt` (`MaterialExpressiveTheme` with the default light/dark scheme and `MotionScheme.expressive()`);
   - the full manifest of §8.1, the adaptive icon (D-111), the splash and window themes (D-112, theme only), the migrated `values*/strings.xml` (D-101) and the debug label override;
 - `core/engine/` with `Direction.kt` and its JUnit 6 test (enough for Kover and the test-count floor to have data), and `core/engine/AGENTS.md` with its `## Code Review Rules` section (D-171, D-192);
-- `testing/Goldens.kt` and `testing/Accessibility.kt` (the D-174 opt-in), `LaunchSmokeTest` (`@Config(sdk = [24, 37])`, asserts launch and the placeholder text, captures nothing) and `PlaceholderScreenshotTest` (default SDK 36) with the one golden `app/src/test/screenshots/launch_placeholder.png`. A golden captured under two SDKs would write two different images to one file;
+- `testing/Goldens.kt` and `testing/Accessibility.kt` (the D-174 opt-in), `LaunchSmokeTest` (`@Config(sdk = [24, 37])`, asserts launch, the placeholder text and its D-083 contrast against the window background in light and dark mode, captures nothing) and `PlaceholderScreenshotTest` (default SDK 36) with the one golden `app/src/test/screenshots/launch_placeholder.png`. A golden captured under two SDKs would write two different images to one file;
 - `fastlane/metadata/android/` after the `git mv`, with the 16 listing-only locales and `promoGraphic.png` deleted and the legacy images moved under `en-US/images/` (content is rewritten in M5);
 - `docs/modernization/legacy-credits.md` (D-124, D-209), written **before** the submodule is removed.
 
@@ -354,7 +354,7 @@ gradle wrapper --gradle-version 9.7.1 --distribution-type bin \
   --gradle-distribution-sha256-sum acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a
 ```
 
-The first `wrapper` call uses the locally installed Gradle 8.14.3; the second runs the new wrapper in that same directory, so the wrapper JAR comes from 9.7.1. Then copy only `gradlew`, `gradlew.bat` and `gradle/wrapper/*` into the repository (never the temporary `settings.gradle.kts`) and run `git update-index --chmod=+x gradlew`. The resulting `gradle-wrapper.properties` is byte-identical to the listing above. A directory without a settings file is not a Gradle build, and the repository root is not a build between M0.6 and M0.8 (TC-4).
+The first `wrapper` call uses the locally installed Gradle 8.14.3; the second runs the new wrapper in that same directory, so the wrapper JAR comes from 9.7.1. Then copy only `gradlew`, `gradlew.bat` and `gradle/wrapper/*` into the repository (never the temporary `settings.gradle.kts`) and run `git update-index --chmod=+x gradlew`. Gradle 9.7.1's `wrapper` task also writes `retries=0` and `retryBackOffMs=500` (the wrapper JAR's defaults for absent keys); delete both lines, so the committed `gradle-wrapper.properties` is byte-identical to the listing above (D-212). A directory without a settings file is not a Gradle build, and the repository root is not a build between M0.6 and M0.8 (TC-4).
 
 Do not add `--warning-mode=fail` anywhere. detekt 2.0.0-alpha.6 prints one Gradle-10 deprecation from `:app:detektRelease` ("Querying the output of an artifact transform from a task action without declaring it as a task input"); it is harmless and outside the project's control.
 
@@ -796,6 +796,8 @@ value class BoardSize private constructor(val n: Int) {
     val cellCount: Int get() = n * n
     /** 8 (= 256) on 3×3, otherwise 11 (= 2048) (D-036). */
     val targetExp: Int get() = if (n == MIN_N) TARGET_EXP_3X3 else TARGET_EXP_DEFAULT
+    /** N² + 1, the largest exponent play makes: 10 on 3×3 … 65 on 8×8 (D-030, D-270). */
+    val maxReachableExp: Int get() = cellCount + 1
 
     override fun toString(): String = "${n}x$n"
 
@@ -963,10 +965,11 @@ object Game {
     const val START_TILES = 2
 
     fun newGame(size: BoardSize, seed: Long): GameState
+    /** Throws IllegalStateException on a merge of two Board.MAX_EXP tiles (§3.3, D-214). */
     fun move(state: GameState, direction: Direction): MoveOutcome
     /** Requires status == WON. Returns KEEP_PLAYING, or OVER when no move is possible (D-036). */
     fun keepGoing(state: GameState): GameState
-    /** null when moveCount == 0 (D-039). */
+    /** null when moveCount == 0 (D-039). Throws IllegalStateException when a logged move does not replay (D-214). */
     fun undo(state: GameState): GameState?
     fun canMove(state: GameState): Boolean
     fun canMove(board: Board): Boolean
@@ -974,10 +977,12 @@ object Game {
     fun replay(size: BoardSize, seed: Long, moves: List<Direction>): GameState
 }
 
-/** Full structural check (I1–I8 of §3.5). Used by tests and by the :app decoder (§4.4). */
+/** Full structural check (I1–I8 and I10–I12 of §3.5) and the reachability bound (D-270). Used by tests and by the :app decoder (§4.4). */
 object GameInvariants {
     /** Empty when the state is consistent; otherwise one human-readable message per violation. */
     fun violations(state: GameState): List<String>
+    /** D-270: null when no exponent of the board or a snapshot exceeds size.maxReachableExp; else a message. Not one of the violations. */
+    fun reachability(state: GameState): String?
 }
 ```
 
@@ -1203,7 +1208,9 @@ fun p1SumConservedPlusSpawn() {
 | P12 | History bytes round-trip: `MoveLog.fromPackedBytes(log.toPackedBytes(), log.size) == log` and `Snapshot.fromBytes(s.toBytes(), size) == s` |
 | P13 | Spawn validity: the spawn lands on a cell that was empty after the slide, with `exp ∈ {1, 2}` |
 
-Structural invariants. `GameState.init` checks the O(1) parts (sizes and counts of I1–I4, I6) on every construction and copy. `GameInvariants.violations(state)` checks all of I1–I8; every engine test that produces a state asserts it is empty, and the `:app` decoder rejects a document whose decoded state has any violation (§4.4). None of these checks replays the move log.
+Structural invariants. `GameState.init` checks the O(1) parts (sizes and counts of I1–I4, I6) on every construction and copy. `GameInvariants.violations(state)` checks all of I1–I8 and I10–I12 (D-214); every engine test that produces a state asserts it is empty, and the `:app` decoder rejects a document whose decoded state has any violation (§4.4). None of these checks replays the move log, so two corruptions pass them: a snapshot whose board or `rngState` the logged moves do not follow from, and a board on which two `Board.MAX_EXP` tiles meet. `Game.undo` and `Game.move` throw `IllegalStateException` on these, and `GameViewModel` handles that like a corrupt game file (§9.1, D-214).
+
+**Reachability bound (D-270).** `GameInvariants.reachability(state)` reports an exponent above `size.maxReachableExp` = N² + 1 (10, 17, 26, 37, 50, 65) on the board or in a snapshot. Play never makes one, so `:app` treats it as corruption: the decoder rejects such a document (§4.4), and `GameViewModel` checks the board of every `Game.move` and `Game.undo` result, because a consistent state within the bound can still move or replay past it (two adjacent N² + 1 tiles, or a snapshot the logged moves do not follow from). It is not an invariant: I1 keeps 0..127, moves keep I1–I12 from any consistent state but not the bound, and the property boards hold exponents up to 17 on every size (D-145, D-214). Every bound is below the 70 that `TileLabels` draws, and with every held state within it no merge reaches `Board.MAX_EXP`, so the two-127 case above no longer comes from a decodable save.
 
 | # | Invariant |
 |---|---|
@@ -1216,6 +1223,9 @@ Structural invariants. `GameState.init` checks the O(1) parts (sizes and counts 
 | I7 | `snapshots[0]` equals the board, score 0, status `PLAYING` and `rngState` of `newGame(size, seed)` (two spawns; cheap) |
 | I8 | `status == OVER` ⇒ `!canMove(board)` |
 | I9 | An accepted move always leaves ≥ 1 empty cell before its spawn, so `Moved.spawn` is never absent |
+| I10 | For every `k ≥ 1` (I7 pins `snapshots[0]`): `snapshots[k].board.size == size` (D-214) |
+| I11 | `0 ≤ snapshots[1].score ≤ … ≤ snapshots[last].score ≤ score` (D-214) |
+| I12 | For every `k ≥ 1`, the status of `snapshots[k]` is one an accepted move stores at move 32k: `WON` ⇒ its `board.maxExp() >= targetExp`; `KEEP_PLAYING` ⇒ `0 ≤ keepGoingAtMove < 32k`; `OVER` ⇒ `moveCount == 32k` and `!canMove` of its board (D-214) |
 
 ### 3.6 Golden vectors
 
@@ -1299,11 +1309,13 @@ class AppContainer(
     private val files: DataStoreFileProvider,
     val versionCode: Int,
     val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,      // public from M4: AboutViewModel's raw reads (D-248)
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
     val clock: MonotonicClock = SystemMonotonicClock,          // SystemClock.elapsedRealtime()
     val seedSource: SeedSource = SecureRandomSeedSource(),      // SecureRandom().nextLong()
     val animatorScale: AnimatorScaleSource,                     // [M3 p1] ui/theme/EffectiveMotion.kt (§5.8)
+    val contrastLevel: ContrastLevelSource = StandardContrastLevel,       // [M4] ui/theme/ContrastLevel.kt (D-073, D-248)
+    val systemBars: SystemBarsController = WindowSystemBarsController,   // [M4] ui/components/ImmersiveMode.kt (D-093, D-248)
 ) {
     private val storeScope: CoroutineScope = applicationScope + ioDispatcher
 
@@ -1341,13 +1353,20 @@ class AppContainer(
     val gameRepository by lazy { GameRepository(::gameStore, applicationScope) }
 
     companion object {
-        fun create(context: Context): AppContainer {
+        fun create(
+            context: Context,
+            systemBars: SystemBarsController = WindowSystemBarsController,   // [M4] a test application passes its fake
+            contrastLevel: ContrastLevelSource? = null,                       // [M4] null: the system source
+        ): AppContainer {
+            val app = context.applicationContext
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             return AppContainer(
-                files = { name -> context.dataStoreFile(name) },
+                files = { name -> app.dataStoreFile(name) },
                 versionCode = BuildConfig.VERSION_CODE,                       // compile-time constant (D-134); no PackageManager
                 applicationScope = scope,
-                animatorScale = SystemAnimatorScaleSource(context, scope),    // from M3 p1
+                animatorScale = SystemAnimatorScaleSource(app, scope),        // from M3 p1
+                contrastLevel = contrastLevel ?: SystemContrastLevelSource(app, scope),   // from M4
+                systemBars = systemBars,                                      // from M4
             )
         }
     }
@@ -1356,9 +1375,11 @@ class AppContainer(
 
 The `animatorScale` parameter arrives in M3 p1 together with `ui/theme/EffectiveMotion.kt`; the M2 container does not have it. `AppContainer` owns the one `SystemAnimatorScaleSource`; tests pass a fake whose `scale` is a `MutableStateFlow<Float>` (MOTION_SPEC.md §2.1).
 
-- `Game2048Application.onCreate()` sets `container = AppContainer.create(this)`. Activities read it through `(application as Game2048Application).container`.
+**M4 seams (PLAN.md §2.6 E, D-248).** `contrastLevel` is the live system contrast level (`ContrastLevelSource { contrast: StateFlow<Float> }`; `create` passes the one `SystemContrastLevelSource` over the application scope, D-073), and `StandardContrastLevel` (always 0) is the constructor's default, so JVM tests that build the container directly see standard contrast. `systemBars` is the `SystemBarsController { setSystemBarsBehavior, hide, show }` through which `ImmersiveMode.apply(window, on, controller)` hides and shows the bars (D-093); `WindowSystemBarsController` calls `WindowCompat.getInsetsController`. `ioDispatcher` is public from M4, because `aboutViewModelFactory(resources)` hands it to `AboutViewModel` for its raw-resource reads (§4.7).
+
+- `Game2048Application` is `open`. `onCreate()` sets `container = createContainer()`, and `protected open fun createContainer(): AppContainer = AppContainer.create(this)`. Activities read it through `(application as Game2048Application).container`. Robolectric tests that need the fakes in an activity run under `@Config(application = SeamsTestApplication::class)` (`testing/SeamsTestApplication.kt`), whose `createContainer()` passes a `FakeSystemBarsController` and a `FakeContrastLevelSource` to `AppContainer.create` (§10.5).
 - There is exactly **one** DataStore per file per process; two instances on one file throw `IllegalStateException` (D-022).
-- Tests construct `AppContainer(files = { File(tmp.root, it) }, versionCode = 30000, applicationScope = testScope.backgroundScope, ioDispatcher = testDispatcher, mainDispatcher = testDispatcher, clock = FakeClock(), seedSource = FixedSeedSource(0x2048))` (from M3 p1 also `animatorScale = <fake>`) through `testing/TestAppContainer.kt`. Each test uses a fresh `TemporaryFolder`.
+- Tests construct `AppContainer(files = { File(tmp.root, it) }, versionCode = 30000, applicationScope = testScope.backgroundScope, ioDispatcher = testDispatcher, mainDispatcher = testDispatcher, clock = FakeClock(), seedSource = FixedSeedSource(0x2048))` (from M3 p1 also `animatorScale = <fake>`; from M4 optionally `contrastLevel = FakeContrastLevelSource()` and `systemBars = FakeSystemBarsController()`) through `testing/TestAppContainer.kt`. Each test uses a fresh `TemporaryFolder`.
 - `DataStoreFiles`: `SETTINGS = "settings.json"`, `RECORDS = "records.json"`, `fun game(size) = "game-${size.n}.json"`. Production files land in `files/datastore/<name>` (D-040), which the backup rules include (§8.2).
 - **Version without `PackageManager` (D-134).** `create` runs on the main thread inside `Application.onCreate()`, so it makes no `PackageManager` call. `versionCode` is `BuildConfig.VERSION_CODE`, the compile-time constant AGP generates from D-130's literal (§2.6); it is the same value in debug and release. The M2 container already passes it, so the version needs no M4 helper. There is no `AppVersion` class and no `getPackageInfo`/`PackageInfoCompat` call anywhere in main sources; the About header formats `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE` the same way (FEATURES.md F25). The app's own startup code (`Game2048Application.onCreate` → `create`, `MainActivity.onCreate`, the first composition) calls no `PackageManager` at all. `di/AppContainerTest` (Robolectric, M2) guards this:
   - `createDoesNotTouchPackageManager` (F30-AC10) wraps the Robolectric application in a `ContextWrapper` whose `getPackageManager()` throws `AssertionError("PackageManager on the startup path")` and whose `getApplicationContext()` returns the wrapper itself. `AppContainer.create(wrapper)` must return, and `versionCode` must be 30000; the test then cancels `applicationScope`. A `PackageManager` version lookup in `create`, the old `AppVersion.code(context)` included, fails it;
@@ -1527,7 +1548,7 @@ class JsonDocumentSerializer<T>(
 ```
 
 - DataStore calls the corruption handler **only** for `CorruptionException` (verified: `ReplaceFileCorruptionHandler(produceNewData: (CorruptionException) -> T)`). Every decode failure must therefore be converted to `CorruptionException`, as above.
-- `GameDocumentSerializer` wraps `JsonDocumentSerializer(GameDocument.serializer(), GameDocument())` and, when `size != 0`, runs `GameDocumentMapper.toSavedGame(doc)` once to validate: the mapping itself (`BoardSize.of`, `Board.of`, `MoveLog.fromPackedBytes`, `Snapshot.fromBytes`, `Base64.decode`, `GameState.init`) plus `GameInvariants.violations(state).isEmpty()`. The mapper also `require`s the D-044 identity fields: `gameId ≥ 1`; `pendingFinalizations.size ≤ MAX_PENDING_FINALIZATIONS`; entry `gameId`s strictly increasing, each in `1 until gameId` (R1 depends on that order, §4.9); and for every entry, `score`, `moveCount`, `elapsedMs` and `undoCount` ≥ 0 and `maxExp in 1..Board.MAX_EXP` (a bounded `maxExp` also bounds the `tileReach` growth in `finalize`). Any `IllegalArgumentException` or non-empty violation list becomes `CorruptionException`.
+- `GameDocumentSerializer` wraps `JsonDocumentSerializer(GameDocument.serializer(), GameDocument())` and, when `size != 0`, runs `GameDocumentMapper.toSavedGame(doc)` once to validate: the mapping itself (`BoardSize.of`, `Board.of`, `MoveLog.fromPackedBytes`, `Snapshot.fromBytes`, `Base64.decode`, `GameState.init`) plus `GameInvariants.violations(state).isEmpty()`. The mapper also `require`s the D-044 identity fields: `gameId ≥ 1`; `pendingFinalizations.size ≤ MAX_PENDING_FINALIZATIONS`; entry `gameId`s strictly increasing, each in `1 until gameId` (R1 depends on that order, §4.9); and for every entry, `score`, `moveCount`, `elapsedMs` and `undoCount` ≥ 0 and `maxExp in 1..size.maxReachableExp` (D-270: no recovery entry takes an unreachable best tile into the records; a bounded `maxExp` also bounds the `tileReach` growth in `finalize`). It then requires `GameInvariants.reachability(state) == null` (D-270): no exponent of the board or a snapshot above N² + 1. Any `IllegalArgumentException`, non-empty violation list or reachability message becomes `CorruptionException`.
 - Corruption handlers (D-045): `ReplaceFileCorruptionHandler { Settings() }`, `{ Records() }`, `{ GameDocument() }`. The handler writes the default into the corrupt file; nothing else is touched.
 - `migrations = emptyList()` in v1.0. A breaking change in a later version bumps that document's `schemaVersion` and adds a `DataMigration<T>` whose `shouldMigrate(current) = current.schemaVersion < N`; `migrate` returns the upgraded document with `schemaVersion = N`; `cleanUp` does nothing. Non-breaking additions need only a defaulted field (D-041).
 - A document from a **newer** app version (downgrade) still decodes: unknown keys are ignored and unknown enum names coerce to the field default.
@@ -1549,6 +1570,7 @@ class ConflatedWriter<T : Any>(
     private val versions = AtomicLong(0)
     @Volatile private var lastFailed: Pending<T>? = null   // the latest attempt when it threw; null after a write returns normally
     val failures = AtomicInteger(0)              // test hook; never shown in UI, never logged
+    val submissions: Long get() = versions.get() // test hook (D-221): every submit, conflated values and retries included
 
     init {
         scope.launch {
@@ -1578,6 +1600,7 @@ class ConflatedWriter<T : Any>(
 
 - `collect` (not `collectLatest`) means a write in progress always finishes; while it runs, newer submissions replace each other and only the latest is written next (D-024).
 - An `IOException` (disk full, I/O error) is swallowed: the in-memory state stays authoritative, and the next submission rewrites the whole document (§9.3). There is no retry timer; `retryFailed()` is the one explicit retry, called by `RecordsRepository` at the points named in §4.9.
+- **Counting saves** (D-221). `submissions` counts every `submit`, including the values a newer one replaced before the collector ran. Under a test dispatcher, two saves in one synchronous action reach the file as one `updateData`, so tests that assert a number of saves read `submissions` (through the repositories, §4.6), never a count of file writes.
 - **Durable success** (D-044). A write is durable when `write` returned normally: DataStore's `updateData` returns only after it has written the temp file and renamed it over the old one, so the file then holds that value. The writer reports exactly those values through `onWritten`, in write order; a throwing write reports nothing. Because writes are whole documents applied in submission order, the latest reported value is what the file holds.
 
 `data/DocumentHolder.kt` gives settings and records an in-memory source of truth:
@@ -1624,6 +1647,7 @@ class DocumentHolder<T : Any>(
 
     suspend fun awaitLoaded(): T { loaded.first { it }; return state.value }
     suspend fun awaitIdle() = writer.awaitIdle()
+    val submissions: Long get() = writer.submissions   // test hook (D-221)
 }
 ```
 
@@ -1633,25 +1657,25 @@ Every state change submits, so the value a failed write tried to store is `state
 
 | Repository | File(s) | API | Notes |
 |---|---|---|---|
-| `SettingsRepository` | `settings.json` | `state: StateFlow<Settings>`, `loaded`, `awaitLoaded()`, `update((Settings) -> Settings)`, `awaitIdle()` | Wraps a `DocumentHolder`. `lastBoardSize` outside 3..8 is coerced to 4 on read |
-| `RecordsRepository` | `records.json` | `state: StateFlow<Records>`, `awaitLoaded()`, `onProgress(game: SavedGame)`, `finalize(game: SavedGame)`, `recover(game: SavedGame)`, `isFinalized(game: SavedGame): Boolean`, `isDurable(f: Finalization): Boolean`, `retryFailedWrite()`, `nextGameId(size, replaced: SavedGame?): Long`, `resetAll()`, `best(size): Long`, `awaitIdle()` | Wraps a `DocumentHolder`. All arithmetic is in the pure `RecordsMath` (§4.9). `onProgress` writes only when a best increases (D-043). `finalize(game)` = `update { RecordsMath.finalize(it, game.toFinalization()) }`; `recover(game)` = one `update { r -> game.pendingFinalizations.fold(r, RecordsMath::finalize) }`, in list order (ascending `gameId`); `isDurable(f)` = `RecordsMath.isFinalized(holder.durable.value, f.size, f.gameId)`: the records file is known to hold `f` (§4.5); `retryFailedWrite()` = `holder.retryFailed()`; `resetAll()` = `update(RecordsMath::reset)`. Because `DocumentHolder.update` submits only a changed value, a finalization that is already recorded submits no write (D-044) |
-| `GameRepository` | `game-N.json` | `suspend load(size): SavedGame?`, `save(game: SavedGame)`, `suspend peek(size): SavedGame?`, `suspend awaitIdle()` | One `ConflatedWriter` per size, created lazily. Keeps `latest[size]`, the last submitted value, so `load`/`peek` of a size with a pending write return what was submitted, not the older file. `load` returns `null` for the `size == 0` sentinel |
+| `SettingsRepository` | `settings.json` | `state: StateFlow<Settings>`, `loaded`, `awaitLoaded()`, `update((Settings) -> Settings)`, `awaitIdle()`, `submissions` (test hook, D-221) | Wraps a `DocumentHolder`. `lastBoardSize` outside 3..8 is coerced to 4 on read |
+| `RecordsRepository` | `records.json` | `state: StateFlow<Records>`, `awaitLoaded()`, `onProgress(game: SavedGame)`, `finalize(game: SavedGame)`, `recover(game: SavedGame)`, `isFinalized(game: SavedGame): Boolean`, `isDurable(f: Finalization): Boolean`, `retryFailedWrite()`, `nextGameId(size, replaced: SavedGame?): Long`, `resetAll()`, `best(size): Long`, `awaitIdle()`, `submissions` (test hook, D-221) | Wraps a `DocumentHolder` that reads through a coercing view, as `SettingsRepository` does: `RecordsMath.coerceBestTiles` on read, so a `bestTileExp` outside `0..size.maxReachableExp` is 0 in `state` and the file keeps its raw value until the next write (D-270). All arithmetic is in the pure `RecordsMath` (§4.9). `onProgress` writes only when a best increases (D-043). `finalize(game)` = `update { RecordsMath.finalize(it, game.toFinalization()) }`; `recover(game)` = one `update { r -> game.pendingFinalizations.fold(r, RecordsMath::finalize) }`, in list order (ascending `gameId`); `isDurable(f)` = `RecordsMath.isFinalized(holder.durable.value, f.size, f.gameId)`: the records file is known to hold `f` (§4.5); `retryFailedWrite()` = `holder.retryFailed()`; `resetAll()` = `update(RecordsMath::reset)`. Because `DocumentHolder.update` submits only a changed value, a finalization that is already recorded submits no write (D-044) |
+| `GameRepository` | `game-N.json` | `suspend load(size): SavedGame?`, `save(game: SavedGame)`, `suspend peek(size): SavedGame?`, `suspend awaitIdle()`, `submissions(size): Long` (test hook, D-221: the `save`s of that size so far, 0 before the first) | One `ConflatedWriter` per size, created lazily. Keeps `latest[size]`, the last submitted value, so `load`/`peek` of a size with a pending write return what was submitted, not the older file. `load` returns `null` for the `size == 0` sentinel |
 
 ### 4.7 ViewModels and UI state
 
 | ViewModel | Scope | Created by | Depends on |
 |---|---|---|---|
-| `AppViewModel` | Activity | `by viewModels { container.appViewModelFactory() }` in `MainActivity` | `SettingsRepository`, `versionCode` |
+| `AppViewModel` | Activity | `by viewModels { container.appViewModelFactory() }` in `MainActivity` | `AppViewModel(settings: SettingsRepository, versionCode: Int)` |
 | `GameViewModel` | Activity | `by viewModels { container.gameViewModelFactory() }` in `MainActivity`, passed into `App()` | `GameRepository`, `RecordsRepository`, `SettingsRepository`, `MonotonicClock`, `SeedSource` |
-| `SettingsViewModel` | `SettingsKey` entry | `viewModel(factory = container.settingsViewModelFactory())` inside the entry (decorated by `rememberViewModelStoreNavEntryDecorator`) | `SettingsRepository` |
-| `StatsViewModel` | `StatsKey` entry | same pattern | `RecordsRepository`, `GameRepository` (`peek`, D-198) |
-| `AboutViewModel` | `AboutKey` and `LicensesKey` entries | same pattern | `Resources` (reads `res/raw/legacy_history.json` and `third_party_licenses.json` on `Dispatchers.IO`) |
+| `SettingsViewModel` | `SettingsKey` entry | `viewModel(factory = container.settingsViewModelFactory())` inside the entry (decorated by `rememberViewModelStoreNavEntryDecorator`) | `SettingsViewModel(settings: SettingsRepository, animatorScale: AnimatorScaleSource, contrastLevel: ContrastLevelSource)`: the Motion row's system-scale state (AC-SCALE-4) and the high-contrast row's system state (D-073) |
+| `StatsViewModel` | `StatsKey` entry | `viewModel(factory = container.statsViewModelFactory())` | `StatsViewModel(records: RecordsRepository, games: GameRepository, settings: SettingsRepository)`: `peek` for the display fold (D-198); the settings for the initially selected size tab (`lastBoardSize`) |
+| `AboutViewModel` | `AboutKey` and `LicensesKey` entries | `viewModel(factory = container.aboutViewModelFactory(LocalResources.current))`, so the per-app locale applies | `AboutViewModel(resources: Resources, ioDispatcher: CoroutineDispatcher)`: reads `res/raw/legacy_history.json` and `third_party_licenses.json` on the container's `ioDispatcher` (`Dispatchers.IO` in production) |
 
-Factories live in `di/ViewModelFactories.kt` and use `viewModelFactory { initializer { … } }` (D-022). `GameViewModel` is activity-scoped (not entry-scoped) because the splash gate in `MainActivity` reads its `ready` flag (§4.12).
+Factories live in `di/ViewModelFactories.kt` and use `viewModelFactory { initializer { … } }` (D-022): `gameViewModelFactory()`, `appViewModelFactory()`, `settingsViewModelFactory()`, `statsViewModelFactory()` and `aboutViewModelFactory(resources)`, all extensions of `AppContainer`. The constructors are the M4.1 contract (D-248); each work package owns its ViewModel's members. `GameViewModel` is activity-scoped (not entry-scoped) because the splash gate in `MainActivity` reads its `ready` flag (§4.12).
 
 `StatsViewModel` folds unfinalized finished games into what it displays (D-198). It combines `records.state` with `GameRepository.peek(n)` for n = 3..8 and displays `(3..8).fold(records) { r, n -> RecordsMath.displayed(r, peeked[n]) }` without persisting it (§4.9). For each size, that applies every entry of the saved game's `pendingFinalizations`, in list order, and then the saved game itself if it is `OVER`, all through the identity-guarded `finalize`. A game whose `gameId` is already finalized (an interrupted New game that has not been completed yet) therefore adds nothing, and each recovery entry not yet applied to `records.json` is shown once (D-044). Persisted finalization still happens only at New game and in D-044's recovery (§4.9), so nothing is counted twice, and undoing out of `OVER` removes the game from the display. Without the fold, a player who loses their first game would see an empty Statistics screen.
 
-`GameViewModel` exposes separate `StateFlow`s (board, header, overlay, nudge and the chrome-level `uiState`) so a score tick never recomposes the board (D-024):
+`GameViewModel` exposes separate `StateFlow`s (board, header, overlay, nudge, message and the chrome-level `uiState`) so a score tick never recomposes the board (D-024):
 
 ```kotlin
 @Immutable
@@ -1675,6 +1699,7 @@ data class HeaderUi(
     val epoch: Long = 0,                       // = that BoardUi's epoch; with event, tells a move from undo, new game and size switch (§4.11)
     val newBestMoveId: Long = -1,              // keys the once-per-game new-best moment (D-044)
     val newBestAnnounced: Boolean = false,     // = the current SavedGame.newBestAnnounced: the static NEW BEST style (§4.11)
+    val particleSeed: Long = 0,                // = state.seed xor state.moveCount of that state: the sparkles' seed (MOTION_SPEC.md §3.6, D-222)
 )
 
 @Immutable
@@ -1686,7 +1711,7 @@ sealed interface OverlayEntry {
 @Immutable
 sealed interface OverlayUi {
     data object None : OverlayUi
-    data class Win(val targetExp: Int, val summary: GameSummary, val entry: OverlayEntry) : OverlayUi   // summary feeds Share (D-200)
+    data class Win(val targetExp: Int, val summary: GameSummary, val entry: OverlayEntry, val particleSeed: Long, val spawnIndex: Int) : OverlayUi   // summary feeds Share (D-200); particleSeed = state.seed xor state.moveCount, the confetti seed (D-236); spawnIndex = the winning move's spawn cell, Keep going into OVER's deflate origin (D-237)
     data class GameOver(val summary: GameSummary, val entry: OverlayEntry) : OverlayUi
 }
 
@@ -1711,6 +1736,10 @@ data class GameSummary(
 
 @Immutable data class Nudge(val id: Long, val direction: Direction)
 
+@Immutable data class GameMessage(val id: Long, val kind: GameMessageKind)   // a snackbar request; the screen shows each id once (D-231)
+
+enum class GameMessageKind { UNDO_USED, NOTHING_TO_UNDO }   // undo_hint_no_undo_best, nothing_to_undo (D-186)
+
 class GameViewModel(/* … */) : ViewModel() {
     val ready: StateFlow<Boolean>
     val uiState: StateFlow<GameUiState>
@@ -1718,12 +1747,15 @@ class GameViewModel(/* … */) : ViewModel() {
     val header: StateFlow<HeaderUi>
     val overlay: StateFlow<OverlayUi>
     val nudge: StateFlow<Nudge?>               // invalid moves; never changes BoardUi
+    val message: StateFlow<GameMessage?>       // D-186 snackbars, decided in onUndo; null until the first (D-231)
+    val sizeOptions: StateFlow<ImmutableList<SizeOption>>   // the board-size sheet's six rows; empty until onSizeSheetOpened (D-236, D-245)
 
     fun onMove(direction: Direction)
     fun onUndo()
     fun onNewGame()                            // the UI shows the confirm dialog first when uiState.inProgress (D-007)
     fun onKeepGoing()
     fun onSizeSelected(size: BoardSize)
+    fun onSizeSheetOpened()                    // reads every size's best and in-progress state into sizeOptions: memory at once, then peek; ignored until ready and while busy (D-236, D-245)
     fun onHintDismissed()
     fun onResumed()                            // from LifecycleResumeEffect in GameScreen
     fun onPaused()                             // from onPauseOrDispose
@@ -1739,7 +1771,37 @@ Invalid moves travel only on `nudge` as `Nudge(id, direction)` and never produce
 
 `showFirstLaunchHint` is `!onboardingDone && startGame.moveCount == 0 && startGame.undoCount == 0`, where `startGame` is the game loaded at start and a missing game file counts as `moveCount == 0` (D-201). The fresh game is saved at first load (§4.9), so D-009's original "no game file exists" condition would hide the hint for good once the app has been opened. The hint disappears after the first accepted move or "Got it", which sets `onboardingDone = true`.
 
-`AppViewModel` exposes `appearance: StateFlow<AppearanceUi>` (theme mode, palette, high-contrast setting, dynamic chrome, motion preference, haptics, move timing, swipe sensitivity, immersive, keep-screen-on), `whatsNew: StateFlow<ImmutableList<ChangelogEntry>?>` and `onWhatsNewDismissed()`. `App()` passes the appearance values to `GameTheme`, which provides the palette, skin and `LocalEffectiveMotion` locals; `App()` itself provides only `LocalHapticsEnabled` (§5.8).
+`AppViewModel` exposes `appearance: StateFlow<AppearanceUi>`, `whatsNew: StateFlow<ImmutableList<ChangelogEntry>?>` and `onWhatsNewDismissed()` (D-248):
+
+```kotlin
+@Immutable
+data class AppearanceUi(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val palette: PaletteId = PaletteId.CLASSIC,
+    val highContrast: Boolean = false,         // the setting; GameTheme also applies the system level (D-073)
+    val dynamicChrome: Boolean = false,
+    val motion: MotionPreference = MotionPreference.FULL,
+    val haptics: Boolean = true,
+    val moveTiming: MoveTiming = MoveTiming.DURING_SWIPE,
+    val swipeSensitivity: SwipeSensitivity = SwipeSensitivity.MEDIUM,
+    val immersive: Boolean = false,
+    val keepScreenOn: Boolean = false,
+    val lastBoardSize: Int = Settings().lastBoardSize,   // the size chip's label while the game loads (DESIGN_SYSTEM.md §6.1)
+    val loaded: Boolean = false,                         // false while these are the defaults shown before the file's read (D-255)
+)
+
+fun Settings.toAppearance(loaded: Boolean): AppearanceUi  // the ten settings plus lastBoardSize and loaded
+
+class AppViewModel(private val settings: SettingsRepository, val versionCode: Int) : ViewModel() {
+    val appearance: StateFlow<AppearanceUi> =             // stateIn(viewModelScope, Eagerly, settings.state.value.toAppearance(settings.loaded.value))
+        combine(settings.state, settings.loaded) { value, loaded -> value.toAppearance(loaded) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, /* … */)
+    val whatsNew: StateFlow<ImmutableList<ChangelogEntry>?>   // §4.13; null while no sheet is shown
+    fun onWhatsNewDismissed()
+}
+```
+
+Equal settings give an equal `AppearanceUi`, so a write of a field it does not hold (`onboardingDone`, `lastSeenVersionCode`) recomposes nothing. `SettingsRepository` publishes the file's value before it reports `loaded`, so a loaded `AppearanceUi` never holds the defaults. `App()` passes the appearance values to `GameTheme`, which provides the palette, skin and `LocalEffectiveMotion` locals; it passes Motion Off until `GameViewModel.ready` and until a composition has shown a loaded appearance (D-251, D-255; a composition that starts with one, such as a recreation, is not held). `App()` itself provides only `LocalHapticsEnabled` (declared in `game/feedback/HapticsController.kt`, §5.8, §5.9). `GameScreen` reads `appearance` for the move timing, the swipe sensitivity, keep-screen-on and `lastBoardSize`, and `whatsNew` for the What's new sheet and its `modalOpen` (§6.6, §7.2).
 
 ### 4.8 Move flow: gesture → engine → persistence → animation
 
@@ -1769,7 +1831,7 @@ sequenceDiagram
 `onMove` in detail (all on the main thread, no suspension):
 
 1. Return if `!ready`, `busy`, or `overlay.value != None` (D-054).
-2. `outcome = Game.move(current.state, direction)`.
+2. `outcome = Game.move(current.state, direction)`; a `Moved` result whose board holds an exponent above `size.maxReachableExp` (N² + 1) fails the ViewModel's `checkReachable` with an `IllegalStateException` (D-270). An `IllegalStateException` from either replaces the game like a corrupt file before anything is shown, counted or saved (§9.1, D-214). Two `Board.MAX_EXP` tiles that meet, the engine's own move check, no longer come from a decodable save (§3.5).
 3. `Blocked` → return. `Invalid` → `nudge.value = Nudge(++nudgeId, direction)` and return. No state, file or `BoardUi` changes (D-035).
 4. `Moved`:
    1. `now = clock.nowMs()`; `playClock.onAccepted(now, outcome.state)` (starts on the first accepted move while resumed; stops when the status leaves `PLAYING`/`KEEP_PLAYING`).
@@ -1789,15 +1851,15 @@ sequenceDiagram
 | Action | ViewModel steps | `BoardEvent` | Persisted |
 |---|---|---|---|
 | Load at start | `settings.awaitLoaded()`, `records.awaitLoaded()`, `size = BoardSize.of(lastBoardSize)`, `start = restore(size)` (below: D-044 recovery R1/R2, or a fresh game when no file exists); `hint = !onboardingDone && start.state.moveCount == 0 && start.state.undoCount == 0` (a missing file yields `fresh`, so it counts as 0; D-201); `presenter.reset(start.state, Restored)`; overlay from the loaded status with `Restored` entry; `ready = true`; then `viewModelScope.launch { recoverOtherSizes(size) }` (below) | `Restored` | game when `restore` created or replaced one; records when R1 applied an entry |
-| Undo | `Game.undo(state) ?: return` (at `moveCount == 0`, U, Ctrl+Z and Backspace show `nothing_to_undo` at most once per 2 s); `presenter.reset(state', Undo)` (cells whose exponent is unchanged keep their tile id, D-182); overlay `None`. When `undoCount` goes 0 → 1 while `RecordsMath.aggregate(records).totalUndos == 0`, the screen shows `undo_hint_no_undo_best` (D-186) | `Undo` | game |
-| New game | `current = replaceWithFresh(current, size)` (below: retry a failed records write; finalize the old game if `countsWhenReplaced`, a no-op when its `gameId` is already finalized; then a fresh game with `bestAtStart = records.best(size)` read **after** finalization, the next `gameId` and the carried `pendingFinalizations`; then save it; D-044, D-198); `presenter.reset(current.state, NewGame)` | `NewGame` | records, game |
+| Undo | `Game.undo(state) ?: return` (at `moveCount == 0`, where only U, Ctrl+Z and Backspace reach it, `message` gets `NOTHING_TO_UNDO` at most once per `NOTHING_TO_UNDO_MIN_INTERVAL_MS` = 2 s of `MonotonicClock` time and nothing else changes; an `IllegalStateException`, a restored log that does not replay or a replayed board above `size.maxReachableExp` (D-270), replaces the game like a corrupt file, §9.1, D-214); `presenter.reset(state', Undo)` (cells whose exponent is unchanged keep their tile id, D-182); overlay `None`. When `undoCount` goes 0 → 1 while `RecordsMath.aggregate(records).totalUndos == 0`, `message` gets `UNDO_USED`, and the screen shows `undo_hint_no_undo_best` (D-186, D-231) | `Undo` | game |
+| New game | `current = replaceWithFresh(current.copy(elapsedMs = playClock.elapsed(now)), size)` (the running play time is folded in first, so the finalization and its recovery entry count it, D-043; below: retry a failed records write; finalize the old game if `countsWhenReplaced`, a no-op when its `gameId` is already finalized; then a fresh game with `bestAtStart = records.best(size)` read **after** finalization, the next `gameId` and the carried `pendingFinalizations`; then save it; D-044, D-198); `presenter.reset(current.state, NewGame)` | `NewGame` | records, game |
 | Keep going | `Game.keepGoing(state)`; overlay `None`, or `GameOver(summary, Animated(moveId))` when the result is `OVER`. Entering `OVER` this way fires the game-over `Reject` on the card-exit origin; the Keep going tap itself is silent (D-185, MOTION_SPEC.md §3.12) | none (board unchanged) | game |
 | Size switch | Fold elapsed, `games.save(current)`, `settings.update { lastBoardSize = n }`, `busy = true`, then `restore(n)` in `viewModelScope`, `presenter.reset(loaded, SizeSwitched)`, `busy = false`. No confirmation and no finalization of the current game (D-007); `restore` only completes an interrupted New game of size n (R2) | `SizeSwitched` | game (both sizes), settings |
 | Pause (`ON_PAUSE` or leaving the Game entry) | `playClock.pause(now)`; `games.save(current with folded elapsedMs)`; `records.retryFailedWrite()` (D-043, D-044) | — | game; records only when its latest write failed |
 | Resume | `playClock.resume(now)` if in progress | — | — |
 | Presentation reported (`onBoardPresented`, `onHeaderPresented`, `onOverlayPresented`) | Replaces only the reported presentation with its static form (§4.11): `board = BoardPresenter.settled(board)`, `header.lastDelta = 0`, or an `Animated(moveId)` entry → `Restored`; a stale or repeated id is a no-op. No engine call, no `SavedGame`, clock, records or settings change | — (same `moveId`; event becomes `Restored`) | — |
 | Hint dismissed | `settings.update { onboardingDone = true }` | — | settings |
-| Reset statistics (Stats screen, after two dialogs) | `records.resetAll()` (`RecordsMath.reset`: `sizes` emptied, `lastFinalizedGameId` kept); in-progress games, including their `bestAtStart` and `pendingFinalizations`, are untouched (D-044, D-198) | — | records |
+| Reset statistics (Stats screen, after two dialogs) | `records.resetAll()` (`RecordsMath.reset`: `sizes` emptied, `lastFinalizedGameId` kept); in-progress games, including their `bestAtStart` and `pendingFinalizations`, are untouched (D-044, D-198). `GameViewModel` collects `records.state` from ready on: when `max(records.best(size), score)` differs from `header.best`, it replaces only `header.best`, and only `summary.best` of a shown card, with no new `moveId`, epoch or entry and no save; so after a reset both show the current score (D-264) | — | records |
 
 `fresh(size, replaced: SavedGame?) = SavedGame(Game.newGame(size, seedSource.nextSeed()), elapsedMs = 0, bestAtStart = records.best(size), newBestAnnounced = false, gameId = records.nextGameId(size, replaced), pendingFinalizations = emptyList())`.
 
@@ -1851,11 +1913,12 @@ private suspend fun recoverOtherSizes(start: BoardSize) {
 `RecordsMath` (pure, `data/records/RecordsMath.kt`) holds all record arithmetic so `RecordsMathTest` can property-test it. `key(size) = "${size.n}"`:
 - `progress(records, game)`: `bestScore = max`, `bestScoreNoUndo = max` only when `undoCount == 0`, `bestTileExp = max`. Nothing else changes.
 - `isFinalized(records, size, gameId) = gameId <= (records.lastFinalizedGameId[key(size)] ?: 0)`.
-- `finalize(records, f: Finalization)`: if `isFinalized(records, f.size, f.gameId)`, it returns `records` itself, unchanged (D-044 idempotence). Otherwise it applies the D-044 finalization followed by the `progress` arithmetic on `f.score`, `f.undoCount` and `f.maxExp`, and sets `lastFinalizedGameId[key(f.size)] = f.gameId`. It counts `gamesPlayed`; `gamesAbandoned` if `f.status != OVER`; `gamesWon` and the streaks when `f.maxExp ≥ f.size.targetExp` (judged on the final board, so an undone winning tile does not count); totals; and `tileReach[k]++` for every `1 ≤ k ≤ maxExp`, growing the list as needed. A finalized non-win resets `currentWinStreak` to 0, and a `KEEP_PLAYING` game abandoned through New game counts as both won and abandoned (D-198).
+- `finalize(records, f: Finalization)`: if `isFinalized(records, f.size, f.gameId)`, it returns `records` itself, unchanged (D-044 idempotence). Otherwise it applies the D-044 finalization followed by the `progress` arithmetic on `f.score`, `f.undoCount` and `f.maxExp`, and sets `lastFinalizedGameId[key(f.size)] = f.gameId`. It counts `gamesPlayed`; `gamesAbandoned` if `f.status != OVER`; `gamesWon` and the streaks when `f.maxExp ≥ f.size.targetExp` (judged on the final board, so an undone winning tile does not count); totals; and `tileReach[k]++` for every `0 ≤ k ≤ maxExp`, growing the list as needed (D-218). A finalized non-win resets `currentWinStreak` to 0, and a `KEEP_PLAYING` game abandoned through New game counts as both won and abandoned (D-198).
 - `displayed(records, game: SavedGame?)`: the D-198 fold for one size. It applies every entry of `game.pendingFinalizations` through `finalize`, in list order, then `finalize(…, game.toFinalization())` if `game.state.status == OVER`. Since ids grow, the entries (lower ids, ascending) go first.
 - `reset(records) = Records(lastFinalizedGameId = records.lastFinalizedGameId)`: Reset statistics empties `sizes` and keeps the identity map (D-044).
 - `nextGameId(records, size, replaced: SavedGame?) = max(replaced?.gameId ?: 0, records.lastFinalizedGameId[key(size)] ?: 0) + 1`.
 - `aggregate(records)`: the "All sizes" tab (sums; bests are maxima). It reads `sizes` only.
+- `coerceBestTiles(records)`: the records as read (D-270). Under the keys `"3"` … `"8"`, a `bestTileExp` outside `0..size.maxReachableExp` becomes 0, its default; every other field and key is kept, and `records` itself is returned when nothing is out of range. `RecordsRepository` applies it on read only, so no arithmetic above ever sees an unreachable best tile.
 - Invariants: no sequence of `progress`/`finalize` lowers any best, and only `reset` does; `finalize` never lowers `lastFinalizedGameId`, and neither does `reset`.
 
 `PlayClock` (`game/PlayClock.kt`) accumulates `MonotonicClock` milliseconds only while the Game entry is resumed **and** the status is `PLAYING`/`KEEP_PLAYING` **and** `moveCount ≥ 1` (D-043). `elapsed(now)` folds the running interval without stopping, so every save carries current time.
@@ -1902,7 +1965,7 @@ A process kill loses at most the one change whose write is in flight (DataStore 
 1. **Only the presentation changes.** A report changes no engine state, `SavedGame`, history, `PlayClock`, records or settings. It saves nothing, emits no new `moveId` or `epoch`, and leaves `nudge` alone. It acts only when its id matches the current value and that value is still in its animated form, so a stale or repeated report is a no-op and the three reports may arrive in any order.
 2. **A live presentation scope never sees the replacement.** `GameScreen` collects `board`, `header` and `overlay` once each with `collectAsStateWithLifecycle()` and never reads their values in its own body, so it still recomposes 0 times per move (MOTION_SPEC.md §7.2). No presenting reader reads these collectors directly (the measurement probe's digit count, below, presents nothing). Each reads a **retention state** that `rememberPresented` (`game/PresentedState.kt`) makes in the reader's **presentation scope**, the composition it is created and disposed with:
    - **The screen scope**, made in `GameScreen`'s body, serves the readers that `GameScreen` composes outside `GameLayout`'s arrangement slots and that live as long as the Game screen: `OverlayController` (with the scrim, the cards and `ContentEffectsCanvas`), `HapticsController`'s board and nudge effects, and the share builder. It holds `board` and `overlay`; no screen-level reader reads `header`.
-   - **One arrangement scope per `GameLayout` slot** (DESIGN_SYSTEM.md §5.3), made first thing in the content of the slot that `GameLayout` subcomposes with slot id `GameLayoutSpec.mode`. It holds `board` and `header` and serves the readers the slot holds: `BoardView` (with its semantics node and `BoardEffectsCanvas`), `GameHeader` and the status line. `GameScreen` passes the `board` and `header` collectors to `GameLayout`, never a screen-scope retention state. The slot content reads no value itself. The measurement probe under `LocalChromeProbe` reads no retention state and presents nothing: it reads only the live digit count `d = digits(max(score, best))` of the `header` collector, through `derivedStateOf` (DESIGN_SYSTEM.md §5.3, §7.2), which a presentation report never changes (it changes only `lastDelta`) and which recomposes the probe only when `d` changes.
+   - **One arrangement scope per `GameLayout` slot** (DESIGN_SYSTEM.md §5.3), made first thing in the content of the slot that `GameLayout` subcomposes with slot id `GameLayoutSpec.mode`. It holds `board` and `header` and serves the readers the slot holds: `BoardView` (with its semantics node and `BoardEffectsCanvas`), `GameHeader` and the status line. The scope and the arrangement are keyed on whether the effective motion level is Full, so a level change (App turning Full on once the game is ready, or the system animator scale changing) makes a new scope from the settled values, as an arrangement switch does (D-252). `GameScreen` passes the `board` and `header` collectors to `GameLayout`, never a screen-scope retention state. The slot content reads no value itself. The measurement probe under `LocalChromeProbe` reads no retention state and presents nothing: it reads only the live digit count `d = digits(max(score, best))` of the `header` collector, through `derivedStateOf` (DESIGN_SYSTEM.md §5.3, §7.2), which a presentation report never changes (it changes only `lastDelta`) and which recomposes the probe only when `d` changes.
 
    ```kotlin
    // game/PresentedState.kt
@@ -1962,12 +2025,14 @@ class MainActivity : ComponentActivity() {
         val gate = SplashGate(timeoutMs = 1_000, uptimeMs = SystemClock::uptimeMillis)
         splash.setKeepOnScreenCondition { gate.keep(ready = gameViewModel.ready.value) }
         enableEdgeToEdge()                                      // 3
-        setContent { App(appViewModel, gameViewModel) }        // 4
+        setContent { App(appViewModel, gameViewModel, container) }   // 4 (D-248)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) ImmersiveMode.apply(window, appViewModel.appearance.value.immersive)  // D-093
+        if (hasFocus) {                                         // D-093, F19-AC4
+            ImmersiveMode.apply(window, appViewModel.appearance.value.immersive, container.systemBars)
+        }
     }
 }
 
@@ -1977,8 +2042,9 @@ class SplashGate(private val timeoutMs: Long, private val uptimeMs: () -> Long) 
 }
 ```
 
+- `App(appViewModel, gameViewModel, container)` (D-248) collects `appViewModel.appearance` and the container's animator-scale and contrast sources, makes the system-bar icons follow the effective theme in a `DisposableEffect(activity, dark)` through `LocalActivity` (F12-AC9), applies Immersive mode in a `DisposableEffect` on the setting through `container.systemBars` (F19), provides `LocalHapticsEnabled`, and composes `GameTheme { AppNavHost(gameViewModel, appViewModel, container) }` (§7.1). `onWindowFocusChanged(true)` re-applies Immersive mode after the share chooser, a system dialog or a multi-window focus change (F19-AC4).
 - `gameViewModel.ready` becomes true after settings, records and the current game are loaded (§4.9).
-- The condition is polled before every frame, so the timeout needs no coroutine. After 1,000 ms the splash is released even if loading is slow; `GameScreen` then shows the empty board frame (board and empty cells, no tiles) until `ready`, and the tiles appear as `Static`.
+- The condition is polled before every frame, so the timeout needs no coroutine. The cap is the named argument `timeoutMs = 1_000` of this call and has no other name (D-217). After 1,000 ms the splash is released even if loading is slow; `GameScreen` then shows the empty board frame (board and empty cells, no tiles) until `ready`, and the tiles appear as `Static`.
 - `SplashGateTest` asserts that the first `BoardUi` composed after `ready` equals the persisted fixture's board and contains no `Spawned` tiles (D-112).
 
 ### 4.13 What's new (D-009)
@@ -1986,20 +2052,26 @@ class SplashGate(private val timeoutMs: Long, private val uptimeMs: () -> Long) 
 `about/WhatsNewPolicy.kt` (pure):
 
 ```kotlin
+// about/Changelog.kt (the type from M4.1, D-248; CHANGELOG from M4.5)
+@Immutable
+data class ChangelogEntry(val versionCode: Int, @param:StringRes val lines: ImmutableList<Int>)   // string resources, in order
+
+// about/WhatsNewPolicy.kt
 data class WhatsNewDecision(val entries: List<ChangelogEntry>, val storeVersionCode: Int?)
 
 fun decideWhatsNew(lastSeen: Int, current: Int, changelog: Map<Int, List<Int>>): WhatsNewDecision =
     when {
         lastSeen == 0 -> WhatsNewDecision(emptyList(), storeVersionCode = current)          // fresh install
         lastSeen < current -> WhatsNewDecision(
-            changelog.filterKeys { it in (lastSeen + 1)..current }.toSortedMap().map { (code, res) -> ChangelogEntry(code, res) },
+            changelog.filterKeys { it in (lastSeen + 1)..current }.toSortedMap()
+                .map { (code, res) -> ChangelogEntry(code, res.toImmutableList()) },
             storeVersionCode = current,
         )
         else -> WhatsNewDecision(emptyList(), storeVersionCode = null)
     }
 ```
 
-`AppViewModel` evaluates it once after `settings.awaitLoaded()`. If `entries` is non-empty it exposes them on `whatsNew` and shows the sheet over the Game root; `storeVersionCode` is written immediately (`settings.update { it.copy(lastSeenVersionCode = …) }`), so the sheet appears at most once even if the process dies while it is open. `Changelog.kt` holds `val CHANGELOG: Map<Int, List<Int>> = mapOf(30000 to listOf(R.string.whatsnew_30000_1, R.string.whatsnew_30000_2, R.string.whatsnew_30000_3, R.string.whatsnew_30000_4, R.string.whatsnew_30000_5))`. `WhatsNewSheet` shows the entries through `GameModalSheet` (D-181). `WhatsNewTest` covers fresh install (0 → nothing shown, 30000 stored), update (e.g. 29999 → entries for 30000) and equal codes (nothing). Because 30000 is the first version code of this app, the sheet cannot appear in v1.0 builds (noted in D-009).
+`AppViewModel` evaluates it once after `settings.awaitLoaded()`. If `entries` is non-empty it exposes them on `whatsNew` (as an `ImmutableList<ChangelogEntry>`) and `GameScreen` shows the sheet over the Game root (§7.2); `storeVersionCode` is written immediately (`settings.update { it.copy(lastSeenVersionCode = …) }`), so the sheet appears at most once even if the process dies while it is open. `Changelog.kt` holds `val CHANGELOG: Map<Int, List<Int>> = mapOf(30000 to listOf(R.string.whatsnew_30000_1, R.string.whatsnew_30000_2, R.string.whatsnew_30000_3, R.string.whatsnew_30000_4, R.string.whatsnew_30000_5))`. `WhatsNewSheet` shows the entries through `GameModalSheet` (D-181). `WhatsNewTest` covers fresh install (0 → nothing shown, 30000 stored), update (e.g. 29999 → entries for 30000) and equal codes (nothing). Because 30000 is the first version code of this app, the sheet cannot appear in v1.0 builds (noted in D-009).
 
 ---
 
@@ -2105,9 +2177,8 @@ maxSlideCells(transitions, n):             // pure; used by GameViewModel for Bo
 
 settled(board):                            // companion, pure; the static form of a presented board (§4.11, D-047)
     if board.event == Restored: return board
-    tiles = board.tiles.filter { it.kind != Ghost }
+    tiles = board.tiles.filter { it.kind != Ghost }               // the presented z-order, Ghosts dropped (D-241)
                        .map { it.copy(fromRow = it.row, fromCol = it.col, kind = Static) }
-                       .sortedBy { it.row * n + it.col }          // the row-major order reset() uses
     return board.copy(tiles = tiles, scoreDelta = 0, event = Restored)   // moveId, epoch, size, cells and ids unchanged
 ```
 
@@ -2115,7 +2186,7 @@ settled(board):                            // companion, pure; the static form o
 
 Epoch rules (D-182): an epoch `BoardUi` never contains `Ghost`, `Moved`, `Merged` or `Spawned` tiles. Only `Undo` keeps ids, and only for cells whose exponent is unchanged; every other epoch assigns new ids. The outgoing tiles of an epoch are the ids present before it and absent after it (§5.5); ids present in both boards neither animate nor recompose.
 
-`BoardPresenterTest` (M2) properties: for random replays, the non-`Ghost` tiles of every emitted `BoardUi` are exactly the non-empty cells of the engine board (position and exponent), with no duplicate IDs, and `Ghost` tiles are exactly the merge sources; every epoch board is all `Static`; after `Undo` a cell keeps its id if and only if its exponent is unchanged, and after `reset(…, Restored)`, `NewGame` and `SizeSwitched` every id is new. `settledKeepsIdentityAndIsStatic` (F07-AC25): for every emitted `b`, `settled(b)` keeps `moveId`, `epoch`, `size`, `cells` and the ids and cells of `b`'s non-`Ghost` tiles, in row-major order, all `Static` with `from == to`, `scoreDelta == 0` and event `Restored`; it is idempotent; and the presenter's next emission is the same with or without the call.
+`BoardPresenterTest` (M2) properties: for random replays, the non-`Ghost` tiles of every emitted `BoardUi` are exactly the non-empty cells of the engine board (position and exponent), with no duplicate IDs, and `Ghost` tiles are exactly the merge sources; every epoch board is all `Static`; after `Undo` a cell keeps its id if and only if its exponent is unchanged, and after `reset(…, Restored)`, `NewGame` and `SizeSwitched` every id is new. `settledKeepsIdentityAndIsStatic` (F07-AC25): for every emitted `b`, `settled(b)` keeps `moveId`, `epoch`, `size`, `cells` and the ids and cells of `b`'s non-`Ghost` tiles, in `b`'s order (D-241), all `Static` with `from == to`, `scoreDelta == 0` and event `Restored`; it is idempotent; and the presenter's next emission is the same with or without the call.
 
 ### 5.3 Composition structure
 
@@ -2123,7 +2194,7 @@ Epoch rules (D-182): an epoch `BoardUi` never contains `Ghost`, `Moved`, `Merged
 
 ```text
 AnimatedContent(targetState = boardSize)              // size switch fade (MOTION_SPEC.md §3.10, D-182)
-└── BoardView(board: BoardUi, onPresented: (Long) -> Unit, modifier)   // board: its arrangement scope's presented value (§4.11 item 2); inside CompositionLocalProvider(LocalLayoutDirection provides Ltr) (D-104)
+└── BoardView(board: BoardUi, nudge, status, canUndo, loading, clock, onMove, onUndo, onNewGame, onBoardKey, onPresented: (Long) -> Unit, modifier, focusRequester)   // D-222; board: its arrangement scope's presented value (§4.11 item 2); inside CompositionLocalProvider(LocalLayoutDirection provides Ltr) (D-104)
     └── Box(Modifier
             .size(boardSizeDp)
             .offset { nudgeOffset() }                  // invalid-move nudge, layout phase (D-064)
@@ -2141,17 +2212,30 @@ OverlayCard (win or game-over card)                    // topmost
 
 `BoardEffectsCanvas` and `ContentEffectsCanvas` both live in `game/board/EffectsCanvas.kt` and share one particle engine (`game/motion/ConfettiSystem`, structure-of-arrays state). `GameScreen` places the scrim, `ContentEffectsCanvas` and the card over the whole game content, because a single canvas cannot draw the ring below the scrim and confetti above it (D-187).
 
+**The board link and the card sequences (D-236; `game/board/BoardEffects.kt`).** The win and game-over sequences are timed by the screen scope's `OverlayController` (§4.11 item 2), but half of each runs on the board: the win ring, the `OVER` desaturation and deflate ripple, and the saturation restore (MOTION_SPEC.md §3.11–§3.13). The board that draws them is composed in an arrangement scope and can be replaced while the screen scope lives on (a recreation, or an arrangement switch in M4), so the controller never holds a `BoardView` directly. Three types connect them:
+
+- `BoardOverlayLink(effects: ContentEffects)` (`@Stable`, main thread only): `GameScreen` makes one per screen, `remember(effects) { BoardOverlayLink(effects) }`, and provides it as `LocalBoardOverlayLink` around everything it composes. It carries the screen's `ContentEffects` (the confetti and sparkles that `OverlayController` emits into `ContentEffectsCanvas`) and `board: BoardCardHandle?`, the live board's handle. `attach(handle)` sets it; `detach(handle)` clears it only while it is still that handle, so a new board that attached first is never cleared by the old one's disposal.
+- `LocalBoardOverlayLink = staticCompositionLocalOf<BoardOverlayLink?> { null }`: `null` outside the Game screen (a `BoardView` in a test or a preview then attaches nothing). It is a composition local because the link crosses `GameLayout`'s subcompositions, which `GameScreen` cannot pass a parameter through without every arrangement forwarding it (detekt `ComposeCompositionLocalUsage` is suppressed on it with a reason that points here).
+- `BoardCardHandle` is what the controller may ask of the board: `ring()` (the probe's `ProbeEffects.ring`), `targetCenterInRoot()` (the confetti origin), `keepGoingIntoOver(originIndex)` (D-036: the desaturation and deflate ripple from Ft, from `OverlayUi.Win.spawnIndex`, D-237) and `restoreSaturation()`. `BoardCardSequence(scope, animator, effects)` implements it: each `BoardView` remembers one, attaches it in `DisposableEffect(link, cards)` and detaches it on disposal, calls `onCommit(board, status, plan)` from its `LaunchedEffect(board.moveId)` (the win ring of a winning move; the `OVER` move's desaturation `delayedSpec(overDesaturate, overT0Ms)` and deflate from its spawn cell; the `OVER` end state of a board that arrives in `OVER`; the restore when the status leaves `OVER`) and `onStatus(status)` from its `LaunchedEffect(status)` (Keep going into `OVER`, which changes the status without a new `BoardUi`). Its `running` flag holds the D-183 frame-rate vote at High while Keep going into `OVER` animates.
+
+A board composed anew therefore takes over the link on its first composition, starts from its static end state (§4.11 item 3) and receives only the sequences that start after it attached; the controller's own timeline, haptics and confetti are unaffected.
+
 `TileView(id: Long, exp: Int, animator: BoardAnimator, geometry: State<BoardGeometry>, style: TileStyle, modifier)`:
 
 ```kotlin
 val anim = animator.anim(id)                   // created by animator.prepare(board) earlier in the same composition
 Box(
     modifier
-        .offset { geometry.value.cellTopLeft(anim.offset.value.x, anim.offset.value.y) }   // layout phase, IntOffset
-        .size(with(LocalDensity.current) { geometry.value.tilePx.toDp() })
-        .graphicsLayer {                                                    // layer-property phase
-            val s = anim.scale.value * effects.deflate(id)
-            scaleX = s; scaleY = s; alpha = anim.alpha.value
+        .layout { measurable, _ ->                                          // size: measure phase
+            val side = geometry.value.tilePx.roundToInt()
+            val placeable = measurable.measure(Constraints.fixed(side, side))
+            layout(side, side) {                                            // position: layout phase, IntOffset
+                val at = anim.offset.value
+                placeable.placeWithLayer(geometry.value.cellTopLeft(at.x, at.y)) {   // the placement's own layer:
+                    val s = anim.scale.value * effects.deflate(id)          // not Modifier.graphicsLayer, whose
+                    scaleX = s; scaleY = s; alpha = anim.alpha.value       // node is a semantics node (D-228)
+                }
+            }
         }
         .dropShadow(style.shape) { style.glow(exp, this, anim.glowBoost.value) }    // draw phase, no-op when exp has no glow
         .drawBehind {                                                       // fill, outline, cached text, then the
@@ -2234,7 +2318,7 @@ Under Off, initial values equal end values (positions at target, ghosts at alpha
      Here `moved = board.event as BoardEvent.Moved`; only `Moved` boards contain `Merged` and `Spawned` tiles.
    - `Static` (epoch events): snap everything to target; the epoch transition of §5.5 runs instead.
 4. **Board-level effects** keyed by the event (win ring, game-over desaturation, deflate ripple and scrim) are launched at the origin with their delays inside their specs, exactly as MOTION_SPEC.md §3.11 and §3.13 list them (D-064, D-183).
-5. **State flips at an offset** use `MoveTimeline` (mechanism B): the score display update, "+N" creation and the new-best start at 80 ms, confetti emission, overlay composition, card interactivity and haptics. Each calls `awaitOffset(moveId, ms)`, or `awaitRealTime(moveId, ms)` for Reduced and Off haptics, and drops its work when the call returns `false` because a newer change published first.
+5. **State flips at an offset** use `MoveTimeline` (mechanism B): the score display update, "+N" creation and the new-best start at 80 ms, confetti emission, overlay composition, card interactivity and haptics. Each calls `awaitOffset(moveId, ms)`, or `awaitRealTime(moveId, ms)` for Reduced and Off haptics, and drops its work when the call returns `false` because a newer change published first. A flip that is drawn passes its write as `awaitOffset(moveId, ms) { … }`, which runs it inside the due frame's callback, so that frame draws it (D-224).
 
 Why the trigger is separate from the work: if spawn and pop coroutines ran inside `LaunchedEffect(board.moveId)`, the next move would cancel them mid-way. D-062 requires effects to finish, so `LaunchedEffect` only calls `onCommit`, which launches into the `BoardView`'s longer-lived scope.
 
@@ -2312,7 +2396,7 @@ Per-frame values are read **only** in these places (D-025):
 | Value | Read in |
 |---|---|
 | Tile position | `Modifier.offset { }` (layout phase; votes the high frame-rate category on Android 15+ ARR devices, research/04 §4.2) |
-| Tile scale, alpha, deflate | `Modifier.graphicsLayer { }` |
+| Tile scale, alpha, deflate | the tile's `placeWithLayer { }` block (layer phase; not `Modifier.graphicsLayer`, whose node is a semantics node, D-228) |
 | Glow pulse | `Modifier.dropShadow(shape) { }` block |
 | Desaturation, merge sheen | the tile's own `drawBehind { }` (desaturation applied arithmetically to the tile colors; the sheen is tile-local, D-187) |
 | Nudge | board `offset { }` |
@@ -2364,7 +2448,7 @@ Ownership (D-185): priority is resolved once, in the ViewModel; the UI only sche
 | `MERGE` | `SegmentTick` | +80 | +0 |
 | `becameOver` (separate from the above) | `Reject` | +300 (frame 304) | +0 |
 | Keep going into `OVER` (D-036) | `Reject` | on the card-exit origin Ft (MOTION_SPEC.md §3.12) | on Ft |
-| Invalid move (`nudge`), API 30+ only | `Reject`, at most once per 400 ms of `MonotonicClock` time | at the nudge's start frame | same |
+| Invalid move (`nudge`), API 30+ only | `Reject`, at most once per 400 ms of `MonotonicClock` time | at the nudge's start frame, its first animation frame (D-224) | same |
 | Settings switches | `ToggleOn` / `ToggleOff` | on toggle | on toggle |
 
 Rules (D-185):
@@ -2387,8 +2471,8 @@ Rules (D-185):
 data class SwipeConfig(
     val timing: MoveTiming,          // DURING_SWIPE (default) or ON_RELEASE (D-050)
     val thresholdDp: Int,            // 40 / 24 / 12 (D-050)
-    val dominanceRatio: Float = 1.4f,
-    val flingDpPerSecond: Float = 600f,
+    val dominanceRatio: Float = GameDimens.SwipeDominanceRatio,     // 1.4 (D-050, D-222)
+    val flingDpPerSecond: Float = GameDimens.SwipeFlingDpPerSecond, // 600 dp/s
 )
 ```
 
@@ -2483,7 +2567,7 @@ Rules: only `KeyEventType.KeyDown`; ignore events with Alt, Meta or Shift; ignor
 ### 6.6 Modal gating
 
 `GameScreen` computes two flags and passes them as `State<Boolean>` (via `rememberUpdatedState`) to the swipe detector and the key handlers:
-- `modalOpen = dialogOpen || sheetOpen || menuOpen || whatsNew != null`. **Dialogs and sheets** (and the menu) stay fully modal: every game input, including U, N and R, is ignored (D-199).
+- `modalOpen = dialogOpen || sheetOpen || menuOpen || !whatsNew.isNullOrEmpty()` (`AppViewModel.whatsNew`, D-248). **Dialogs and sheets** (and the menu) stay fully modal: every game input, including U, N and R, is ignored (D-199).
 - `boardInputEnabled = !modalOpen && overlay == None && uiState.ready && !uiState.busy` gates swipes and direction keys.
 
 **While the win or game-over card is shown** (D-199):
@@ -2524,11 +2608,16 @@ val NavKeysConfiguration: SavedStateConfiguration = SavedStateConfiguration {
     }
 }
 
-// AppNavHost.kt
+// AppNavHost.kt (the M4 form, D-248)
 @Composable
-fun AppNavHost(gameViewModel: GameViewModel, appViewModel: AppViewModel, modifier: Modifier = Modifier) {
+fun AppNavHost(
+    gameViewModel: GameViewModel,
+    appViewModel: AppViewModel,
+    container: AppContainer,
+    modifier: Modifier = Modifier,
+) {
     val backStack = rememberNavBackStack(NavKeysConfiguration, GameKey)
-    val navigate: (NavKey) -> Unit = { key -> if (backStack.lastOrNull() != key) backStack.add(key) }
+    val actions = remember(backStack) { NavActions(backStack) }   // navigate (not if on top), back (never the root), up(key) (only while key is on top)
     val level: MotionLevel = LocalEffectiveMotion.current
     // ui/theme/GameNavTransitions.kt: push, pop and predictive-pop specs per level (MOTION_SPEC.md §3.17, §3.19).
     // Under MotionLevel.OFF all three are EnterTransition.None togetherWith ExitTransition.None.
@@ -2536,8 +2625,9 @@ fun AppNavHost(gameViewModel: GameViewModel, appViewModel: AppViewModel, modifie
     NavDisplay(
         backStack = backStack,
         modifier = modifier,
-        onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+        onBack = actions::back,
         entryDecorators = listOf(
+            rememberOffLeaveDecorator(backStack),               // F21-AC10 (D-247)
             rememberSaveableStateHolderNavEntryDecorator(),
             rememberViewModelStoreNavEntryDecorator(),
         ),
@@ -2545,16 +2635,32 @@ fun AppNavHost(gameViewModel: GameViewModel, appViewModel: AppViewModel, modifie
         popTransitionSpec = nav.pop,
         predictivePopTransitionSpec = nav.predictivePop,
         entryProvider = entryProvider {
-            entry<GameKey> { GameScreen(gameViewModel, appViewModel, onNavigate = navigate) }
-            entry<StatsKey> { StatsScreen(onBack = { backStack.removeLastOrNull() }) }
-            entry<SettingsKey> { SettingsScreen(onBack = { backStack.removeLastOrNull() }) }
-            entry<HowToPlayKey> { HowToPlayScreen(onBack = { backStack.removeLastOrNull() }) }
-            entry<AboutKey> { AboutScreen(onBack = { backStack.removeLastOrNull() }, onOpenLicenses = { navigate(LicensesKey) }) }
-            entry<LicensesKey> { LicensesScreen(onBack = { backStack.removeLastOrNull() }) }
+            entry<GameKey> { GameScreen(gameViewModel, appViewModel, container.clock, onNavigate = actions.navigate) }
+            entry<StatsKey> {
+                val stats: StatsViewModel = viewModel(factory = container.statsViewModelFactory())
+                StatsScreen(viewModel = stats, onBack = { actions.up(StatsKey) })
+            }
+            entry<SettingsKey> {
+                val settings: SettingsViewModel = viewModel(factory = container.settingsViewModelFactory())
+                SettingsScreen(viewModel = settings, onBack = { actions.up(SettingsKey) })
+            }
+            entry<HowToPlayKey> { HowToPlayScreen(onBack = { actions.up(HowToPlayKey) }) }
+            entry<AboutKey> {
+                val about: AboutViewModel = viewModel(factory = container.aboutViewModelFactory(LocalResources.current))
+                AboutScreen(viewModel = about, onBack = { actions.up(AboutKey) }, onOpenLicenses = { actions.navigate(LicensesKey) })
+            }
+            entry<LicensesKey> {
+                val about: AboutViewModel = viewModel(factory = container.aboutViewModelFactory(LocalResources.current))
+                LicensesScreen(viewModel = about, onBack = { actions.up(LicensesKey) })
+            }
         },
     )
 }
 ```
+
+**Signatures (D-248).** `App(appViewModel, gameViewModel, container, modifier)`, `AppNavHost(gameViewModel, appViewModel, container, modifier)` and `GameScreen(viewModel: GameViewModel, appViewModel: AppViewModel, clock: MonotonicClock, onNavigate: (NavKey) -> Unit, modifier: Modifier = Modifier)`. The container carries what the entries and `App()` need besides the two activity-scoped ViewModels: the animator-scale and contrast sources, the system-bar controller, the clock (which D-236 already passed) and the entry ViewModel factories. Each sub-screen entry makes its entry-scoped ViewModel with `viewModel(factory = container.…ViewModelFactory())` (§4.7), which `rememberViewModelStoreNavEntryDecorator` clears when the entry leaves the back stack; the Licenses entry has its own `AboutViewModel`. The screens are `SettingsScreen(viewModel, onBack, modifier)`, `StatsScreen(viewModel, onBack, modifier)`, `AboutScreen(viewModel, onBack, onOpenLicenses, modifier)`, `LicensesScreen(viewModel, onBack, modifier)` and `HowToPlayScreen(onBack, modifier)`; each destination root is tagged `screenTag(key)`.
+
+**M3 form (D-236).** From M3 part 2 until M4.1 the host was `AppNavHost(gameViewModel: GameViewModel, settings: Settings, clock: MonotonicClock, modifier: Modifier = Modifier)` and the Game entry `GameScreen(gameViewModel, settings, clock, onNavigate = navigate)`; M4.1 replaced `settings` with `appViewModel` and gave the host the container, whose clock the Game entry passes on (D-248).
 
 The explicit `SavedStateConfiguration` overload avoids reflection-based key lookup, so the back stack restores identically in the R8-minified release build (both overloads exist in 1.2.0; verified).
 
@@ -2577,7 +2683,7 @@ Not destinations (D-023); each is state in the screen that shows it:
 | New-game confirmation (`ConfirmDialog`, an `AlertDialog`) | `GameScreen` | `rememberSaveable` | dismisses; Cancel changes nothing (D-007) |
 | Game menu (`DropdownMenu`) | `GameScreen` | `rememberSaveable` | dismisses |
 | Win card / game-over card | `GameScreen` | `GameViewModel.overlay` (from the persisted status) | **not intercepted**: the system goes home (D-054) |
-| What's new (`WhatsNewSheet` on `GameModalSheet`, D-181) | `GameScreen` | `AppViewModel.whatsNew` | dismisses |
+| What's new (`WhatsNewSheet(entries, onDismissRequest)` on `GameModalSheet`, D-181) | `GameScreen`, over the Game root, when `AppViewModel.whatsNew` is non-empty; `onDismissRequest = appViewModel::onWhatsNewDismissed` (D-248) | `AppViewModel.whatsNew` | dismisses |
 | Undo snackbars (`GameSnackbarHost`, D-186) | `GameScreen` | transient | — |
 | First-launch hint (inline card) | `GameScreen` | `GameUiState.showFirstLaunchHint` | — |
 | Reset-statistics dialogs (two steps) | `StatsScreen` | `rememberSaveable` step counter | dismisses |
@@ -2758,8 +2864,11 @@ The script compares `exported_components "$apk"` with the expected set using `di
 | Failure | Detected by | Behaviour | Never | Test |
 |---|---|---|---|---|
 | `game-N.json` is not valid JSON or has wrong types | `JsonDocumentSerializer` → `CorruptionException` | Handler writes `GameDocument()` (size 0); `GameRepository.load` returns `null`; a fresh game of that size starts with a new seed; `bestAtStart` from records | Touch `records.json`, `settings.json` or other sizes' files | `PersistenceCorruptionTest` |
-| `game-N.json` decodes but violates an engine invariant (bad Base64, wrong lengths, snapshot count, `keepGoingAtMove`, enum ordinal) or a D-044 identity check (`gameId < 1`, including a missing `gameId` key, which decodes to 0; more than 16 `pendingFinalizations`, entry ids not strictly increasing or outside `1 until gameId`, a negative counter or `maxExp` outside `1..Board.MAX_EXP`) | `GameDocumentSerializer` validation → `CorruptionException` | Same as above | Crash; run the game on an inconsistent history; count a corrupt recovery entry | `PersistenceCorruptionTest` (one fixture per invariant family) |
+| `game-N.json` decodes but violates an engine invariant (bad Base64, wrong lengths, snapshot count, `keepGoingAtMove`, enum ordinal, a later snapshot's board size, score or status: I10–I12) or a D-044 identity check (`gameId < 1`, including a missing `gameId` key, which decodes to 0; more than 16 `pendingFinalizations`, entry ids not strictly increasing or outside `1 until gameId`, a negative counter or `maxExp` outside `1..size.maxReachableExp`, D-270) | `GameDocumentSerializer` validation → `CorruptionException` | Same as above | Crash; run the game on an inconsistent history; count a corrupt recovery entry | `PersistenceCorruptionTest` (one fixture per invariant family) |
+| `game-N.json` decodes, but its board or a snapshot holds an exponent above `size.maxReachableExp` (N² + 1), which no game makes (D-270) | `GameDocumentSerializer` validation (`GameInvariants.reachability`) → `CorruptionException` | As for an invariant violation: a fresh game of that size | Crash (`TileLabels` draws exponents below 70 only); draw or replay the tile; touch `records.json` | `PersistenceCorruptionTest` (F07-AC34, F07-AC35); `SplashGateTest.unrenderableTileSaveStartsFreshGame` (F07-AC36) |
+| A restored game passes every invariant, but the engine cannot play it: a snapshot the logged moves do not follow from (D-214), or a move or undo whose board goes above `size.maxReachableExp` (two adjacent N² + 1 tiles, a snapshot replayed past it; D-270). Two `Board.MAX_EXP` tiles no longer load (row above) | `IllegalStateException` from `Game.undo` in `onUndo` or `Game.move` in `onMove`, or from the ViewModel's reachability check of their result, caught in `GameViewModel` | As for a corrupt `game-N.json`: `current = replaceWithFresh(null, size)` (nothing finalized or carried for the replaced game, §9.2), presented as `NewGame` with overlay `None` | Crash; show or log anything; finalize or carry the replaced game | `GameViewModelTest.engineCheckFailureIsCorruption` (F07-AC32), `GameViewModelTest.unreachableEngineResultIsCorruption` (F07-AC37) |
 | `records.json` corrupt | Serializer → `CorruptionException` | `Records()` | Delete or modify any game file | `PersistenceCorruptionTest` |
+| `records.json` decodes, but a size's `bestTileExp` lies outside `0..size.maxReachableExp` (D-270) | `RecordsRepository` read (`RecordsMath.coerceBestTiles`) | That `bestTileExp` reads as 0; every other value is kept; the Statistics hero shows the best score without a best tile until a move raises it | Corruption fallback; lower a valid best; draw the tile | `RecordsMathTest` (F08-AC26), `StatsScreenTest` (F08-AC25) |
 | `settings.json` corrupt | Serializer → `CorruptionException` | `Settings()`: size 4, `lastSeenVersionCode = 0` (treated as a fresh install: no What's new) | Touch other files | `PersistenceCorruptionTest` |
 | Unknown keys / unknown enum names (newer schema, downgrade) | `ignoreUnknownKeys`, `coerceInputValues` | Decode with defaults | Treat as corruption | `PersistenceFixturesTest` |
 | `lastBoardSize` outside 3..8 | `SettingsRepository` read | Coerced to 4 | Corruption fallback | `SettingsRepositoryTest` |
@@ -2816,7 +2925,7 @@ This is the complete canonical file map; `PLAN.md` §2 indexes the same names, a
 |---|---|---|---|
 | `Direction.kt` | `Direction` enum, `fromCode` | M0 | D-031 |
 | `GameStatus.kt` | `GameStatus` enum (ordinals persisted) | M1 | D-036 |
-| `BoardSize.kt` | `BoardSize` value class, targets | M1 | D-030, D-036 |
+| `BoardSize.kt` | `BoardSize` value class, targets, `maxReachableExp` (D-270) | M1 | D-030, D-036, D-270 |
 | `Board.kt` | Immutable exponent grid, content equality, `tileValue` | M1 | D-030 |
 | `SplitMix64.kt` | `RandomSource`, `SplitMix64` (`SHIFT_1`–`SHIFT_3` named, §3.2) | M1 | D-038 |
 | `MoveLog.kt` | Packed 2-bit log + codec (`MOVES_PER_BYTE`, `BITS_PER_MOVE`, `MOVE_MASK`) | M1 | D-039, D-042 |
@@ -2826,14 +2935,14 @@ This is the complete canonical file map; `PLAN.md` §2 indexes the same names, a
 | `Slide.kt` | internal line traversal + merge-once (§3.3) | M1 | D-032, D-033 |
 | `Spawner.kt` | internal `spawnInto` | M1 | D-034 |
 | `Game.kt` | `object Game`: `newGame`, `move`, `step`, `keepGoing`, `undo`, `canMove`, `replay` | M1 | D-034–D-039 |
-| `GameInvariants.kt` | Public I1–I8 checker (tests + `:app` decoder) | M1 | D-041, D-045, D-145 |
+| `GameInvariants.kt` | Public I1–I8 and I10–I12 checker and the `reachability` bound (tests + `:app` decoder) | M1 | D-041, D-045, D-145, D-214, D-270 |
 
 ### 10.2 `:core:engine` tests: `core/engine/src/test/kotlin/com/clayboicardi/game2048/engine/`
 
 | File | Content | M |
 |---|---|---|
 | `DirectionTest.kt` | Code round trip; unknown code throws | M0 |
-| `EngineGoldenTest.kt` | `rowLeftGoldens` (the 13 row-left D-032 rows), `rowRightAndVerticalGoldens` (the 3 row-right rows, and the rows applied UP and DOWN by transposition), `largerBoards`, `noOpDrawsNothing`, `winRows` | M1 |
+| `EngineGoldenTest.kt` | `rowLeftGoldens` (the 13 row-left D-032 rows), `rowRightAndVerticalGoldens` (the 3 row-right rows, and the rows applied UP and DOWN by transposition), `largerBoards`, `noOpDrawsNothing`, `winRows`; `reachableMaximum` (D-270) | M1 |
 | `SplitMix64GoldenTest.kt` | D-038 vectors for seeds 0 and 0x2048; `nextInt(10)`, `nextInt(16)`; `require(bound > 0)` | M1 |
 | `EngineReplayGoldenTest.kt` | §3.6 `newGame` and replay vectors, including move 3's transitions | M1 |
 | `EnginePropertiesTest.kt` | P1–P13 (§3.5), `p1SumConservedPlusSpawn` … `p13SpawnLandsOnEmptyCell`; seeded in `@BeforeEach` (TC-6) | M1 |
@@ -2853,20 +2962,20 @@ Root package:
 
 | File | Responsibility | M | D-IDs |
 |---|---|---|---|
-| `Game2048Application.kt` | Empty `Application` subclass in M0; creates `AppContainer` from M2 | M0 (container M2) | D-022 |
-| `MainActivity.kt` | `installSplashScreen()`, `super.onCreate`, `enableEdgeToEdge()`, then only `setContent { App() }` (M0); activity-scoped `AppViewModel`/`GameViewModel` and the `SplashGate` keep condition (M2); `onProvideKeyboardShortcuts` (M3 p1, D-203); immersive re-apply on focus (M4) | M0 | D-023, D-093, D-112, D-203 |
-| `App.kt` | M0: the placeholder (`GameTheme` around a centered `Text(stringResource(R.string.settings))` tagged `placeholder`). M3 p1: `GameTheme` around `GameScreen`. M3 p2: `GameTheme` around `AppNavHost`. M4: collects `AppViewModel.appearance`, system-bar style per theme (`enableEdgeToEdge(SystemBarStyle.auto…)` via `LocalActivity` in a `DisposableEffect(dark)`), provides `LocalHapticsEnabled`, hosts What's new | M0 | D-023, D-026, D-093 |
-| `AppViewModel.kt` | Appearance + What's new (§4.7, §4.13) | M4 | D-006, D-009 |
+| `Game2048Application.kt` | Empty `Application` subclass in M0; creates `AppContainer` from M2; `open`, with `protected open fun createContainer()` that a test application overrides (M4, D-248) | M0 (container M2) | D-022, D-248 |
+| `MainActivity.kt` | `installSplashScreen()`, `super.onCreate`, `enableEdgeToEdge()`, then only `setContent { App() }` (M0); activity-scoped `AppViewModel`/`GameViewModel` and the `SplashGate` keep condition (M2); `onProvideKeyboardShortcuts` (M3 p1, D-203); `setContent { App(appViewModel, gameViewModel, container) }` and `onWindowFocusChanged(true)` → `ImmersiveMode.apply(window, immersive, container.systemBars)` (M4, §4.12) | M0 | D-023, D-093, D-112, D-203, D-248 |
+| `App.kt` | M0: the placeholder (`GameTheme` around a centered `Text(stringResource(R.string.settings))` tagged `placeholder`). M3 p1: `GameTheme` around `GameScreen`. M3 p2: `GameTheme` around `AppNavHost`. M4: `App(appViewModel, gameViewModel, container, modifier)` collects `AppViewModel.appearance` and the container's animator-scale and contrast sources, sets the system-bar style per theme (`enableEdgeToEdge(SystemBarStyle.auto…)` via `LocalActivity` in a `DisposableEffect(activity, dark)`), applies Immersive mode through `container.systemBars`, provides `LocalHapticsEnabled` and passes the appearance to `GameTheme`, with Motion Off until `GameViewModel.ready` and a composition that has shown the loaded appearance, so a restored appearance never crossfades (§4.12, §7.1; D-251, D-255). What's new is composed by `GameScreen` (§7.2) | M0 | D-023, D-026, D-093, D-248 |
+| `AppViewModel.kt` | `AppViewModel(settings, versionCode)`: `appearance: StateFlow<AppearanceUi>` (the ten settings plus `lastBoardSize` and `loaded`, D-255) and `Settings.toAppearance(loaded)` (M4.1); `whatsNew` and `onWhatsNewDismissed()` with the one What's new evaluation (M4.5) (§4.7, §4.13) | M4 | D-006, D-009, D-248 |
 | `NavKeys.kt` | Six keys + `NavKeysConfiguration` (§7.1) | M3 p1 | D-023 |
-| `AppNavHost.kt` | `NavDisplay` with the `GameNavTransitions` specs (§7.1) | M3 p2 | D-023, D-094 |
+| `AppNavHost.kt` | `NavDisplay` with the `GameNavTransitions` specs (§7.1); from M4 `AppNavHost(gameViewModel, appViewModel, container, modifier)`, whose sub-screen entries make their ViewModels with `viewModel(factory = container.…ViewModelFactory())` | M3 p2 | D-023, D-094, D-248 |
 | `SplashGate.kt` | Timeout gate (§4.12) | M2 | D-112 |
 
 `di/`:
 
 | File | Responsibility | M |
 |---|---|---|
-| `AppContainer.kt` | §4.2; `versionCode` from `BuildConfig.VERSION_CODE` (no `PackageManager`, D-134); owns the one `SystemAnimatorScaleSource` from M3 p1 | M2 |
-| `ViewModelFactories.kt` | `gameViewModelFactory()` (M2); `appViewModelFactory()`, `settingsViewModelFactory()`, `statsViewModelFactory()`, `aboutViewModelFactory()` (M4) | M2 |
+| `AppContainer.kt` | §4.2; `versionCode` from `BuildConfig.VERSION_CODE` (no `PackageManager`, D-134); owns the one `SystemAnimatorScaleSource` from M3 p1; `contrastLevel`, `systemBars`, a public `ioDispatcher` and `create(context, systemBars, contrastLevel)` from M4 (D-248) | M2 |
+| `ViewModelFactories.kt` | `gameViewModelFactory()` (M2); `appViewModelFactory()`, `settingsViewModelFactory()`, `statsViewModelFactory()`, `aboutViewModelFactory(resources)` (M4, §4.7) | M2 |
 
 `data/`:
 
@@ -2883,11 +2992,11 @@ Root package:
 | `settings/SettingsRepository.kt` | §4.6 | M2 |
 | `records/Records.kt` | `Records` (incl. `lastFinalizedGameId`), `SizeRecord` | M2 |
 | `records/Finalization.kt` | `Finalization`, `MAX_PENDING_FINALIZATIONS`, `SavedGame.countsWhenReplaced`, `SavedGame.toFinalization()` (D-044, D-046) | M2 |
-| `records/RecordsMath.kt` | `progress`, `isFinalized`, `finalize` (identity-guarded), `displayed`, `reset`, `nextGameId`, `aggregate` (pure; D-044, D-198) | M2 |
+| `records/RecordsMath.kt` | `progress`, `isFinalized`, `finalize` (identity-guarded), `displayed`, `reset`, `nextGameId`, `aggregate`, `coerceBestTiles` (pure; D-044, D-198, D-270) | M2 |
 | `records/RecordsRepository.kt` | §4.6 | M2 |
 | `game/GameDocument.kt` | `GameDocument`, `FinalizationDocument`, `StatusDto` | M2 |
 | `game/GameDocumentMapper.kt` | `SavedGame` ↔ `GameDocument`, validation | M2 |
-| `game/GameDocumentSerializer.kt` | JSON + validation → `CorruptionException` | M2 |
+| `game/GameDocumentSerializer.kt` | JSON + validation (mapping, invariants, the D-270 reachability bound) → `CorruptionException` | M2 |
 | `game/SavedGame.kt` | Domain model | M2 |
 | `game/GameRepository.kt` | Per-size writers, `latest` cache, `peek` | M2 |
 
@@ -2900,11 +3009,11 @@ Root package:
 | `PlayClock.kt` | Elapsed-time accounting | M2 | D-043 |
 | `PresentedState.kt` | `rememberPresented` (the retention state of one presentation scope) and `sameBoardPresentation`, `sameHeaderPresentation`, `sameOverlayPresentation` (§4.11) | M3 p1 | D-047, D-095 |
 | `GameScreen.kt` | Route: collects `board`, `header` and `overlay` once each and makes the screen scope's `rememberPresented` states (§4.11 item 2; until M4 also the one arrangement's), `LifecycleResumeEffect`, modal gating (§6.6), key handlers, snackbars (D-186), `ContentEffectsCanvas` placement (M3 p1); overlays, scrim, cards and the size sheet (M3 p2); keep-screen-on, hint, pad (M4) | M3 p1 | D-007, D-054, D-186, D-199 |
-| `GameLayout.kt` | `SubcomposeLayout`: per-axis margins; the measurement probe of the chrome under `LocalChromeProbe` (defined here; never placed, semantics cleared; its placeholder scores `10^(d − 1)` carry the live digit count `d`, read through `derivedStateOf`, DESIGN_SYSTEM.md §5.3); `resolveGameLayout`; the stacked / 3-column / side-panel / scroll arrangements (SCROLL: `verticalScroll`, `swipeToMove` on the board, board scrolled into view when a card composes), each its own subcomposition slot keyed by `GameLayoutSpec.mode` that first makes its own arrangement scope (`rememberPresented` over the `board` and `header` collectors, §4.11 item 2), so an arrangement switch composes the board and header anew from the settled values (no `movableContentOf`; default `SubcomposeLayoutState`, no slot kept for reuse); `animateBounds` within one arrangement | M4 | D-051, D-075, D-091, D-095, D-188 |
-| `GameControls.kt` | Undo, New game and More through the `GameButton*` wrappers of `ui/components/AppButtons.kt`; no `ButtonGroup` (More opens `GameMenu` from M3 p2) | M3 p1 | D-023, D-026 |
-| `GameMenu.kt` | Statistics, Settings, How to play, About | M3 p2 | D-023 |
-| `StatusLine.kt` | Polite live region, composed only during touch exploration; spawn, undo, new-game and size-switch sentences | M4 | D-081, D-202 |
-| `header/GameHeader.kt` | Title, Score and Best chips, size chip, `onHeaderPresented` report (M3 p1, §4.11); compact 64 dp header, the INLINE / OWN_ROW / STACKED chip layouts from `scoreFit` (DESIGN_SYSTEM.md §6.1, §7.2), and no effects or `onHeaderPresented` under `LocalChromeProbe` (M4) | M3 p1 | D-047, D-076, D-084, D-091, D-188 |
+| `GameLayout.kt` | `SubcomposeLayout`: per-axis margins; the measurement probe of the chrome under `LocalChromeProbe` (defined here; never placed, semantics cleared; its placeholder scores `10^(d − 1)` carry the live digit count `d`, read through `derivedStateOf`, DESIGN_SYSTEM.md §5.3); `resolveGameLayout`; the stacked / 3-column / side-panel / scroll arrangements (SCROLL: `verticalScroll`, `swipeToMove` on the board, board scrolled into view when a card composes), each its own subcomposition slot keyed by `GameLayoutSpec.mode` that first makes its own arrangement scope (`rememberPresented` over the `board` and `header` collectors, §4.11 item 2), so an arrangement switch composes the board and header anew from the settled values (no `movableContentOf`; default `SubcomposeLayoutState`, no slot kept for reuse); `animateBounds` within one arrangement, the slot's chrome keyed on whether the motion level is Full so a level change composes it anew (D-252); `layoutTag(mode)` and `LayoutSpecKey` on each arrangement root (test hooks) | M4 | D-051, D-075, D-091, D-095, D-188 |
+| `GameControls.kt` | The controls bar through the `GameButton*` wrappers of `ui/components/AppButtons.kt`; no `ButtonGroup`. M3: Undo, New game and More. M4: Undo and New game at weights 1 : 1 (RTL [New game][Undo]), `maxLines = 2` as the fallback; with the TalkBack pad, New game alone beside it (`ControlsForm.PAD_COLUMN`), or full width below it when its label does not fit the column (`ControlsForm.BELOW_PAD`, D-266); the Undo icon's rotation reader `registerUndoIcon` (D-248) | M3 p1 | D-023, D-026, D-249, D-266 |
+| `GameMenu.kt` | `GameMoreMenu`: the More `FilledTonalIconButton` (`ic_more_vert`, `more_options`) and its `DropdownMenu` of Statistics, Settings, How to play, About. M4: placed at the end of the size chip's header row in STACKED and SCROLL (40 dp container, 48 dp target), last in the THREE_COLUMN actions rail, at the end of the SIDE_PANEL title row (`mediumContainerSize()`); each item draws the focus ring (D-269) | M3 p2 | D-023, D-249, D-269 |
+| `StatusLine.kt` | Polite live region, composed only during touch exploration and hidden from accessibility while blank (D-252); spawn, undo, new-game and size-switch sentences; `ReservedStatusLine(d)` and `longestStatusTexts(resources, locale, d)`, the probe's reservation of the line at its longest announcements, which the arrangements give the line as its minimum height (D-265) | M4 | D-081, D-202, D-265 |
+| `header/GameHeader.kt` | Title, Score and Best chips, size chip, `onHeaderPresented` report (M3 p1, §4.11); compact 64 dp header, the INLINE / OWN_ROW / STACKED chip layouts from `scoreFit` (DESIGN_SYSTEM.md §6.1, §7.2), More at the end of the size chip's row in STACKED and SCROLL (D-249), and no effects or `onHeaderPresented` under `LocalChromeProbe` (M4); the BEST chip reserves `best_label` and `new_best_label` (`ScoreChip`'s `reserved`), and side-by-side chips share one height (`IntrinsicSize.Max`), so the new-best moment changes no size (D-268) | M3 p1 | D-047, D-076, D-084, D-091, D-188, D-249, D-268 |
 | `header/ScoreFit.kt` | `ChipLayout`, `ScoreFit`, `scoreFit(digits, width, lead, advance14, ownRow)` and `scoreLines(text, digitsPerLine)`: the long-score fit chain (pure; DESIGN_SYSTEM.md §7.2) | M4 | D-084 |
 | `header/ScoreOdometer.kt` | Per-digit `AnimatedContent` (M3 p1); digit positions placed in the `scoreLines` lines of a wrapped value (M4) | M3 p1 | D-064, D-084 |
 | `header/ScoreFloats.kt` | "+N" floats (max 3; pill for `maxMergedExp ≥ 9`); composed by `GameHeader` inside `key(header.epoch, header.event)`, so a non-move or a new epoch removes them (§4.11) | M3 p1 | D-062, D-064, D-187 |
@@ -2921,7 +3030,7 @@ Root package:
 | `Board.kt` | `@Composable fun BoardView(…)`: §5.3 composition, semantics node, cell layer, `OutgoingTilesLayer`, nudge, frame-rate vote, `MoveTimeline.publish`, `onBoardPresented` report (§4.11) | M3 p1 | D-025, D-047, D-080, D-104, D-182, D-183 |
 | `TileView.kt` | One tile (§5.3), including the tile-local sheen | M3 p1 | D-025, D-078, D-187 |
 | `TileLabels.kt` | `object TileLabels`: `label(exp, tileSizeDp): TileLabel(text, fontSizeDp, wdth, compact)`, `fullDecimal(exp)` (pure) | M3 p1 | D-077, D-103 |
-| `TileTextCache.kt` | LRU of `TextLayoutResult` | M3 p1 | D-025 |
+| `TileTextCache.kt` | LRU of `TextLayoutResult`; `text(exp, tilePx, density, skin)` measures with `GameFonts.tile(skin, chars)` (D-251) | M3 p1 | D-025 |
 | `BoardAnimator.kt` | `BoardAnimator` with one `TileAnim` per tile id (§5.4–§5.5) | M3 p1 | D-052, D-061, D-062, D-183 |
 | `BoardEffects.kt` | Board-level effect state: glow pulse (M3 p1); desaturation, deflate ripple and win ring (M3 p2) | M3 p1 | D-064, D-078, D-183 |
 | `EffectsCanvas.kt` | `BoardEffectsCanvas` (win glow ring, below the scrim) and `ContentEffectsCanvas` (confetti and new-best sparkles, above the scrim, below the card); sparkles M3 p1, ring and confetti M3 p2 | M3 p1 | D-064, D-187 |
@@ -2936,8 +3045,8 @@ Root package:
 | `input/KeyboardInput.kt` | `KeyMap`, `RepeatLimiter`, handlers (§6.3); card keys (M3 p2, D-199) | M3 p1 | D-053, D-199 |
 | `input/DirectionPad.kt` | TalkBack pad (forced LTR) | M4 | D-082 |
 | `feedback/HapticsMap.kt` | Priority resolution (pure), used by `GameViewModel` | M2 | D-065, D-185 |
-| `feedback/HapticsController.kt` | Scheduling, interruption and rate limit over `HapticFeedback` (§5.9) | M3 p1 | D-065, D-066, D-185 |
-| `motion/MoveTimeline.kt` | `publish`, `awaitOffset`, `awaitRealTime`, `LocalMoveTimeline` (MOTION_SPEC.md §2.4) | M3 p1 | D-183 |
+| `feedback/HapticsController.kt` | Scheduling, interruption and rate limit over `HapticFeedback` (§5.9); `LocalHapticsEnabled` (provided by `App()`) and the companion `HapticsController.toggle(feedback, checked, enabledAfter)` for the Settings switches (M4, D-248) | M3 p1 | D-065, D-066, D-185, D-248 |
+| `motion/MoveTimeline.kt` | `publish`, `awaitOffset` (and its `onDue` form, D-224), `awaitRealTime`, `LocalMoveTimeline` (MOTION_SPEC.md §2.4) | M3 p1 | D-183, D-224 |
 | `motion/MotionProbe.kt` | Test hook `LocalMotionProbe` (null in production; MOTION_SPEC.md §8.2) | M3 p1 | D-150, D-182 |
 | `motion/DelayedSpec.kt` | `delayedSpec(spec, delayMs)` (§5.4) | M3 p1 | D-183 |
 | `motion/FlashLimiter.kt` | At most 3 sheen or glow pulses per rolling 1000 ms of real time | M3 p1 | D-063, D-183 |
@@ -2947,7 +3056,7 @@ Root package:
 | `overlay/NewGameDialog.kt` | Confirmation dialog on `ConfirmDialog` | M3 p1 | D-007 |
 | `overlay/OverlayController.kt` | Win and game-over sequencing, `interactive` state, card exits, Keep going → `OVER`, `onOverlayPresented` report (§4.11) | M3 p2 | D-008, D-047, D-064, D-200 |
 | `overlay/WinCard.kt` | Win card, `WinBadge` morph, icon-only Share button | M3 p2 | D-008, D-064, D-200 |
-| `overlay/GameOverCard.kt` | Game-over card + Share | M3 p2 | D-008, D-200 |
+| `overlay/GameOverCard.kt` | Game-over card + Share; values wrap between digits at 14 sp, and the Compact card stacks its boxes and gives New game its own row rather than cut a label (D-252) | M3 p2 | D-008, D-200 |
 | `overlay/BoardScrim.kt` | `OverlayCard` (Regular and Compact layouts fitted to the board, scrolling as a last resort) + scrim clipped to the board shape | M3 p2 | D-008, D-200 |
 | `overlay/BoardSizeSheet.kt` | Size picker with best + "In progress", on `GameModalSheet` | M3 p2 | D-007, D-181 |
 | `overlay/FirstLaunchHint.kt` | One-time hint built on `ui/components/HintCard.kt` | M4 | D-009, D-188, D-201 |
@@ -2959,7 +3068,7 @@ Root package:
 | `settings/SettingsScreen.kt` | `SubScreenScaffold` stub (M3 p2); the D-006 rows in order, App language row on API 33+ (M4) | M3 p2 | D-006, D-102 |
 | `settings/SettingsViewModel.kt` | Exposes settings, animator-scale state, contrast lock | M4 | D-006, D-073 |
 | `settings/AppLanguage.kt` | App-language helpers (L10N_STORE_LEGAL.md §1.13) | M4 | D-102 |
-| `stats/StatsScreen.kt` | Stub (M3 p2); size tabs + All sizes, Reset action (M4) | M3 p2 | D-044 |
+| `stats/StatsScreen.kt` | Stub (M3 p2); size tabs + All sizes, Reset action (M4); each tab draws the focus ring (D-269); the hero draws the best tile only when `bestTileExp ≥ 1` (D-270) | M3 p2 | D-044, D-269, D-270 |
 | `stats/StatsViewModel.kt` | Derived `StatsUi` per tab, with the display-time fold of unfinalized `OVER` games (§4.7) | M4 | D-044, D-198 |
 | `stats/StatsUi.kt` | Stable display model (formatted via `formatCount`) | M4 | D-103 |
 | `stats/ResetStatsDialogs.kt` | Two sequential confirmations | M4 | D-044 |
@@ -2969,7 +3078,7 @@ Root package:
 | `about/LicensesScreen.kt` | Stub (M3 p2); renders `third_party_licenses.json` + texts (M4) | M3 p2 | D-122 |
 | `about/LicenseCatalog.kt` | JSON model + parser | M4 | D-122 |
 | `about/LegacyHistory.kt` | JSON model + parser for `legacy_history.json` | M4 | D-124 |
-| `about/Changelog.kt` | `versionCode → List<@StringRes Int>` (`whatsnew_30000_1` … `whatsnew_30000_5`) | M4 | D-009 |
+| `about/Changelog.kt` | `ChangelogEntry(versionCode, lines: ImmutableList<Int>)` (M4.1); `CHANGELOG: Map<Int, List<@StringRes Int>>` (`whatsnew_30000_1` … `whatsnew_30000_5`, M4.5) (§4.13) | M4 | D-009, D-248 |
 | `about/WhatsNewPolicy.kt` | §4.13 (pure) | M4 | D-009 |
 | `about/WhatsNewSheet.kt` | Sheet UI on `GameModalSheet` | M4 | D-009, D-181 |
 
@@ -2986,28 +3095,29 @@ Root package:
 | `ui/theme/Shapes.kt` | Shapes; graphics-shapes polygons (star, cookie, morph helpers) | M3 p1 | D-012, D-064 |
 | `ui/theme/TilePalette.kt` | `interface TilePalette` (D-071 verbatim), `Glow`, `TileSkin` (with `titleColor`), `LocalTilePalette`, `LocalTileSkin` | M3 p1 | D-071, D-189 |
 | `ui/theme/ClassicRefinedPalette.kt` | `ClassicLightPalette`, `ClassicDarkPalette`: research/04 §8 A + D-072 super tiles, Classic dark `fill(1)` `#524A42` | M3 p1 | D-070, D-072, D-207 |
-| `ui/theme/NeonArcadePalette.kt` | `NeonLightPalette`, `NeonDarkPalette`: research/04 §8 C + D-072 | M4 | D-071, D-072 |
-| `ui/theme/HighContrastPalette.kt` | `HighContrastPalette(base)`: black/white ink, 1.5 dp outline, empty-cell stroke in `ink(1)` | M4 | D-073, D-206 |
-| `ui/theme/ChromeColorSchemes.kt` | Classic and Neon light/dark `ColorScheme`s (Neon light `surface` `#F3F1FA`) | M4 | D-070, D-071, D-189 |
-| `ui/theme/ContrastLevel.kt` | `UiModeManager.getContrast()` + listener (API 34+), injectable source | M4 | D-073 |
-| `ui/theme/Typography.kt` | M3 type scale (research/04 §9.4) | M4 | D-076 |
-| `ui/theme/NumeralFont.kt` | `object GameFonts`: Google Sans Flex families (`FontVariation` weight/width/`ROND`), fallback to `FontFamily.Default` Bold + `tnum` (the M3 numerals) | M4 | D-076 |
-| `ui/components/AppButtons.kt` | `GameButton*` wrappers with `ButtonDefaults.shapes()` | M3 p1 | D-026 |
-| `ui/components/ScoreCard.kt` | `@Composable fun ScoreChip` (Score and Best; `a11y_chip_value`) and `ScoreValue` (M3 p1, sized into the INLINE value width of 64 dp until `scoreFit` lands); `ScoreValue(value, fit)` with the chip widths, wrapped lines and 28 sp line box of DESIGN_SYSTEM.md §7.2 (M4) | M3 p1 | D-070, D-080, D-084 |
-| `ui/components/SizeChip.kt` | Board-size chip (`board_size_cd`, `board_size_change`) | M3 p1 | D-007 |
-| `ui/components/Dialogs.kt` | `ConfirmDialog` (M3 p1), `ChoiceDialog` (M4) | M3 p1 | D-007, D-184 |
-| `ui/components/GameSnackbar.kt` | `GameSnackbarHost`: one snackbar at a time, placement per resolved arrangement (`GameLayoutSpec.mode`; over the board in SCROLL) | M3 p1 | D-184, D-186, D-188 |
-| `ui/components/FocusRing.kt` | `Modifier.focusRing(shape)` | M3 p1 | D-084 |
+| `ui/theme/NeonArcadePalette.kt` | `NeonLightPalette`, `NeonDarkPalette`, `NeonLightSkin`, `NeonDarkSkin`, `NeonWellColor`, `NEON_WELL_ALPHA`: research/04 §8 C + D-072 (D-251) | M4 | D-071, D-072 |
+| `ui/theme/HighContrastPalette.kt` | `HighContrastPalette(base)`: black/white ink, 1.5 dp outline, empty-cell stroke in `ink(1)`; `highContrastInk`, `highContrastSkin(skin, outline)`, `HIGH_CONTRAST_SUFFIX` (D-251) | M4 | D-073, D-206 |
+| `ui/theme/ChromeColorSchemes.kt` | `ClassicLightScheme`, `ClassicDarkScheme`, `NeonLightScheme`, `NeonDarkScheme` (Neon light `surface` `#F3F1FA`), `chromeScheme(id, dark)` and `lerpColorScheme` (D-251) | M4 | D-070, D-071, D-189 |
+| `ui/theme/ContrastLevel.kt` | `ContrastLevelSource { contrast: StateFlow<Float> }`, `StandardContrastLevel` (always 0), `SystemContrastLevelSource(context, scope)` (`UiModeManager.getContrast()` + listener on API 34+, 0 below), `SYSTEM_HIGH_CONTRAST_MIN` = 0.5 and `systemForcesHighContrast(level)` | M4 | D-073, D-248 |
+| `ui/theme/Typography.kt` | `object GameTextStyles`: `sectionHeader`, `cardTitle`, `cardTitleCompact`, `chipLabel`, the material3 1.5-only emphasized styles for code outside `ui/theme` and `ui/components` (research/04 §9.4; PLAN.md §5.7 A3) | M4 | D-026, D-076, D-248 |
+| `ui/theme/NumeralFont.kt` | `object GameFonts`, the only source of numeral styles: `score(skin)`, `plusN(skin)`, `title(skin)` and `tile(skin, chars)` over the Google Sans Flex families (`FontVariation` weight/width/`ROND`, DESIGN_SYSTEM.md §3.2; `numerals(weight, width, rond)` memoizes one per instance, D-251), or D-076's fallback `FontFamily.Default` Bold + `tnum` (the M3 numerals) | M4 | D-076, D-248 |
+| `ui/components/AppButtons.kt` | `GameButton*` wrappers with `ButtonDefaults.shapes()`; `GameIconButton(…, iconSize)`; `rememberGameButtonMinWidth(text)` (D-252); `rememberGameButtonLabelFits(text, width)`, which the pad row asks before it puts New game beside the pad (D-266) | M3 p1 | D-026 |
+| `ui/components/ScoreCard.kt` | `@Composable fun ScoreChip` (Score and Best; `a11y_chip_value`) and `ScoreValue` (M3 p1, sized into the INLINE value width of 64 dp until `scoreFit` lands); `ScoreValue(value, fit)` with the chip widths, wrapped lines and 28 sp line box of DESIGN_SYSTEM.md §7.2 (M4); `ScoreChip(…, reserved)` makes room for labels it measures and never places, and `BaselineOverlay` reports exact intrinsic sizes (D-268) | M3 p1 | D-070, D-080, D-084, D-268 |
+| `ui/components/SizeChip.kt` | Board-size chip (`board_size_cd`, `board_size_change`); in the COMPACT header without its leading `ic_grid_view` icon (M4) | M3 p1 | D-007, D-249 |
+| `ui/components/Dialogs.kt` | `ConfirmDialog` (M3 p1), `ChoiceDialog` (M4), whose option rows draw the focus ring (D-267) | M3 p1 | D-007, D-184, D-267 |
+| `ui/components/GameSnackbar.kt` | `GameSnackbarHost`: one snackbar at a time, placement per resolved arrangement (`GameLayoutSpec.mode`; over the board in SCROLL); tagged `SNACKBAR_TAG` (D-252) | M3 p1 | D-184, D-186, D-188 |
+| `ui/components/FocusRing.kt` | `Modifier.focusRing(shape)`; while the ring shows, its element is placed at z-index 1, above its siblings (D-267) | M3 p1 | D-084, D-267 |
 | `ui/components/Formatting.kt` | `formatCount(n, locale)`, `formatPercent`, `formatElapsed`, `toLatinDigits` (L10N_STORE_LEGAL.md §1.10) | M3 p1 | D-103 |
 | `ui/components/GameModalSheet.kt` | The only `@OptIn(ExperimentalMaterial3Api::class)`: `ModalBottomSheet`, `rememberBottomSheetState`, `SheetValue` | M3 p2 | D-007, D-009, D-181 |
 | `ui/components/MiniTile.kt` | `MiniTile`, `MiniBoardGlyph`, `PaletteSwatch` (`a11y_best_tile`) | M3 p1 | D-070 |
-| `ui/components/Intents.kt` | `openUrl` with snackbar fallback, `shareText` | M3 p2 | D-002, D-008, D-009 |
-| `ui/components/SubScreenScaffold.kt` | Top app bar with back for sub-screens | M3 p2 | D-023 |
+| `ui/components/Intents.kt` | `shareText` (M3 p2); `viewUrlIntent(url)`, `startIntent(context, intent): Boolean` (false when no activity handles it), `openUrl(context, url)` and `@Composable rememberIntentLauncher(snackbars)`, which shows `link_open_failed` when an intent cannot start (M4.1) | M3 p2 | D-002, D-008, D-009, D-248 |
+| `ui/components/SubScreenScaffold.kt` | Top app bar with back for sub-screens (M3 p2); `SubScreenScaffold(title, onBack, modifier, actions, snackbars, content)`: top-bar `actions` (Statistics' Reset) and an optional `SnackbarHostState` (M4.1) | M3 p2 | D-023, D-248 |
+| `ui/components/ListRows.kt` | `SelectableRow`, `LinkRow` (M3 p2) and `PlainRow(modifier, leadingContent, trailingContent, supportingContent, headline)` (M4.1): the material3 1.5 `ListItem` overloads behind wrappers; the two interactive rows draw the focus ring (D-267) | M3 p2 | D-026, D-246, D-248, D-267 |
 | `ui/components/HintCard.kt` | Hint card container | M4 | D-009 |
-| `ui/components/SettingRows.kt` | `SectionHeader`, switch, choice and link rows with Toggle haptics (`a11y_action_change`, `a11y_action_open`) | M4 | D-006, D-065 |
-| `ui/components/WindowMode.kt` | `enum class LayoutMode { STACKED, THREE_COLUMN, SIDE_PANEL, SCROLL }`, `layoutModeFor(widthDp: Int, heightDp: Int)` and `rememberLayoutMode()` from `currentWindowAdaptiveInfoV2()`: the preferred mode, never SCROLL | M4 | D-091, D-092, D-188 |
+| `ui/components/SettingRows.kt` | `SectionHeader`, switch, choice and link rows with Toggle haptics (`a11y_action_change`, `a11y_action_open`), each row with the focus ring (D-267) | M4 | D-006, D-065, D-267 |
+| `ui/components/WindowMode.kt` | `enum class LayoutMode { STACKED, THREE_COLUMN, SIDE_PANEL, SCROLL }`, `layoutModeFor(widthDp: Int, heightDp: Int)` and the internal `preferredLayoutMode(widthDp: Float, heightDp: Float)` that `resolveGameLayout` applies to `GameLayout`'s measured window (its constraints plus the safe insets, D-256): the preferred mode, never SCROLL | M4 | D-091, D-092, D-188, D-256 |
 | `ui/components/Accessibility.kt` | `rememberTouchExplorationEnabled()` | M4 | D-081, D-082 |
-| `ui/components/ImmersiveMode.kt` | `WindowInsetsControllerCompat` hide/show behind `SystemBarsController` | M4 | D-093 |
+| `ui/components/ImmersiveMode.kt` | `SystemBarsController { setSystemBarsBehavior, hide, show }`, `WindowSystemBarsController` (`WindowInsetsControllerCompat`) and `ImmersiveMode.apply(window, on, controller)`: hide with `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`, or show | M4 | D-093, D-248 |
 | `ui/components/KeepScreenOn.kt` | `LocalView.keepScreenOn` effect | M4 | D-006 |
 
 ### 10.4 `:app` resources: `app/src/main/res/`
@@ -3033,6 +3143,8 @@ Icons are exactly the Material Symbols Rounded set of DESIGN_SYSTEM.md §8.1 (sy
 | `ic_expand_less`, `ic_delete`, `ic_open_in_new`, `ic_chevron_right` | Licenses, Reset statistics, links, About | M4 |
 | `ic_pad_up`, `ic_pad_down`, `ic_pad_left`, `ic_pad_right` (`autoMirrored="false"`) | Direction pad, How to play | M4 |
 
+The eight M4 icons are added by the integrator in M4.1, at the M3 pin `10ecc147…` and normalized as DESIGN_SYSTEM.md §8.1 says, so How to play (M4-D) does not wait for the pad's `ic_pad_right` (M4-B) and no two work packages create the same file (D-248).
+
 ### 10.5 `:app` tests: `app/src/test/kotlin/com/clayboicardi/game2048/`
 
 Every `:app` test class of `FEATURES.md` §8, `MOTION_SPEC.md` §8.5, `QUALITY.md` and `L10N_STORE_LEGAL.md` §1.9 is listed here with its package (engine tests are in §10.2). "Robolectric" runs at the default SDK 36 unless stated. Every new test file raises `config/test-count-floor.txt` in the same commit (D-149).
@@ -3045,14 +3157,14 @@ Root package:
 | `PlaceholderScreenshotTest` | The M0 golden `launch_placeholder.png`; deleted with its PNG in M3 p1, when `GameScreenshotTest` replaces it | M0 |
 | `ProcessDeathRestoreTest` | JVM (§4.11) | M2 |
 | `FinalizationRecoveryTest` | JVM (§4.9 finalization protocol, §4.11; QUALITY.md §1.11) | M2 |
-| `SplashGateTest` | Robolectric: `firstBoardEqualsPersistedFixture`, `gateReleasesAtCapOrWhenReady` (M2); `lateLoadRendersStaticTiles` (M3 p1) | M2 |
+| `SplashGateTest` | Robolectric: `firstBoardEqualsPersistedFixture`, `gateReleasesAtCapOrWhenReady` (M2); `lateLoadRendersStaticTiles` (M3 p1); `unrenderableTileSaveStartsFreshGame` (D-270, M6) | M2 |
 | `RecreateNoReplayTest` | Robolectric: `recreateRendersStaticBoard`, `pauseResumeDoesNotReplay` (M2); `openSheetSurvivesRecreation`, and under `MotionHarness` `recreateAfterMoveRendersFinalFrame`, `recreateMidMoveSnapsToFinalFrame`, `recreateDuringAndAfterWinShowsRestoredCard`, `recreateDuringAndAfterGameOverShowsRestoredCard`, `recreateAfterInvalidMoveDoesNotNudge` (M3 p2, §4.11); `rotationKeepsStateStatic` (M4) | M2 |
 | `BackupRulesTest` | Robolectric (§8.2) | M2 |
 | `BackOnRootTest` | Robolectric (§7.3) | M3 p2 |
 | `ManifestPolicyTest` | Robolectric, including `legacyLauncherIconOnApi24` and `splashThemeUsesIdentityColors` | M4 |
 | `ImmersiveModeTest`, `KeepScreenOnTest` | Robolectric | M4 |
-| `LocalizationTest` | Robolectric (F24-AC8, F28-AC2–AC6) | M5 |
-| `TranslationQualityTest` | Robolectric, the 9 methods of L10N_STORE_LEGAL.md §1.9 | M5 |
+| `LocalizationTest` | Robolectric (F24-AC8, F28-AC2–AC6; the L-OI-13 regression test, D-261) | M5, M6 |
+| `TranslationQualityTest` | Robolectric, the 10 methods of L10N_STORE_LEGAL.md §1.9 (D-259) | M5 |
 
 `data/` (all JVM, M2): `PersistenceFixturesTest`, `PersistenceCorruptionTest`, `PersistenceBudgetTest`, `ConflatedWriterTest`, `SettingsRepositoryTest`, `RecordsMathTest`, `LongGameGeneratorTest`, `DataMigrationSeamTest`.
 
@@ -3062,11 +3174,11 @@ Root package:
 
 | Class | Kind | M |
 |---|---|---|
-| `game/GameViewModelTest` | JVM + Turbine; includes `hintShownWhileStartingGameHasNoMove` and `hintHiddenAfterAMove` (D-201), `presentationReportsSettleWithoutStateChange` (§4.11) and `headerCarriesBoardEventAndEpoch` (§4.8) | M2 (extended M3–M4) |
+| `game/GameViewModelTest` | JVM + Turbine; includes `hintShownWhileStartingGameHasNoMove` and `hintHiddenAfterAMove` (D-201), `presentationReportsSettleWithoutStateChange` (§4.11), `headerCarriesBoardEventAndEpoch` (§4.8), `engineCheckFailureIsCorruption` (§9.1, D-214), `resetStatisticsShowsCurrentScoreAsBest` (§4.9, D-264, M6) and `unreachableEngineResultIsCorruption` (§9.1, D-270, M6) | M2 (extended M3–M4, M6) |
 | `game/InputBurstOrderingTest` | JVM | M2 |
 | `game/PlayClockTest` | JVM | M2 |
-| `game/GameScreenTest` | Robolectric: `undoUsedSnackbarUntilFirstFinalizedUndoGame` (D-186) and the other M3 p1 ACs; `shareOnBothCardsNotInMenu` (D-200), `menuOpensEveryDestination` and the other M3 p2 ACs; F17-AC15, F22-AC5–AC6, F24-AC7, the short-window layout checks `shortWindowsKeepBoardAndChromeOnScreen` (F18-AC10) and `scrollModeCardBringsBoardIntoView` (F18-AC12), and the long-score header check `longScoresFitHeaderWithoutTruncation` (F17-AC23) (M4) | M3 p1 |
-| `game/TalkBackModeTest` | Robolectric | M4 |
+| `game/GameScreenTest` | Robolectric: `undoUsedSnackbarUntilFirstFinalizedUndoGame` (D-186) and the other M3 p1 ACs; `shareOnBothCardsNotInMenu` (D-200), `menuOpensEveryDestination` and the other M3 p2 ACs; F17-AC15, F22-AC5–AC6, F24-AC7, the short-window layout checks `shortWindowsKeepBoardAndChromeOnScreen` (F18-AC10) and `scrollModeCardBringsBoardIntoView` (F18-AC12), and the long-score header check `longScoresFitHeaderWithoutTruncation` (F17-AC23) (M4); `bestChipShowsCurrentScoreAfterStatisticsReset` (F08-AC24, D-264) (M6); `newBestMomentKeepsBoardInPlace` and `bestChipFormsMeasureAlikeInEveryLocale` (F09-AC7, F09-AC8, D-268) (M6 review) | M3 p1 |
+| `game/TalkBackModeTest` | Robolectric; `longStatusLineKeepsBoardInPlace`, `reservedStatusFitsEveryAnnouncementInEveryLocale` (F17-AC25, F17-AC26, D-265) and the two `padNewGameLabelFits…` methods (F17-AC27, D-266) added in the M6 review | M4 |
 | `game/header/ScoreFitTest` | JVM: `fallbackChainTable` (F17-AC22, DESIGN_SYSTEM.md §7.2) | M4 |
 | `game/board/BoardPresenterTest` | JVM (§5.2), including `settledKeepsIdentityAndIsStatic` | M2 |
 | `game/board/BoardGeometryTest` | JVM: `classicGeometryAllSizes`, `sideMarginRespectsGestureInsets` (M3 p1); `boardSizePerMode`, `narrowWindowFloor`, `resolvedLayoutTable`, `boardNeverBelowFloorOrOffWindow` (M4; a private nominal `ChromeMeasure`), `growingHeaderKeepsBoardAndChromeInWindow` (M4; a stepped `ChromeMeasure`, F18-AC15) | M3 p1 |
@@ -3100,6 +3212,7 @@ Root package:
 | `ui/theme/GameThemeTest` | Robolectric | M4 |
 | `ui/components/FormattingTest` | JVM; `toLatinDigitsMapsArabicIndicAndPersian` (L-AC5) added in M5 | M3 p1 |
 | `ui/components/MiniTileTest` | Robolectric: `MiniTile` rendering and its `a11y_best_tile` description | M3 p1 |
+| `ui/components/FocusRingTest` | Robolectric: the list rows', the Statistics tabs' and the game menu items' focus ring in keyboard input mode, a pixel check (F16-AC12, F16-AC13; D-267, D-269) | M6 |
 | `ui/components/LayoutModeTest` | JVM | M4 |
 | `settings/SettingsScreenTest` | Robolectric, including `appLanguageSummaryDefaultsToSystem` (L-AC6) and the Settings parts of AC-HAP-4 and AC-SCALE-4 | M4 |
 | `stats/StatsScreenTest` | Robolectric | M4 |
@@ -3133,9 +3246,13 @@ Root package:
 | `testing/Accessibility.kt` | ATF options, `atfRule`, `assertTouchTargets()` (QUALITY.md §1.12); the only `@file:OptIn(ExperimentalRoborazziApi::class)` (D-174) | M0 |
 | `testing/MainDispatcherRule.kt`, `testing/TestAppContainer.kt`, `testing/FakeClock.kt`, `testing/FixedSeedSource.kt` | JVM and container helpers | M2 |
 | `testing/LongGameGenerator.kt` | §9.4 | M2 |
-| `testing/FaultyDataStore.kt` | `FaultyDataStore<T>(delegate: DataStore<T>)`: delegates `data`. `updateData` throws `IOException` while `failWrites` is true and delegates otherwise. It wraps one store of a container so that file's writes fail (QUALITY.md §1.11) | M2 |
+| `testing/FaultyDataStore.kt` | `FaultyDataStore<T>(delegate: DataStore<T>)`: delegates `data`. `updateData` throws `IOException` while `failWrites` is true and delegates otherwise. It wraps one store of a container so that file's writes fail (QUALITY.md §1.11). `writeAttempts` counts its `updateData` calls: file writes, not saves (saves are counted by `submissions`, D-221) | M2 |
 | `testing/FakeHapticFeedback.kt` | Records `(type, mainClock.currentTime − origin)` | M3 p1 |
-| `fixtures/GoldenFixtures.kt` | DESIGN_SYSTEM.md §10.3 (`FIX_FILM`, `FIX_MID_4`, `FIX_MID_3`, …) | M3 p1 |
+| `testing/FakeContrastLevelSource.kt` | `FakeContrastLevelSource(initial = 0f)`: the system contrast level as a settable `MutableStateFlow<Float>` (F11-AC8, F12-AC6) | M4 |
+| `testing/FakeSystemBarsController.kt` | Records every `SystemBarsController` call in order (`Call(kind, value)`: `BEHAVIOR`, `HIDE`, `SHOW` with the behavior constant or type mask); changes no window (F19-AC2–AC5) | M4 |
+| `testing/SeamsTestApplication.kt` | `Game2048Application` whose `createContainer()` passes its `FakeSystemBarsController` and `FakeContrastLevelSource` to `AppContainer.create`; activity-level tests run under `@Config(application = SeamsTestApplication::class)` (§4.2, D-248) | M4 |
+| `testing/TestApp.kt` | `TestApp(container, gameViewModel)`: `App()` the way `MainActivity` composes it, with an `AppViewModel` of the container in a `ViewModelStore` that the composition clears (`rememberTestAppViewModel`); `testAppViewModel(container, store)` for rigs that make their ViewModels up front | M4 |
+| `fixtures/GoldenFixtures.kt` | DESIGN_SYSTEM.md §10.3 (`FIX_FILM`, `FIX_MID_4`, `FIX_MID_3`, …) and the `fixtureGame` builder (D-216). M2: `FIX_MID_4`, `FIX_MID_3`, `FIX_OVER_4`, `FIX_RECORDS`; M3 p1: the rest | M2 |
 | `fixtures/MotionFixtures.kt` | MOTION_SPEC.md §8.6 | M3 p1 |
 
 The D-146 named suites all appear above.
@@ -3149,7 +3266,7 @@ The D-146 named suites all appear above.
 | `CLAUDE.md` | Root agent instructions for this repository | plan PR | D-177 |
 | `docs/modernization/README.md`, `DECISIONS.md`, `PLAN.md`, `ARCHITECTURE.md`, `FEATURES.md`, `DESIGN_SYSTEM.md`, `MOTION_SPEC.md`, `QUALITY.md`, `L10N_STORE_LEGAL.md`, `research/` | The planning set; `research/` is frozen evidence | plan PR | D-160, D-177 |
 | `core/engine/AGENTS.md` | `## Code Review Rules` → `### Game rules` (PLAN.md §5.0) | M0 | D-171, D-192 |
-| `scripts/verify.sh` | Exactly D-140, with the levels of D-178 | M0 | D-140, D-178 |
+| `scripts/verify.sh` | Exactly D-140, with the levels of D-178 and the engine-first invocation of D-223 | M0 | D-140, D-178, D-223 |
 | `scripts/check-apk.sh` | §8.6 | M0 | D-148, TC-2 |
 | `scripts/check-test-counts.sh`, `config/test-count-floor.txt` | Floors, `skipped == 0`, goldens ↔ Roborazzi results exactly (QUALITY.md §1.15 G1–G5: no results fails, orphans, results without a golden, non-`unchanged` results, unreadable results) | M0 | D-149, D-179 |
 | `scripts/check-licenses.sh`, `config/license-groups.txt` | Coverage; stale or malformed lines fail | M0 | D-122, D-179 |

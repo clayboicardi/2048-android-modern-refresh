@@ -415,6 +415,8 @@ b = 0.0259040371 l' + 0.7827717662 m' - 0.8086757660 s'
 | Features kept | GSUB `tnum`, `lnum`, `pnum`; GPOS `kern` |
 | Name table | all IDs kept (`--name-IDs='*'`). ID 13 is the OFL notice |
 | Size | **19,016 bytes**, computed 2026-10-28 with the recipe below. The budget is ≤ 32,768 (D-152) |
+| Output | sha256 `3d8049577691260aca85af47ae79e9cf4b9239444b61cde2612394225654d6a7` from `google/fonts` `9b59ea9f333c5b8a99fa44e2a698496d6cde5b8e`, reproducible with `SOURCE_DATE_EPOCH` set to the source's `head.modified` (D-251) |
+| Vertical metrics | `hhea` ascender 1932, descender −572 at 2000 units per em: one line is 1.252 em, so the 28 sp score line box of §7.2 is about 35 dp (D-251) |
 | License text | `app/src/main/res/raw/ofl_google_sans_flex.txt` (D-122) |
 
 ```bash
@@ -447,12 +449,23 @@ Cap height is 1432/2000 = **0.716 em**.
 
 ### 3.2 Font instances (`ui/theme/NumeralFont.kt`, `object GameFonts`)
 
-Variation settings are fixed per `Font` object. `GameFonts` therefore memoizes one `FontFamily` per `(weight, width, rond)`:
+`GameFonts` is the only source of numeral styles (D-248): every call site of a game numeral (tiles and compact labels through `TileTextCache`, mini tiles, the win badge, the Score and Best values of the header and the game-over card, "+N" and the "2048" title) reads one of its four functions, each a complete `TextStyle` laid out left to right (D-104, §3.7):
+
+```kotlin
+object GameFonts {
+    fun score(skin: TileSkin): TextStyle              // Score / Best values, game-over score: wght 750, "tnum, lnum"
+    fun plusN(skin: TileSkin): TextStyle              // "+N": wght 800, "tnum"
+    fun title(skin: TileSkin): TextStyle              // "2048": wght 850, letterSpacing −0.01 em, no features
+    fun tile(skin: TileSkin, chars: Int): TextStyle   // tile labels, compact labels, mini tiles, win badge: the skin's weight and ROND, width by chars, "lnum"
+}
+```
+
+With D-076's fallback (PLAN.md §5.4 Font fallback) each returns `FontFamily.Default` Bold with `tnum` (the M3 numerals), whatever the skin. With the bundled subset, variation settings are fixed per `Font` object, so `GameFonts` memoizes one `FontFamily` per `(weight, width, rond)` behind the four functions:
 
 ```kotlin
 object GameFonts {
     private val cache = HashMap<Triple<Int, Float, Float>, FontFamily>()
-    fun numerals(weight: Int, width: Float, rond: Float): FontFamily = cache.getOrPut(Triple(weight, width, rond)) {
+    private fun numerals(weight: Int, width: Float, rond: Float): FontFamily = cache.getOrPut(Triple(weight, width, rond)) {
         FontFamily(
             Font(
                 resId = R.font.google_sans_flex_numerals,
@@ -601,8 +614,12 @@ Chrome text uses `MaterialTheme.typography`, the M3 baseline `Typography()` with
 | `ControlsBarHeight` | 80 dp (minimum) | stacked controls (D-091) |
 | `StackGap` | 24 dp | header↔board and board↔controls (240 = 112 + 24 + 24 + 80); `Space8` replaces it with the COMPACT header (§5.3) |
 | `ScoreChipMinWidth` / `ScoreChipMinHeight` | 88 / 64 dp | |
-| `ControlHeight` | `ButtonDefaults.MediumContainerHeight` (56 dp) | Undo, New game, More, card buttons |
+| `ControlHeight` | `ButtonDefaults.MediumContainerHeight` (56 dp) | Undo, New game, More in the rail and panel, card buttons |
+| `HeaderMoreSize` | `IconButtonDefaults.smallContainerSize()` (40 dp) | More in the STACKED and SCROLL header, inside the 48 dp minimum interactive size (D-249) |
 | `PadButton` / `PadGap` | 64 / 8 dp | TalkBack direction pad (D-082) |
+| `PadIcon` / `PadControlsWidth` | 32 / 104 dp | the pad's icons; the column of New game beside the pad (§6.6, D-249) |
+| `RailTitleMax` | 40 sp | the THREE_COLUMN stats rail title's `autoSize` maximum (§5.4) |
+| `StatsEmptyGlyph` / `AboutIcon` / `AboutTitle` / `HowToPlayArrow` | 96 dp / 72 dp / 40 sp / 24 dp | Statistics empty state, About header, How to play merge illustration (§6.9–§6.11, D-248) |
 | `StatusLineMinHeight` | 40 dp | 2 lines of `bodyMedium` |
 | `BoardMin` / `BoardMax` / `BoardFloor` | 280 / 720 / 220 dp | D-075 |
 | `BoardGapMin` / `BoardGapMax` | 2 / 20 dp | D-075 gap clamp (§4.2) |
@@ -739,8 +756,8 @@ Code computes the dark Classic values as `lightAlpha * 1.15f`, unrounded.
 
 ### 4.7 Draw order inside the board and pixel snapping
 
-1. Board background, plus the Neon inset well.
-2. Empty cells: a **single** `drawBehind` over N² rounded rects (D-025), plus the high-contrast empty-cell strokes (§2.7, D-206).
+1. Board background.
+2. Empty cells: a **single** `drawBehind` over N² rounded rects (D-025), plus the high-contrast empty-cell strokes (§2.7, D-206); then the Neon inset well, an `innerShadow` in the board shape over the background and the empty cells (D-251).
 3. Ghost tiles (D-025) and, after an undo or new game, the previous board's outgoing tiles in `OutgoingTilesLayer` (D-182).
 4. Static and moved tiles.
 5. Merged tiles, revealed above the ghosts at +80 ms (D-061).
@@ -770,11 +787,9 @@ fun layoutModeFor(widthDp: Int, heightDp: Int): LayoutMode = when {
     else -> LayoutMode.STACKED
 }
 
-@Composable
-fun rememberLayoutMode(): LayoutMode   // the preference, from currentWindowAdaptiveInfoV2().windowSizeClass
 ```
 
-- The window size comes from `currentWindowAdaptiveInfoV2().windowSizeClass` (D-026, D-092), read by `rememberLayoutMode()`. That is only the **preferred** mode: `GameLayout` draws the arrangement that `resolveGameLayout` (§5.3) picks from the board size each candidate would give, so a window whose rails or panel would leave too small a board gets STACKED or SCROLL instead (D-188). Everything that depends on the arrangement (hint and snackbar placement, traversal order) reads `GameLayoutSpec.mode`, never the preference.
+- The window size is `GameLayout`'s measured window: its incoming constraints plus the safe-drawing insets it pads by (§5.2), the same as the activity window when the Game content fills it, at the `WindowSizeClass` breakpoints above (D-092, D-256). A sub-window (a test's `requiredSize` box, a future pane) therefore composes as its own window. The preference is only the **preferred** mode: `GameLayout` draws the arrangement that `resolveGameLayout` (§5.3) picks from the board size each candidate would give, so a window whose rails or panel would leave too small a board gets STACKED or SCROLL instead (D-188). Everything that depends on the arrangement (hint and snackbar placement, traversal order) reads `GameLayoutSpec.mode`, never the preference.
 - **"Expanded"** in this file always means window width ≥ 840 dp. It controls the 64 sp title, the 120 dp hero badge and the 144-particle confetti (D-064).
 - Sub-screens (Settings, Stats, How to play, About, Licenses) use one column of at most `ContentMaxWidth` (640 dp), centered, with the horizontal margin of §5.2. They have no mode switch.
 
@@ -808,26 +823,26 @@ fun rememberLayoutMode(): LayoutMode   // the preference, from currentWindowAdap
 
 D-075's narrow-window rule (`availW < 280dp`: board `max(220dp, availW)`, title hidden) is the STACKED row with the COMPACT header; its `max(availW, 220dp)` term lets a 220 dp board spill into the side margins when `availW < 220dp`.
 
-**Measured chrome** (D-188). Terms in dp at content width `w`; `h` is FULL or COMPACT. With the FULL header, header and controls are as wide as the board (§5.5 A). With the COMPACT header (STACKED and SCROLL) they span the content width `w0 = min(max(availW, 220dp), 720dp)`, because the one header row needs about 290 dp at fontScale 1.0 (size chip, two 88 dp chips, two 8 dp gaps) and a COMPACT board can be narrower; below that width, and whenever the values do not fit inline, the chips move to their own row or stack (§6.1, §7.2):
+**Measured chrome** (D-188). Terms in dp at content width `w`; `h` is FULL or COMPACT. With the FULL header, header and controls are as wide as the board (§5.5 A). With the COMPACT header (STACKED and SCROLL) they span the content width `w0 = min(max(availW, 220dp), 720dp)`, because the one header row needs about 314 dp at fontScale 1.0 (the size chip without its grid icon, two 88 dp chips, the 48 dp More target and three 8 dp gaps, D-249) and a COMPACT board can be narrower; below that width, and whenever the values do not fit inline, the chips move to their own row or stack (§6.1, §7.2). The controls term is the bar of Undo and New game (D-249); More is part of the header terms:
 
 | Term | Definition | Nominal at fontScale 1.0 |
 |---|---|---|
-| `header(FULL, w)` | the §6.1 FULL header at width `w`, in the `ChipLayout` that `scoreFit` gives at `w` for the live digit count: INLINE: title row (the taller of 64 dp and the chips) + size-chip row; OWN_ROW: title row + chip row + size-chip row; STACKED: title row + Score + 8 + Best + size-chip row | 112 (INLINE) |
-| `header(COMPACT, w)` | the §6.1 COMPACT header, no title, chip layout as above: INLINE: one row [size chip][Score][Best]; OWN_ROW: size-chip row + chip row; STACKED: size-chip row + Score + 8 + Best | 64 (INLINE) |
+| `header(FULL, w)` | the §6.1 FULL header at width `w`, in the `ChipLayout` that `scoreFit` gives at `w` for the live digit count: INLINE: title row (the taller of 64 dp and the chips) + size-chip row; OWN_ROW: title row + chip row + size-chip row; STACKED: title row + Score + 8 + Best + size-chip row. The size-chip row holds the size chip (start) and More (end, 48 dp target, D-249) | 112 (INLINE) |
+| `header(COMPACT, w)` | the §6.1 COMPACT header, no title, chip layout as above: INLINE: one row [size chip][Score][Best][More]; OWN_ROW: size-chip row (More at its end) + chip row; STACKED: size-chip row (More at its end) + Score + 8 + Best | 64 (INLINE) |
 | `gap(h)` | header↔board and board↔controls: `StackGap` for FULL, `Space8` for COMPACT | 24; 8 |
 | `top(h, w)` | `header(h, w)` + (hint shown ? 8 + hint card + 8 : `gap(h)`) | FULL 136; COMPACT 72 (no hint) |
-| `bottom(h, w)` | without the pad: `gap(h)` + controls bar. With it: (FULL ? 16 : 8) + status line + 8 + pad row (§6.6) | FULL 104 / 200; COMPACT 88 / 192 |
+| `bottom(h, w)` | without the pad: `gap(h)` + controls bar (Undo and New game, 1 : 1). With it: (FULL ? 16 : 8) + status line (its reservation, below) + 8 + pad row (the pad and New game beside it, or below it when its label does not fit, §6.6, D-266) | FULL 104 / 200; COMPACT 88 / 192 |
 | `stacked(h, w)` | `top(h, w) + bottom(h, w)` | FULL 240 / 336; COMPACT 160 / 264 |
 | `statusBlock` | SCROLL only: 8 + status line at `w0` while the pad is shown, else 0 | 48 / 0 |
 | rails | the taller of the stats rail without its title and the actions rail, at the rail width (§5.4); the stats rail's chips are STACKED and wrap as §7.2 says for the live digit count | 192; 312 with the pad |
 | panel | the panel's content at the panel width (§5.4), its chips OWN_ROW or STACKED for the live digit count | 256; 448 with the pad |
 
-The status line enters every term at its reserved two-line height, not with its current text, so an announcement never changes the arrangement; §6.6's absorption of a longer status line then shrinks the board, never below `BoardFloor`.
+The status line enters every term at its **reservation**, not with its current text (D-265): the height of the tallest of its longest announcements for the current locale, at the term's width, for the live digit count `d`, and never less than its two-line minimum. The nominal 40 dp above is two lines; the measured reservation at 328 dp is two lines in English up to five digits and three from six, and three lines in German. Each arrangement gives its status line the reservation at the width it draws the line as a minimum height, so an announcement never changes the arrangement, the board or the pad's position, and never reaches into the board. STACKED's safety net: should the bottom chrome ever be taller than its reservation (the one frame of a size switch to a size with fewer digits, which still shows the previous size's status), it moves down into the bottom margin instead of over the board.
 
 The score chips, unlike the status line, enter with the live digit count `d = digits(max(score, best))` (§7.2): a header that must stack its chips is measured stacked, so the board shrinks, the STACKED header falls back from FULL to COMPACT, or the arrangement becomes SCROLL, instead of the header clipping or overlapping the board. `d` changes only when the larger value gains or loses a digit (a record game crossing 10^k, an undo back across it, a new game, a size switch). Such a change is a live layout change like the others: it keeps `GameLayoutSpec.mode` and animates as §5.8 says, or it changes `mode` and is an arrangement switch (below).
 
 `GameLayout` (`game/GameLayout.kt`) is a `SubcomposeLayout`, and the resolution runs in its measure block:
-1. It subcomposes a **measurement probe** of the chrome: the header in both styles, the hint, the controls bar, the status line, the pad row, both rails and the panel. The probe is wrapped in `Modifier.clearAndSetSemantics {}` and composed under `LocalChromeProbe provides true`, which turns off every effect in chrome composables (`GameHeader`'s header moments and its `onHeaderPresented` report, ARCHITECTURE.md §4.11). It shows placeholder values: Score and Best both show `10^(d − 1)`, a value with the live digit count `d` (§7.2), so the probe's chips take the layout and line count the real chips will; the status line is its `Text` with `minLines = 2` and no text. The probe reads `d` from the `header` collector that `GameScreen` passes in (not a retention state; ARCHITECTURE.md §4.11 item 2) through `derivedStateOf { digits(max(header.score, header.best)) }`, so it recomposes only when `d` changes, never on an ordinary move or a presentation report. It is never placed, so it draws nothing and takes no input, focus or semantics.
+1. It subcomposes a **measurement probe** of the chrome: the header in both styles (each with More in its size-chip row, D-249), the hint, the controls bar (Undo and New game), the status line, the pad row, both rails and the panel. The probe is wrapped in `Modifier.clearAndSetSemantics {}` and composed under `LocalChromeProbe provides true`, which turns off every effect in chrome composables (`GameHeader`'s header moments and its `onHeaderPresented` report, ARCHITECTURE.md §4.11). It shows placeholder values: Score and Best both show `10^(d − 1)`, a value with the live digit count `d` (§7.2), so the probe's chips take the layout and line count the real chips will. Its BEST chip, like the real one, reserves the larger of its two forms, and Score and Best side by side share one height (§7.2), so the new-best moment changes no term (D-268). The status line is `ReservedStatusLine(d)` (`game/StatusLine.kt`, D-265): the tallest status line `Text` (`minLines = 2`) showing one of `longestStatusTexts(resources, locale, d)`, the announcements built from the locale's real strings with the widest values a game of `d` digits can name: every score and merged value (a created tile, never above the score) as the largest number of `d` digits in prose format; each moved sentence followed by each merged sentence (`a11y_merged_1`–`_3`, and `a11y_merged_more` in every plural form that 1–29 further merges select, written with 29, since an 8×8 move merges at most 32 pairs), a spawned 4 at row 8, column 8 and the score; Move undone, New game with two such start tiles, "Board 8×8" and the four blocked moves. Game digits are Latin and of one width, so no announcement wraps to more lines; the rails and the panel compose their status line blank at that reservation. The pad row is the same `PadRowLayout` the arrangements compose (§6.6, D-266). The probe reads `d` from the `header` collector that `GameScreen` passes in (not a retention state; ARCHITECTURE.md §4.11 item 2) through `derivedStateOf { digits(max(header.score, header.best)) }`, so it recomposes only when `d` changes, never on an ordinary move or a presentation report. It is never placed, so it draws nothing and takes no input, focus or semantics.
 2. A `ChromeMeasure` answers each term with the probe's `maxIntrinsicHeight` at the asked width.
 3. `resolveGameLayout` picks the arrangement. `GameLayout` subcomposes that arrangement, measures each child once and places it. Each arrangement is its own subcomposition slot, keyed by `GameLayoutSpec.mode`, and holds the board, header, controls and the rest of the visible chrome. The slot's content first makes the arrangement's own presentation scope: `rememberPresented` retention states over the `board` and `header` collectors that `GameScreen` passes in (`ARCHITECTURE.md` §4.11 item 2), read by the slot's one `BoardView`, its one `GameHeader` (its `HeaderStyle` is a parameter) and the status line. `GameLayout` uses the default `SubcomposeLayoutState`, which keeps no slot for reuse.
 
@@ -853,7 +868,7 @@ interface ChromeMeasure {   // the measured-chrome terms above; each is non-incr
     fun header(style: HeaderStyle, width: Float): Float
     fun hint(width: Float): Float
     fun controls(width: Float): Float
-    fun status(width: Float): Float      // the reserved two-line height
+    fun status(width: Float): Float      // the reservation: the longest announcements, at least two lines (D-265)
     fun padRow(width: Float): Float
     fun rails(rail: Float): Float
     fun panel(panel: Float): Float
@@ -936,18 +951,18 @@ Guarantees, asserted by `BoardGeometryTest.boardNeverBelowFloorOrOffWindow` (F18
 | Title "2048" | header row 1, start | stats rail top (autoSize 32–40 sp; dropped first if the rail overflows) | title row at the panel top, start (D-188) |
 | Score, Best chips | header row 1, end (Score then Best); on their own row or stacked when the values do not fit inline (§6.1, §7.2) | stats rail, stacked, full rail width; a value too long for the rail wraps between digits (§7.2) | panel, one row, each `(panel − 8)/2`; stacked at the panel width when the values do not fit (§7.2) |
 | Moves / time | not on the HUD (D-006); shown on the game-over card, in the share text and in Statistics | same | same |
-| Board-size chip | header row 2, start | stats rail, below Best | panel, below the chips |
+| Board-size chip | header row 2, start (COMPACT header: its size-chip row, start, without the grid icon, D-249) | stats rail, below Best | panel, below the chips |
 | First-launch hint (§6.2) | between header and board, above the board (D-188) | actions rail, replacing Undo and New game while shown (D-188) | panel, above the buttons (D-188) |
-| Undo, New game | controls bar (weights 1 : 1) | actions rail, stacked, full width | panel, one row (weights 1 : 1) |
-| More (menu) | controls bar, end (56 dp) | actions rail, last | panel, title row end |
+| Undo, New game | controls bar (weights 1 : 1; one line each at fontScale 1.0 in English, D-249) | actions rail, stacked, full width | panel, one row (weights 1 : 1) |
+| More (menu) | end of the size chip's header row: FULL row 2, end; COMPACT INLINE, the one row's end; COMPACT OWN_ROW and STACKED, the size-chip row's end. 40 dp container, 48 dp target (§5.6, D-249) | actions rail, last (56 dp) | panel, title row end (56 dp) |
 | Snackbar host (D-186) | in the gap between board and controls bar when that gap ≥ the snackbar's measured height + 16 dp; otherwise over the board, bottom-centred, width board − 16 dp, 8 dp above the board's bottom edge. Never over the controls bar | bottom of the actions rail | bottom of the panel, aligned with the board's bottom edge |
-| TalkBack status line + pad | between board and controls; New game + More sit beside the pad (§6.6) | actions rail top (rail ≥ 208 dp) | panel, below the buttons |
+| TalkBack status line + pad | between board and controls; New game sits beside the pad and More stays in the header (§6.6, D-249) | actions rail top (rail ≥ 208 dp) | panel, below the buttons |
 | Confetti | full game-content overlay | same | same |
 | Win / game-over card | centered on the board; never past its edges (D-200) | same | same |
 
 STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line of the available area. Side-panel and 3-column groups are centered horizontally in `availW`.
 
-**SCROLL** (§5.3) places every item as the STACKED column does with the COMPACT header (no title), top-aligned in its scrolling column; the snackbar uses the over-the-board placement.
+**SCROLL** (§5.3) places every item as the STACKED column does with the COMPACT header (no title; More at the end of the size chip's row), top-aligned in its scrolling column; the snackbar uses the over-the-board placement.
 
 **SIDE_PANEL alignment** (D-188): the panel's height equals the board's, and its top aligns with the board's top. The title row (title and More) is at the top of the panel, and the snackbar host at its bottom, on the board's bottom edge.
 
@@ -962,7 +977,7 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 │    │ 2048                  ┌─ SCORE ─┐ 8 ┌── BEST ──┐     │  │ row 1, 64
 │    │ (GSF 850, ≤56 sp)     │  10220  │   │  24680   │     │  │ chips ≥ 88 × 64
 │    │                       └─────────┘   └──────────┘     │  │
-│    │ ( ▦ 4×4 ▾ )                                          │  │ row 2, 48
+│    │ ( ▦ 4×4 ▾ )                                    [ ⋮ ] │  │ row 2, 48 (More: 40 in a 48 target)
 │    └──────────────────────────────────────────────────────┘  │
 │                         ↕ ≥ 24 (flex)                        │
 │    ┌──────────────── board 328 (r 4.9 + 10) ──────────────┐  │
@@ -973,7 +988,7 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 │    └──────────────────────────────────────────────────────┘  │
 │                         ↕ ≥ 24 (flex)                        │
 │    ┌──────────────────────────────────────────────────────┐  │
-│    │ [ ↶ Undo     ]  8 [ ↻ New game   ]  8 [ ⋮ ]           │  │ controls, 80 (buttons 56)
+│    │ [ ↶ Undo               ]  8 [ ↻ New game           ] │  │ controls, 80 (buttons 56, 1 : 1)
 │    └──────────────────────────────────────────────────────┘  │
 │ navigation bar (safeDrawing ≈ 24)                            │
 └──────────────────────────────────────────────────────────────┘
@@ -1030,11 +1045,14 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 │                        8
 │    ┌─────── pad 208 ───────┐ 16 ┌──── 104 ────┐
 │    │      [  ↑  ] [ ↶ ]    │    │ [ New game ] │  56
-│    │ [ ← ] [  ↓  ] [ → ]   │    │ [    ⋮     ] │  56
+│    │ [ ← ] [  ↓  ] [ → ]   │    │              │
 │    └───── 136 high ────────┘    └──────────────┘
+│    (More stays at the end of header row 2, D-249)
 ```
 
-**F. Narrow window, `availW < 280dp`.** The board is `max(220, availW)`, and the header becomes the COMPACT header with no title (D-075). Its one 64 dp row (size chip, Score, Best) needs about 290 dp at fontScale 1.0, so in these windows the chips take their own row below the size chip (OWN_ROW, 112 dp nominal; §6.1, §7.2). If the window is also too short for that board, the arrangement is SCROLL (§5.3).
+When New game's label does not lay out on two lines in the 104 dp column without breaking a word (`fontScale` 2.0; French "Nouvelle partie" even at 1.0), the pad is centred and New game follows 8 dp below it at the full width of the column (D-266).
+
+**F. Narrow window, `availW < 280dp`.** The board is `max(220, availW)`, and the header becomes the COMPACT header with no title (D-075). Its one 64 dp row (size chip without its grid icon, Score, Best, More) needs about 314 dp at fontScale 1.0 (D-249), so in these windows the chips take their own row below the size-chip row, which keeps More at its end (OWN_ROW, 112 dp nominal; §6.1, §7.2). If the window is also too short for that board, the arrangement is SCROLL (§5.3).
 
 **G. SCROLL, 360×450 split-screen pane with the TalkBack pad.** THREE_COLUMN would leave −112 dp and STACKED 130 dp, so the column scrolls. The first screen (394 dp of `availH`) holds the compact header, the 274 dp board and the status line; the pad row starts below the fold.
 
@@ -1042,7 +1060,7 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 ┌──────────────────────── 360 ────────────────────────┐
 │ status bar (24), then the 16 dp vertical margin     │
 │ 16 ┌──────────────────── 328 ───────────────────┐ 16│
-│    │ ( ▦ 4×4 ▾ )   ┌─ SCORE ─┐ 8 ┌── BEST ──┐   │   │ compact header, 64
+│    │ ( 4×4 ▾ ) 8 ┌─ SCORE ─┐ 8 ┌─ BEST ──┐ 8 [⋮]│   │ compact header, 64 (More 40 in a 48 target)
 │    └───────────────────────────────────────────┘   │
 │                         8                           │
 │          ┌──────── board 274 ─────────┐             │ swipes start here
@@ -1053,14 +1071,14 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 │ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  fold  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
 │                         8                           │ (scrolled into view)
 │    ┌──── pad 208 ────┐ 16 ┌──── 104 ────┐            │ pad row, 136
-│    └─────────────────┘    └─────────────┘            │
+│    └─────────────────┘    └ New game ───┘            │
 └─────────────────────────────────────────────────────┘
 ```
 
 ### 5.6 Touch targets and the gesture surface
 
 - Every interactive element is ≥ 48×48 dp (`minimumInteractiveComponentSize`; D-084).
-  - Game controls are 56 dp (`ButtonDefaults.MediumContainerHeight`, `IconButtonDefaults.mediumContainerSize()`).
+  - Game controls are 56 dp (`ButtonDefaults.MediumContainerHeight`, `IconButtonDefaults.mediumContainerSize()`), except More in the STACKED and SCROLL header: a 40 dp container (`IconButtonDefaults.smallContainerSize()`, `GameDimens.HeaderMoreSize`) inside the 48 dp minimum interactive size, so its target is 48 × 48 dp and FULL header row 2 stays 48 dp (D-249).
   - Pad buttons are 64 dp (D-082).
 - A drag that starts on a button, chip or chip area is a swipe. The control must not fire (D-051).
   - The gesture detector sits on the parent with `PointerEventPass.Initial` and consumes the down/move events once the touch slop is exceeded.
@@ -1072,8 +1090,8 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 ### 5.7 RTL (D-104)
 
 - Chrome mirrors:
-  - title and chips swap sides;
-  - the controls bar order becomes [⋮][New game][Undo];
+  - title and chips swap sides; the header rows mirror, so the size chip's row puts More at the start and the size chip at the end (D-249);
+  - the controls bar order becomes [New game][Undo];
   - the 3-column rails swap: actions rail on the left, stats rail on the right;
   - the side panel moves to the left of the board;
   - `ic_arrow_back`, `ic_chevron_right`, `ic_open_in_new`, `ic_help` and `ic_undo` auto-mirror.
@@ -1102,14 +1120,14 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 
 | Component | Composable | Spec |
 |---|---|---|
-| Title | `GameTitle` | §3.5. `semantics { heading() }`. Its text is the non-translatable `app_name` "2048" |
+| Title | `GameTitle` | §3.5. `semantics { heading() }`. Its text is the game numeral 2048 built in code (`Long.toString()`, Latin digits), which reads "2048" in every locale and build; the debug `app_name` is "2048 Debug" (D-110, D-226) |
 | Score chip | `ScoreChip(kind = SCORE)` | §7.2 |
 | Best chip | `ScoreChip(kind = BEST)` | §7.2. Shows `max(records[size].bestScore, score)`, updated live (D-043) |
-| Board-size chip | `SizeChip` | §7.3. Opens §6.7 |
+| Board-size chip | `SizeChip` | §7.3. Opens §6.7. In the COMPACT header it has no leading `ic_grid_view` icon (D-249) |
 | Board | `BoardView` (`game/board/Board.kt`) | §4, D-025. Semantics D-080 |
 | Undo | `GameButton.Undo` | `FilledTonalButton`, icon `ic_undo`, `undo` = "Undo". Disabled when `moveCount == 0` (D-039) |
 | New game | `GameButton.NewGame` | `OutlinedButton` (border `outline`, content `onSurface`), icon `ic_restart` (Material Symbols `restart_alt`), `new_game` = "New game". Shows a confirmation when the game is in progress (§6.5) |
-| More | `GameMoreMenu` | `FilledTonalIconButton`, `ic_more_vert`, `more_options` = "More options". Opens a `DropdownMenu` with items `menu_statistics` "Statistics" (`ic_bar_chart`), `settings` "Settings" (`ic_settings`, the migrated legacy key, D-101), `menu_how_to_play` "How to play" (`ic_help`) and `menu_about` "About" (`ic_info`). Uses the classic `DropdownMenuItem(text, onClick, leadingIcon)` overload |
+| More | `GameMoreMenu` | `FilledTonalIconButton`, `ic_more_vert`, `more_options` = "More options". Placed at the end of the size chip's header row in STACKED and SCROLL, in a 40 dp container (`IconButtonDefaults.smallContainerSize()`, `GameDimens.HeaderMoreSize`) inside the 48 dp minimum interactive size; last in the THREE_COLUMN actions rail and at the end of the SIDE_PANEL title row at `mediumContainerSize()` (§5.4, D-249). Opens a `DropdownMenu`, anchored to the button, with items `menu_statistics` "Statistics" (`ic_bar_chart`), `settings` "Settings" (`ic_settings`, the migrated legacy key, D-101), `menu_how_to_play` "How to play" (`ic_help`) and `menu_about` "About" (`ic_info`). Uses the classic `DropdownMenuItem(text, onClick, leadingIcon)` overload |
 | Snackbar host | `SnackbarHost` | §7.6 |
 | Effect canvases | `BoardEffectsCanvas` (win glow ring) and `ContentEffectsCanvas` (confetti, new-best sparkles), both in `game/board/EffectsCanvas.kt` | D-064, D-187, §4.7 |
 
@@ -1117,21 +1135,21 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 
 | Where | INLINE | OWN_ROW | STACKED |
 |---|---|---|---|
-| FULL header (STACKED) | row 1: title (start, `weight(1f)`), 8, Score, 8, Best, the taller of 64 dp and the chips; row 2: size chip, 48 dp | title row (min 64 dp, title alone); Score, 8, Best on one row; size-chip row | title row; Score; 8 dp; Best; size-chip row |
-| COMPACT header (STACKED, SCROLL) | one row: size chip, 8, Score, 8, Best (min 64 dp) | size-chip row (48 dp, start-aligned); Score, 8, Best on one row | size-chip row; Score; 8 dp; Best |
+| FULL header (STACKED) | row 1: title (start, `weight(1f)`), 8, Score, 8, Best, the taller of 64 dp and the chips; row 2: size chip (start), More (end), 48 dp | title row (min 64 dp, title alone); Score, 8, Best on one row; size-chip row (size chip, More) | title row; Score; 8 dp; Best; size-chip row (size chip, More) |
+| COMPACT header (STACKED, SCROLL) | one row: size chip (no grid icon), 8, Score, 8, Best, 8, More (min 64 dp) | size-chip row (48 dp: size chip start, More end); Score, 8, Best on one row | size-chip row (size chip, More); Score; 8 dp; Best |
 | THREE_COLUMN stats rail | — | — | always (`ownRow = false`): Score above Best at the full rail width, as §5.4 |
 | SIDE_PANEL | — | Score, 8, Best on one row, as §5.4 | Score above Best, each the panel width, 8 dp apart |
 
 - Rows follow each other with no extra gap, except the 8 dp between two stacked chips.
-- Reading and traversal order are the same in every layout: title, Score, Best, size chip (FULL) and size chip, Score, Best (COMPACT) (F17-AC7). RTL mirrors each row as §5.7 says.
-- Nominal heights at `fontScale` 1.0: FULL 112 / 176 / 248 dp and COMPACT 64 / 112 / 184 dp for INLINE / OWN_ROW / STACKED. At `fontScale` 1.0 a 4×4 game (at most 7 digits) is always INLINE in both headers at 328 dp; OWN_ROW and STACKED appear with long values, at large font scales, and in COMPACT headers narrower than about 290 dp.
+- Reading and traversal order are the same in every layout, with More the last item of the header group (D-080, D-081, D-249): title, Score, Best, size chip, More (FULL) and size chip, Score, Best, More (COMPACT), then the board, then the controls (Undo, New game; with the pad: status line, pad, New game) (F17-AC7). RTL mirrors each row as §5.7 says.
+- Nominal heights at `fontScale` 1.0: FULL 112 / 176 / 248 dp and COMPACT 64 / 112 / 184 dp for INLINE / OWN_ROW / STACKED; More's 40 dp container in its 48 dp target keeps the 48 dp size-chip row (D-249). At `fontScale` 1.0 a 4×4 game (at most 7 digits) is always INLINE in both headers at 328 dp; OWN_ROW and STACKED appear with long values, at large font scales, and in COMPACT headers narrower than about 314 dp.
 - The header's height enters §5.3's measured chrome with the live digit count, so a taller header shrinks the board or changes the arrangement instead of overflowing.
 
 **States**
 
 | State | Condition | Visual |
 |---|---|---|
-| Loading | The splash was released at its 1000 ms cap before the game loaded (D-112) | Board with empty cells only; its description is `a11y_board_loading` = "Game board, %1$s by %1$s. Loading.". Chips show "–" (U+2013). The size chip shows `settings.lastBoardSize`. Undo and New game are disabled. No hint and no spinner. When data arrives, tiles render `Static` |
+| Loading | The splash was released at its 1000 ms cap before the game loaded (D-112) | Board with empty cells only; its description is `a11y_board_loading` = "Game board, %1$s by %1$s. Loading.". Chips show "–" (U+2013). The size chip shows `settings.lastBoardSize` (`AppViewModel.appearance.lastBoardSize`, D-248). Undo and New game are disabled. No hint and no spinner. When data arrives, tiles render `Static` |
 | Fresh | `moveCount == 0`, `PLAYING` | Undo disabled. New game starts at once (no confirmation; D-007) |
 | First launch | `onboardingDone == false` and the starting game has `moveCount == 0` and `undoCount == 0`; a missing game file counts as `moveCount == 0` (D-201) | Hint card (§6.2) |
 | In progress | `moveCount ≥ 1` and `PLAYING` / `KEEP_PLAYING` | Undo enabled. New game asks first (§6.5) |
@@ -1141,7 +1159,7 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 | Keep playing | `KEEP_PLAYING` | Normal play. Tiles above the target continue on the ramp (§2.6) |
 | Over | `OVER` | Game-over card (§6.4) |
 | Modal open | A dialog, sheet or menu is visible | Fully modal: swipes and game keys are ignored (D-054, D-199) |
-| Card shown | The win or game-over card is visible | Board swipes and direction keys are ignored. The controls-bar Undo and New game, the size chip and More stay enabled and act like the card's buttons. U, Ctrl+Z and Backspace undo; N and R start a new game with no confirmation; Enter and Space activate the focused card button (D-199) |
+| Card shown | The win or game-over card is visible | Board swipes and direction keys are ignored. The controls-bar Undo and New game, the size chip and the header's More stay enabled and act like the card's buttons. U, Ctrl+Z and Backspace undo; N and R start a new game with no confirmation; Enter and Space activate the focused card button (D-199) |
 
 ### 6.2 Game: first-launch hint (D-009, D-201)
 
@@ -1191,7 +1209,7 @@ Regular layout (`game/overlay/WinCard.kt`, container and scrim from `game/overla
 
 ### 6.3a Game: Compact win card (D-200)
 
-Used when the Regular layout does not fit the board − 16 dp budget (§6.3), for example on the 280 dp board of a 360×640 window (store screenshot 2, §8.6). Height ≈ 220 dp.
+Used when the Regular layout does not fit the board − 16 dp budget (§6.3), for example on the 328 dp board of a 360×640 window (store screenshot 2, §8.6; D-261). Height ≈ 220 dp.
 
 ```
 ┌─────── ElevatedCard  w = min(clamp(board − 32, 264, 400), board − 16) ───────┐
@@ -1265,9 +1283,9 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Boxes:** `surfaceContainerHighest`, 16 dp radius, 8 dp gaps, minimum height 64 dp, equal weights. Labels `score_label`, `best_label` and `best_tile` (`labelMediumEmphasized`, upper-cased with the locale). The SCORE and BEST values use the GSF score instance through `ScoreValue` (§7.2), fitted between 14 and 24 sp to the box's value width and wrapped between digits at 14 sp when needed (never truncated, D-084); BEST TILE shows a 32 dp `MiniTile` described by `a11y_best_tile`.
-- **Summary:** the same `game_over_summary` line as §6.4, `bodyMedium`, `onSurfaceVariant`, `maxLines = 2`.
-- **Row:** New game is a `Button` with weight 1; Undo is a 56 dp `FilledTonalIconButton` with `ic_undo` and content description `undo`; Share is a 56 dp `OutlinedIconButton` with `ic_share` and content description `share`.
+- **Boxes:** `surfaceContainerHighest`, 16 dp radius, 8 dp gaps, minimum height 64 dp, equal weights. Labels `score_label`, `best_label` and `best_tile` (`labelMediumEmphasized`, upper-cased with the locale). The SCORE and BEST values use the GSF score instance through `ScoreValue` (§7.2), fitted between 14 and 24 sp to the box's value width and wrapped between digits at 14 sp when needed (never truncated, D-084; a wrapped value is one node that speaks the whole value, D-252); BEST TILE shows a 32 dp `MiniTile` described by `a11y_best_tile`. When a third of the row cannot hold a label's longest word on one line (a large font scale on a small board), the three boxes stack in a column of full-width boxes, 8 dp apart (D-252).
+- **Summary:** the same `game_over_summary` line as §6.4, `bodyMedium`, `onSurfaceVariant`; it wraps without a line limit, so it is never cut at a large font scale (D-252).
+- **Row:** New game is a `Button` with weight 1; Undo is a 56 dp `FilledTonalIconButton` with `ic_undo` and content description `undo`; Share is a 56 dp `OutlinedIconButton` with `ic_share` and content description `share`. When the row leaves New game narrower than a word of its label plus its content padding (`rememberGameButtonMinWidth`), New game takes a full-width row of its own and Undo and Share follow, centred, 8 dp below (D-252). A card taller than its budget scrolls inside itself (D-200).
 - Scrim, board state, interactivity, focus (New game) and a11y are exactly as in §6.4.
 
 ### 6.5 Game: new-game confirmation (D-007)
@@ -1285,8 +1303,9 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 
 - **Visible while** `AccessibilityManager.isTouchExplorationEnabled` (listener-observed).
 - **Status line** (`game/StatusLine.kt`):
-  - `Text` with `bodyMedium`, `onSurfaceVariant`, `minHeight = 40.dp`, no `maxLines` (it wraps; the measured chrome of §5.3 absorbs the growth, D-084);
-  - `semantics { liveRegion = LiveRegionMode.Polite }`;
+  - `Text` with `bodyMedium`, `onSurfaceVariant`, `minHeight = 40.dp`, no `maxLines` (it wraps, D-084). Its minimum height in each arrangement is §5.3's reservation, the tallest of its longest announcements at that width, so a longer announcement grows into reserved space and moves neither the board nor the pad (D-265);
+  - `semantics { liveRegion = LiveRegionMode.Polite }`, and `hideFromAccessibility()` while it is still blank, so TalkBack has no stop that reads nothing (D-252);
+  - a status whose text equals the text shown (a second blocked move in the same direction, two undos to the same score) blanks the line for one frame and then shows the text again, so the live region's text changes and TalkBack reads the repeat (D-252);
   - content per D-081, completed by D-202. Besides D-081's move and merge sentences, it reads:
     - **after an accepted move,** `a11y_spawned` = "New %1$s at row %2$s, column %3$s.", placed after the merged sentence and before the score. The value is a game numeral; row and column are 1-based, as in `a11y_cell_tile`. Example: "Moved left. Merged 64 and 16. New 2 at row 4, column 1. Score 1,240.";
     - **after every undo,** `a11y_undone` = "Move undone. Score %1$s.";
@@ -1296,24 +1315,26 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
   - a 2-row × 3-column grid of `FilledTonalIconButton`s, each `Modifier.size(64.dp)`, 8 dp apart (208 × 136 dp):
     - row 1: [empty][↑ `ic_pad_up`, `move_up` = "Move up"][↶ `ic_undo`, `undo`];
     - row 2: [← `ic_pad_left`, `move_left` = "Move left"][↓ `ic_pad_down`, `move_down` = "Move down"][→ `ic_pad_right`, `move_right` = "Move right"];
-  - icons are 32 dp;
+  - icons are 32 dp (`GameIconButton`'s `iconSize = GameDimens.PadIcon`, D-252);
   - the whole pad sits in a forced-LTR subtree (D-104).
 - While the pad is visible, the controls bar's Undo is **removed** (the pad has Undo), so TalkBack meets no duplicate.
-  - In STACKED and SCROLL the controls become a 104 dp column of New game (text only) and More, beside the pad (§5.5 E, G).
+  - In STACKED and SCROLL the controls become a 104 dp column (`GameDimens.PadControlsWidth`) holding New game only (text only), beside the pad; More stays at the end of the size chip's header row (§5.5 E, G; D-249).
+  - When New game's label does not lay out on two lines in that column without breaking a word (`rememberGameButtonLabelFits`: no word wider than `rememberGameButtonMinWidth` allows, at most two lines at 104 dp minus `contentPaddingFor(56.dp)`), the pad is centred and New game takes the full width of the column 8 dp below it (`ControlsForm.BELOW_PAD`). The rule depends only on the locale, the font scale and the density; the traversal stays status line, pad, New game (D-266).
 - The `move_*` strings are the same resources as the board's custom actions (D-080).
 
 ### 6.7 Board-size picker (D-007; `game/overlay/BoardSizeSheet.kt`)
 
 - A `GameModalSheet` (§7.4) with title `board_size_title` = "Board size" (`titleLarge`, 24 dp start padding, 16 dp top).
-- **Six rows**, 3×3 to 8×8, each a `ListItem(selected = n == current, onClick = …) { headline }` (§7.9) at least 72 dp tall, inside a `selectableGroup()`, with `semantics { role = Role.RadioButton }`:
+- **Six rows**, 3×3 to 8×8, each a `SelectableRow(selected = n == current, onClick = …) { headline }` (`ui/components/ListRows.kt`, over `ListItem(selected, onClick)`; §7.9, D-246) at least 72 dp tall, inside a `selectableGroup()`, with `semantics { role = Role.RadioButton }`:
 
 | Slot | Content |
 |---|---|
 | Leading | `MiniBoardGlyph(n)`: 32 dp, N×N cells in `palette.fill(1)` on the board colour, drawn in code (§7.8) |
 | Headline (the trailing `content` lambda) | `"$n×$n"` (system font `bodyLarge`) |
 | Supporting | `board_size_goal` = "Goal %1$s" (`"2048"` or `"256"`), then " · ", then `board_size_best` = "Best %1$s" (`formatCount(best, locale)`) or `board_size_no_best` = "No best score yet". Two strings joined with `board_size_supporting` = "%1$s · %2$s" |
-| Trailing | `in_progress` = "In progress" pill (`labelMedium`, `secondaryContainer` / `onSecondaryContainer`, `CircleShape`, padding 8×4 dp) when that size's game is in progress; then `ic_check` (`primary`) for the current size |
+| Trailing | `in_progress` = "In progress" pill (`labelMedium`, `CircleShape`, padding 8×4 dp) when that size's game is in progress: `secondaryContainer` / `onSecondaryContainer` on the other rows, and `secondary` / `onSecondary` on the selected (current-size) row, whose container is already `secondaryContainer`, so the pill's shape stays visible (D-250: text 6.42 / 7.72 / 6.43 / 7.71:1 and boundary against the row 4.98 / 5.31 / 4.00 / 5.11:1 in Classic light / Classic dark / Neon light / Neon dark, §2.8 values, §2.13 formula); then `ic_check` (`primary`) for the current size |
 
+- **Selected row:** its container is `secondaryContainer` and its headline and supporting text keep material3's selected colours, `onSecondaryContainer` at full emphasis (`ListTokens.ItemSelected*`, no alpha; D-250). In Classic light that pair is 4.60:1 (§2.9), as on Undo and the hint card; `SelectableRow` sets no colours of its own.
 - **Behavior:** tapping a row selects it, dismisses the sheet and switches size with no confirmation (D-007). The current size is announced as selected.
 - The sheet's maximum width is the M3 default (640 dp). It opens with `skipPartiallyExpanded` (§7.4).
 
@@ -1337,10 +1358,10 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 | 11 | `settings_section_language` "Language" | `setting_app_language` "App language" | Link row | (system page) | current app locale display name, or `setting_app_language_system` "System default". Trailing `ic_open_in_new` | API 33+ only. Opens `Settings.ACTION_APP_LOCALE_SETTINGS` (D-102) | — |
 
 - **Rows** (`ui/components/SettingRows.kt`) use the non-deprecated `ListItem` overloads of §7.9, with the headline as the trailing `content` lambda: `ListItem(…) { headline }`. Each row is at least 56 dp (one line) or 72 dp (two lines).
-  - **Switch rows:** `ListItem(checked, onCheckedChange) { headline }`, with the summary as `supportingContent` and the `Switch` as `trailingContent` (role `Switch`).
+  - **Switch rows:** `ListItem(checked, onCheckedChange) { headline }`, with the summary as `supportingContent` and the `Switch` as `trailingContent` (role `Switch`). The checked state keeps the unchecked colours: M3 1.5 draws a checked item as a selected one, a `secondaryContainer` band behind every switch that is on, so only the `Switch` shows the state (D-253).
   - **Choice rows:** `ListItem(modifier = Modifier.clickable(onClickLabel = stringResource(R.string.a11y_action_change), role = Role.Button, onClick = …), supportingContent = …, trailingContent = …) { headline }`. `a11y_action_change` = "Change".
   - **Link rows:** the same, with `onClickLabel` = `a11y_action_open` = "Open".
-- **The choice dialog** (`ChoiceDialog`, §7.5) is an `AlertDialog` whose radio rows are `ListItem(selected, onClick) { label }` with a leading `RadioButton(selected, onClick = null)`, role `RadioButton`, 56 dp each, plus an optional supporting line. Selecting an option applies it, persists it and dismisses the dialog; there is no OK button. `dismissButton = TextButton(cancel)`.
+- **The choice dialog** (`ChoiceDialog`, §7.5) is an `AlertDialog` whose radio rows are `ListItem(selected, onClick) { label }` (transparent container; the selected option keeps M3's selected container) with a leading `RadioButton(selected, onClick = null)`, role `RadioButton`, 56 dp each, plus an optional supporting line. Selecting an option applies it, persists it and dismisses the dialog; there is no OK button. `dismissButton = TextButton(cancel)`.
 - **Persistence:** every change persists immediately (D-043 writer). There is no Save button.
 - **Not in Settings:** Reset statistics lives in Statistics (D-006).
 
@@ -1352,8 +1373,8 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
   1. **Hero card** (`surfaceContainerHigh`, `shapes.large`, 16 dp padding):
      - label `stats_best_score` = "Best score" (`labelLarge`, `onSurfaceVariant`);
      - value (`headlineLarge`, `"tnum"`, `formatCount(bestScore, locale)`);
-     - at the end, a `MiniTile(bestTileExp, 56.dp)` labeled `stats_best_tile` = "Best tile". Its a11y text is `a11y_best_tile` = "Best tile, %1$s" with the full decimal value.
-  2. **Rows:** `ListItem(trailingContent = { value }) { headline }` (§7.9), headline `bodyLarge`, trailing value `titleMedium` `"tnum"`:
+     - at the end, a `MiniTile(bestTileExp, 56.dp)` labeled `stats_best_tile` = "Best tile". Its a11y text is `a11y_best_tile` = "Best tile, %1$s" with the full decimal value. The tile and its label are drawn only when `bestTileExp ≥ 1`: a record with games but no best tile (a hand-written file, or a `bestTileExp` outside 0..N² + 1 that reads as 0) shows the best score alone (D-270).
+  2. **Rows:** the plain row of `ui/components/ListRows.kt`, `ListItem(trailingContent = { value }) { headline }` (§7.9, D-246), headline `bodyLarge`, trailing value `titleMedium` `"tnum"`:
 
 | Key | Headline | Value |
 |---|---|---|
@@ -1386,7 +1407,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 |---|---|---|
 | `htp_goal` | "Goal" | `htp_goal_body` "Slide the tiles to merge equal numbers and build the %1$s tile. On a 3×3 board the goal is %2$s." (`"2048"`, `"256"`) |
 | `htp_moving` | "Moving" | `htp_moving_body` "Swipe up, down, left or right. Every tile slides as far as it can in that direction." |
-| `htp_merging` | "Merging" | `htp_merging_body` "Two touching tiles with the same number merge into one tile with their sum. A tile merges only once per move." Followed by `MergeIllustration`: two mini-tile rows (40 dp tiles, palette colors, forced LTR) "2 2 2 2" → "4 4 · ·", with a 24 dp `ic_pad_right` between, and the a11y text `htp_merging_illustration_cd` "Example: 2, 2, 2, 2 moved left becomes 4, 4" |
+| `htp_merging` | "Merging" | `htp_merging_body` "Two touching tiles with the same number merge into one tile with their sum. A tile merges only once per move." Followed by `MergeIllustration`: two mini-tile rows (40 dp tiles, palette colors, forced LTR) "2 2 2 2" → "4 4 · ·" on `palette.board` with 4 dp padding, side by side with a 24 dp `ic_pad_right` between when the column is at least 400 dp wide, otherwise stacked with the arrow turned to point down (D-254), as one node with the a11y text `htp_merging_illustration_cd` "Example: 2, 2, 2, 2 moved left becomes 4, 4" |
 | `htp_new_tiles` | "New tiles" | `htp_new_tiles_body` "After every move that changes the board, a new tile appears in a random empty cell: a 2 nine times out of ten, otherwise a 4." |
 | `htp_board_sizes` | "Board sizes" | A 2-column table: `"$n×$n"` with Goal 256 / 2048 / 2048 / 2048 / 2048 / 2048, plus `htp_board_sizes_body` "Each size keeps its own game, best score and statistics." |
 | `htp_undo` | "Undo" | `htp_undo_body` "Undo is unlimited and also works after game over. Undo brings back the same next tile, so repeating a move gives the same result. Undos are counted, and games with undo don't count toward Best without undo." |
@@ -1400,7 +1421,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
   - Compose's `painterResource` cannot load an `<adaptive-icon>` XML, so the icon is composed from its layers: `Box(Modifier.size(72.dp).clip(CircleShape).background(GameColors.IconBackground /* #E6A11A */)) { Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize()) }`.
   - The foreground's 108-unit viewport puts the glyph band (56/108 of the side) in the centre, so it is 37 dp wide at 72 dp.
 - **Section `about_whats_new` "What's new":** for each versionCode in `Changelog` (descending), a `titleSmall` "3.0.0", then the entries as bullet rows (`bodyMedium`, "•" + 8 dp).
-- **Row `about_source_code` "Source code":** a link row as in §6.8 (`ListItem(…) { headline }` with `onClickLabel` = `a11y_action_open`):
+- **Row `about_source_code` "Source code":** a link row as in §6.8 (`ListItem(…) { headline }` through a `ui/components` wrapper such as `LinkRow`, D-246, with `onClickLabel` = `a11y_action_open`):
   - supporting text `about_source_code_url` = "github.com/clayboicardi/2048-android-modern-refresh" (`translatable="false"`); trailing `ic_open_in_new`;
   - it opens `ACTION_VIEW`. If `ActivityNotFoundException` is thrown, it shows the snackbar `link_open_failed` = "No app can open this link" (D-009).
 - **Section `about_privacy` "Privacy":** `privacy_text` = D-123's text verbatim: "This app collects nothing. It has no network access, no accounts, no ads and no analytics. Game data stays on your device. Android's own backup may copy it to your Google account if you enabled device backup."
@@ -1416,16 +1437,17 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 
 - A `TopAppBar` titled `licenses` = "Open-source licenses". The body is a `LazyColumn` of at most 640 dp, grouped by `licenseId` from `res/raw/third_party_licenses.json` (D-122), in the order MIT, OFL-1.1, Apache-2.0.
 - **Group header:** `license_mit_name` "MIT License", `license_ofl_name` "SIL Open Font License 1.1", `license_apache_name` "Apache License 2.0" (`titleSmallEmphasized`, `primary`).
-- **Entry rows:** `ListItem(supportingContent = { copyright on line 1, groupOrPath on line 2 (bodySmall) }) { Text(name) }` (§7.9).
-- **After each group:** a toggle row, `ListItem(onClick = …, trailingContent = { icon }) { Text(label) }` with `license_show_text` "Show license text" / `license_hide_text` "Hide license text" and `ic_expand_more` / `ic_expand_less`. It expands a `surfaceContainerLow` box (`shapes.medium`, 16 dp padding) with the raw text (`license_mit.txt`, `ofl_google_sans_flex.txt` or `license_apache_2_0.txt`) in `bodySmall` Monospace.
+- **Entry rows:** the plain row of `ui/components/ListRows.kt`, `ListItem(supportingContent = { copyright on line 1, groupOrPath on line 2 (bodySmall) }) { Text(name) }` (§7.9, D-246).
+- **After each group:** a toggle row, `LinkRow(onClick = …, trailingContent = { icon }) { Text(label) }` (over `ListItem(onClick)`, D-246) with `license_show_text` "Show license text" / `license_hide_text` "Hide license text" and `ic_expand_more` / `ic_expand_less`. It expands a `surfaceContainerLow` box (`shapes.medium`, 16 dp padding) with the raw text (`license_mit.txt`, `ofl_google_sans_flex.txt` or `license_apache_2_0.txt`) in `bodySmall` Monospace.
 - **Expansion:** under Full motion it uses `AnimatedVisibility(expandVertically(GameMotion.overlaySpatial()))`; otherwise it is instant.
 
 ### 6.13 What's new sheet (D-009; `about/WhatsNewSheet.kt`)
 
+- `WhatsNewSheet(entries, onDismissRequest)`, composed by `GameScreen` over the Game root while `AppViewModel.whatsNew` is non-empty, with `onDismissRequest = appViewModel::onWhatsNewDismissed` (ARCHITECTURE.md §7.2, D-248).
 - A `GameModalSheet` with:
   - title `whats_new_title` = "What's new" (`titleLarge`);
   - subtitle `whats_new_version` = "Version %1$s" (`bodyMedium`, `onSurfaceVariant`);
-  - bullet rows for each versionCode > `lastSeenVersionCode`;
+  - the bullet rows ("•" + 8 dp, `bodyMedium`) of every versionCode > `lastSeenVersionCode`, oldest version first, without per-version headings (D-254);
   - a full-width `FilledTonalButton(got_it)` at the bottom, with 24 dp margins.
 - It never blocks the game: dismissible by drag, Back, scrim tap or "Got it".
 - **v1.0 entries** (`Changelog.kt`, versionCode 30000):
@@ -1471,6 +1493,7 @@ File names are relative to `ui/components/`; files in other packages are given f
 | `DirectionPad` | `game/input/DirectionPad.kt` | `FilledTonalIconButton` | §6.6 |
 | `StatusLine` | `game/StatusLine.kt` | `Text` | §6.6 |
 | `SectionHeader`, `SettingsSwitchRow`, `SettingsChoiceRow`, `SettingsLinkRow` | `SettingRows.kt` | `ListItem`, `Switch` | §6.8 |
+| `SelectableRow`, `LinkRow` (M3), the plain row (M4.1) | `ListRows.kt` | `ListItem` | §6.7, §6.9, §6.11, §6.12. The only `ListItem` calls outside `SettingRows.kt` and `Dialogs.kt` (D-246) |
 | `OverlayCard` (win/over container, Regular and Compact layouts) + scrim clipped to the board shape | `game/overlay/BoardScrim.kt`; `WinBadge` in `game/overlay/WinCard.kt` | `ElevatedCard` | §6.3, §6.4 |
 
 ### 7.2 `ScoreChip` and the "+N" float
@@ -1480,7 +1503,7 @@ File names are relative to `ui/components/`; files in other packages are given f
 - **Value** (`ScoreValue(value, fit: ScoreFit)`): GSF score instance (§3.2), each line `maxLines = 1` and `softWrap = false`, `onSurface`. `Text(autoSize = …)` is **not** used for the value. The value is never truncated, ellipsized or abbreviated (no "K" or "M"; always `Long.toString(value)`, every digit) and never drawn below 14 sp; the fit chain below guarantees room for it (D-084).
   - **Size.** `ScoreValue` measures `Long.toString(value)` with `rememberTextMeasurer` in the GSF score instance, once per (digit count, `fit`, density, `fontScale`). It picks the largest size in 14..28 sp, in 1 sp steps, whose width ≤ `fit.valueWidth`; `tnum` gives every digit the same advance, so the width depends only on the digit count. If even 14 sp is wider, the value is drawn at 14 sp: in INLINE the chip widens to the value (it still fits `chipSlot`, by the fit rule), and in STACKED the value wraps (below).
   - **Wrapping** (STACKED only, when `digits > fit.digitsPerLine`; for example 9 digits in a 160 dp rail at `fontScale` 2.0). `scoreLines(Long.toString(value), fit.digitsPerLine)` cuts the digits into `L = ⌈d / digitsPerLine⌉` lines of `⌈d / L⌉` digits counted from the end, so only the first line can be shorter (9 digits at 7 per line: 4 + 5; `Long.MAX_VALUE`, 19 digits, at 11 per line: 9 + 10). Lines are only ever cut between digits; they form a `Column` of centered lines with no extra spacing, top to bottom from the most significant digits, and the chip grows taller.
-  - **Line box.** The value box has a minimum height of one line of the score instance at 28 sp, measured with the same `TextMeasurer`, so the fitted size never changes the chip's height; only wrapping makes it taller. Every measured-chrome term of §5.3 therefore stays non-increasing in its width.
+  - **Line box.** The value box has a minimum height of one line of the score instance at 28 sp, measured with the same `TextMeasurer`, so the fitted size never changes the chip's height; only wrapping makes it taller. Every measured-chrome term of §5.3 therefore stays non-increasing in its width. With the bundled subset that line is about 35 dp (§3.1), so a chip is about 67 dp tall at `fontScale` 1.0; §5.3's nominal 64 dp heights are the pure tests' inputs, and the rendered layout uses the measured ones (D-251).
   - **One size for every digit.** Under Full motion it is an odometer: one `AnimatedContent` per digit position (`game/header/ScoreOdometer.kt`), each digit at that one size and placed in the lines of `scoreLines`, with `slideInVertically { it } + fadeIn(fastEffects)` replacing `slideOutVertically { -it } + fadeOut(fastEffects)` using the slide spring, and no stagger (D-064). Under Reduced and Off it is one `Text` per line at that size, and it changes instantly. The "+N" float anchors to the last line's baseline.
 - **Fit chain** (D-084; `game/header/ScoreFit.kt`, M4). Score and Best share one chip slot, so one `ScoreFit` serves both chips of a header:
 
@@ -1502,7 +1525,7 @@ fun scoreLines(text: String, digitsPerLine: Int): List<String>
   - **Inputs.**
     - `digits` = `Long.toString(max(header.score, header.best)).length`, or 1 while Loading shows "–". It comes from the true `HeaderUi` values, never `displayedScore`, which never has more digits than they do (MOTION_SPEC.md §3.5).
     - `width` = the width the chips are laid out in: the board (FULL header), `w0` (COMPACT header, §5.3), the rail (THREE_COLUMN stats rail) or the panel (SIDE_PANEL).
-    - `lead` = what shares the chips' row in INLINE: the width of "2048" measured in the title instance at 32 sp, the title's `autoSize` minimum (FULL); the size chip's `maxIntrinsicWidth` (COMPACT); `null` in the rail and the panel, which have no INLINE layout.
+    - `lead` = what shares the chips' row in INLINE besides the chips and their two gaps: the width of "2048" measured in the title instance at 32 sp, the title's `autoSize` minimum (FULL); the size chip's `maxIntrinsicWidth` (without its grid icon) plus More's 48 dp target and the 8 dp gap before it (COMPACT, D-249); `null` in the rail and the panel, which have no INLINE layout. F17-AC22's COMPACT `lead` values are inputs of the pure function, not measurements.
     - `advance14` = the width of "0" measured in the score instance (`tnum, lnum`) at 14 sp with `LocalDensity.current`, so Android 14+ non-linear font scaling applies (14 sp is 26 dp at `fontScale` 2.0; with §3.1's 0.665 em digit, `advance14` is 17.3 dp there and 9.3 dp at 1.0). A d-digit value at 14 sp is `d · advance14` wide.
     - `ownRow` = false in the THREE_COLUMN stats rail, whose chips are always stacked (§5.4).
   - **Rule**, first match wins, with `fits(slot) = slot ≥ 88 and digits · advance14 ≤ slot − 24` (88 dp is `ScoreChipMinWidth`; 24 dp is the chip's horizontal padding):
@@ -1511,7 +1534,7 @@ fun scoreLines(text: String, digitsPerLine: Int): List<String>
     3. otherwise → STACKED, `chipSlot = width`, `valueWidth = width − 24`.
 
     `digitsPerLine = max(1, ⌊(chipSlot − 24) / advance14⌋)`. It is ≥ `digits` in INLINE and OWN_ROW by the rule; only a STACKED value can wrap. The rows each layout makes are in §6.1.
-  - **Example.** In a 360 dp window at `fontScale` 2.0, Score 999,999,999 and Best 9,999,999,999 need 155.6 and 172.9 dp of value width at 14 sp. A 328 dp header offers about 82 dp inline with the title (`lead` ≈ 100 dp), about 74 dp inline with the size chip (`lead` ≈ 115 dp) and 136 dp on its own row, so the chips stack, each 328 dp wide, and both values fit on one line at 28 sp. In a 160 dp THREE_COLUMN rail at the same scale, 7 digits fit a line, so they wrap: 4 + 5 and 5 + 5 digits at 14 sp.
+  - **Example.** In a 360 dp window at `fontScale` 2.0, Score 999,999,999 and Best 9,999,999,999 need 155.6 and 172.9 dp of value width at 14 sp. A 328 dp header offers about 82 dp inline with the title (`lead` ≈ 100 dp), about 74 dp inline with the size chip and More (`lead` ≈ 115 dp, F17-AC22's COMPACT input) and 136 dp on its own row, so the chips stack, each 328 dp wide, and both values fit on one line at 28 sp. In a 160 dp THREE_COLUMN rail at the same scale, 7 digits fit a line, so they wrap: 4 + 5 and 5 + 5 digits at 14 sp.
 - **Width:** INLINE: content-sized, at least 88 dp and at most `chipSlot`; OWN_ROW: `weight(1f)` each, so both are `chipSlot` wide; STACKED: `fillMaxWidth()`. A label wider than its chip wraps to at most 2 lines (D-084). The chip never overlaps its neighbours or leaves the header.
 - **"+N" float** (Score chip only; `game/header/ScoreFloats.kt`):
   - Text is `"+" + scoreDelta.toString()` in the GSF "+N" instance. It is drawn in an overlay `Box` anchored to the value baseline and is **not** clipped by the chip.
@@ -1520,7 +1543,9 @@ fun scoreLines(text: String, digitsPerLine: Int): List<String>
 - **NEW BEST style:**
   - container `tertiaryContainer`, label `new_best_label`, label and value `onTertiaryContainer`, all crossfaded with `defaultEffects`;
   - behind the label, the 10-point star badge (`tertiary`, 20 dp; `game/header/NewBestBadge.kt`) and 8 sparkles drawn by `ContentEffectsCanvas` (D-064, D-187). The star and sparkles are one-shot;
-  - the color state remains for the rest of the game (§6.1).
+  - the color state remains for the rest of the game (§6.1);
+  - **no size change** (D-268): the BEST chip reserves the larger of its two forms. It measures `best_label` and `new_best_label` at its width (never placed, no semantics) and is at least as wide as the widest of them and its value, and as tall as the taller label plus the value, in both styles. The label shown and the value stay one unit, centred in the chip, with no reserved space between them; a NEW BEST label that wraps fills the reserved room. The star and sparkles take no layout space, so the moment changes no chip, header or board size. In a locale whose new-best label is wider, or wraps to two lines where the best label does not (German "NEUER REKORD"), the BEST chip has that size before any new best too.
+- **One height per row** (D-268): side by side (INLINE, OWN_ROW), Score and Best take the taller chip's height (`height(IntrinsicSize.Max)` on the row, `fillMaxHeight()` on each chip), and a chip with less content centres it, so labels on one line and the values line up. STACKED chips are on rows of their own.
 - **Semantics:** `val cd = stringResource(R.string.a11y_chip_value, label, valueLatin)`, then `Modifier.semantics(mergeDescendants = true) { contentDescription = cd }`, with `a11y_chip_value` = "%1$s %2$s" (label in sentence case, value in Latin digits), never string concatenation. There is no live region; the status line announces (D-081).
 
 ### 7.3 Buttons and chips
@@ -1529,7 +1554,8 @@ fun scoreLines(text: String, digitsPerLine: Int): List<String>
 |---|---|---|---|---|---|
 | New game (controls bar) | `OutlinedButton` (border `outline`, content `onSurface`) | `heightIn(min = 56.dp)` | `ic_restart` (`ButtonDefaults.iconSizeFor(56.dp)`) | `new_game` | always (disabled only while Loading) |
 | Undo | `FilledTonalButton` | 56 | `ic_undo` | `undo` | `moveCount > 0` |
-| More | `FilledTonalIconButton` | `IconButtonDefaults.mediumContainerSize()` | `ic_more_vert` | — (`contentDescription = more_options`) | always |
+| More, STACKED and SCROLL header | `FilledTonalIconButton` | `IconButtonDefaults.smallContainerSize()` (40 dp, `GameDimens.HeaderMoreSize`) inside the 48 dp minimum interactive size: a 48 × 48 dp target in the 48 dp size-chip row (D-249) | `ic_more_vert` | — (`contentDescription = more_options`) | always |
+| More, THREE_COLUMN actions rail and SIDE_PANEL title row | `FilledTonalIconButton` | `IconButtonDefaults.mediumContainerSize()` | `ic_more_vert` | — (`contentDescription = more_options`) | always |
 | Keep going (win card, Regular and Compact) | `Button` | 56 | — | `keep_going` | composed enabled; interactive after the D-008 delay (D-200) |
 | Win card New game (Regular) | `FilledTonalButton` | 56 | — | `new_game` | composed enabled; interactive after the D-008 delay (D-200) |
 | Win card Undo (Regular) | `TextButton` | 56 | — | `undo` | same |
@@ -1542,12 +1568,12 @@ fun scoreLines(text: String, digitsPerLine: Int): List<String>
 | Game-over Undo (Compact) | `FilledTonalIconButton` | 56 | `ic_undo` | — (`contentDescription = undo`) | same |
 | Game-over Share (Compact) | `OutlinedIconButton` | 56 | `ic_share` | — (`contentDescription = share`) | same |
 
-- Every button uses `shapes = ButtonDefaults.shapes()` (the Expressive press morph; `IconButtonDefaults.shapes()` for icon buttons), `contentPadding = ButtonDefaults.contentPaddingFor(56.dp)` and labels with `maxLines = 2`.
+- Every button uses `shapes = ButtonDefaults.shapes()` (the Expressive press morph; `IconButtonDefaults.shapes()` for icon buttons), `contentPadding = ButtonDefaults.contentPaddingFor(56.dp)` and labels with `maxLines = 2`. The controls bar holds Undo and New game only, at weights 1 : 1 and 8 dp apart, so at `fontScale` 1.0 in English each label lays out on one line at 360 dp and at the Pixel 7's 411 dp (F18-AC16); `maxLines = 2` is the fallback for larger font scales and long translations (D-249).
 - **Card buttons** are composed with `enabled = true`, so they never flash from disabled to enabled colours. Until `OverlayController.interactive` flips, clicks are ignored, they carry `disabled()` semantics and they cannot take focus (§6.3, D-200).
-- **`SizeChip`:** `AssistChip(onClick, label = { Text("$n×$n") }, leadingIcon = ic_grid_view 18 dp, trailingIcon = ic_expand_more 18 dp)`, wrapped in `minimumInteractiveComponentSize()`.
+- **`SizeChip`:** `AssistChip(onClick, label = { Text("$n×$n") }, leadingIcon = ic_grid_view 18 dp, trailingIcon = ic_expand_more 18 dp)`, wrapped in `minimumInteractiveComponentSize()`. In the COMPACT header it has no leading icon, only the label and `ic_expand_more`, so the COMPACT INLINE row (size chip, Score, Best, More and three 8 dp gaps) needs about 314 dp at `fontScale` 1.0 and fits a 360 dp window's 328 dp (D-249).
   - Semantics: `contentDescription = board_size_cd` = "Board size %1$s", `onClickLabel = board_size_change` = "Change board size".
 - **Not used in v1.0:**
-  - `ButtonGroup`, `ToggleButton` and `HorizontalFloatingToolbar`. They are public in 1.5.0-beta02, but Game has only three controls, and settings use dialogs so they survive `fontScale` 2.0 and long translations. The controls bar uses three individual buttons (weights 1:1 plus More).
+  - `ButtonGroup`, `ToggleButton` and `HorizontalFloatingToolbar`. They are public in 1.5.0-beta02, but Game has only two controls in its bar, and settings use dialogs so they survive `fontScale` 2.0 and long translations. The controls bar uses two individual buttons (Undo and New game, weights 1:1); More sits in the header in STACKED and SCROLL, in the actions rail in THREE_COLUMN and in the panel's title row in SIDE_PANEL (D-249).
   - `SegmentedButton`, which has a deprecated overload.
 
 ### 7.4 Sheets (`GameModalSheet`, the single opt-in)
@@ -1559,12 +1585,16 @@ fun scoreLines(text: String, digitsPerLine: Int): List<String>
 // ui/components/GameModalSheet.kt — the ONLY @OptIn(ExperimentalMaterial3Api::class) in the codebase (D-181)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GameModalSheet(onDismissRequest: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun GameModalSheet(onDismissRequest: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.(dismiss: (then: () -> Unit) -> Unit) -> Unit) {
     val state = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
         enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),   // == skipPartiallyExpanded
     )
-    ModalBottomSheet(onDismissRequest = onDismissRequest, modifier = modifier, sheetState = state, content = content)
+    val scope = rememberCoroutineScope()
+    ModalBottomSheet(onDismissRequest = onDismissRequest, modifier = modifier, sheetState = state) {
+        // D-236: a sheet that closes itself hides with the sheet motion first, then runs `then`.
+        content { then -> scope.launch { state.hide() }.invokeOnCompletion { if (!state.isVisible) then() } }
+    }
 }
 ```
 
@@ -1575,9 +1605,9 @@ fun GameModalSheet(onDismissRequest: () -> Unit, modifier: Modifier = Modifier, 
 ### 7.5 Dialogs
 
 - **`ConfirmDialog(title, body?, confirmText, onConfirm, onDismiss)`** is an `AlertDialog` (android overload) with `TextButton`s. Uses: new game (§6.5) and reset statistics (§6.9).
-- **`ChoiceDialog<T>(title, options: List<Choice<T>>, selected, onSelect, onDismiss)`:**
+- **`ChoiceDialog<T>(title, options: ImmutableList<Choice<T>>, selected, onSelect, onDismiss, optionExtra: (@Composable (T) -> Unit)? = null)`** (D-253; `Choice<T>(value, label, supporting)` is an `@Immutable` data class, and option `i` is tagged `choiceOptionTag(i)`):
   - the body is a `Column(Modifier.selectableGroup())` of radio rows, each `ListItem(selected, onClick) { label }` (§7.9) at least 56 dp tall, with role `RadioButton`, a leading `RadioButton(selected, onClick = null)`, the label (`bodyLarge`) and an optional supporting line (`bodyMedium`);
-  - the Palette dialog adds a `PaletteSwatch` under each label;
+  - the Palette dialog adds a `PaletteSwatch` under each label through `optionExtra`;
   - selecting an option calls `onSelect`, then `onDismiss`.
 - **Keyboard and focus:** dialogs take focus. Move keys are ignored while one is open (D-054).
 - **Motion:** dialog windows keep their platform enter and exit fades at every in-app motion level (D-184).
@@ -1606,10 +1636,12 @@ TalkBack announces snackbars politely by default. No snackbar is used for the wi
 
 ### 7.7 Focus ring (D-053, D-084)
 
-- `Modifier.focusRing(shape: Shape)` draws, while focused, a 2 dp `primary` stroke **outside** the element. There is a 2 dp gap, and the outset shape's corner radius is the element's radius + 2 + 1 dp.
+- `Modifier.focusRing(shape: Shape)` draws, while focused in keyboard input mode (`InputMode.Keyboard`, D-227), a 2 dp `primary` stroke **outside** the element. There is a 2 dp gap, and the outset shape's corner radius is the element's radius + 2 + 1 dp.
 - The ring therefore sits on the background (`primary` on `background` ≥ 6.28:1, §2.9) and never on the board or a tile.
-- Applied by every `ui/components` wrapper and to the board (`shape` = board shape). M3 state layers alone are below 3:1.
-- The board requests focus when Game appears (D-053).
+- Applied by every `ui/components` wrapper, to the board (`shape` = board shape), and, outside `ui/components`, to the Statistics `Tab`s and the game menu's `DropdownMenuItem`s (`RectangleShape`, their resting shapes; D-269). M3 state layers alone are below 3:1 (the focused layer is 10 %). The interactive list rows (`SettingsSwitchRow`, `SettingsChoiceRow`, `SettingsLinkRow`, `SelectableRow`, `LinkRow` and `ChoiceDialog`'s options) use `ListItemDefaults.shapes().shape`, M3's resting list shape (D-267).
+- While the ring shows, `focusRing` places its element at z-index 1, above its siblings, so the next list row's opaque container does not cover the ring's lower edge. In a full-width list the ring's sides lie outside the window, and its top and bottom edges show (D-267); the tab row clips its tabs to its height, so a tab's ring shows its sides, and the menu clips its full-width items at its sides, so an item's ring shows its top and bottom edges (D-269).
+- The game buttons (`GameButton`, `GameIconButton`) show the M3 focused state layer only in keyboard input mode too: focus still moves to a card's primary button (D-081), and a touch player sees no focused tint on it (D-240).
+- The board requests focus when Game appears (D-053), unless a card is shown then: its primary button keeps the focus, and the board takes it back when the card leaves (D-240).
 
 ### 7.8 `MiniTile`, `MiniBoardGlyph`, `PaletteSwatch`
 
@@ -1619,13 +1651,14 @@ TalkBack announces snackbars politely by default. No snackbar is used for the wi
   - semantics `contentDescription` = the full decimal value.
 - **`MiniBoardGlyph(n, size)`** draws an N×N grid with its own geometry, not §4.2's: `gapPx = max(1, round(0.10 × sizePx / n))`, with no dp floor, and cells of `(sizePx − (n + 1) · gapPx) / n`. The cells are drawn in `palette.fill(1)` on the board colour (not `palette.empty`), so they stay legible at 32 dp. It is decorative (`contentDescription = null`).
   - Test: `ui/components/MiniTileTest.glyphCellsLegibleAt32dp` asserts that for N = 8 at 420 dpi every cell is ≥ 9 px.
-- **`PaletteSwatch(palette, darkTheme)`** is a row of 4 `MiniTile`s (2, 8, 128, 2048) at 24 dp, 4 dp apart, on that palette's board color with 4 dp padding. In the Palette dialog each option previews its own palette in the current light or dark mode.
+- **`PaletteSwatch(palette, skin)`** is a row of 4 `MiniTile`s (2, 8, 128, 2048) at 24 dp, 4 dp apart, on that palette's board color with 4 dp padding. It draws the `TilePalette` and `TileSkin` it is given, which the caller resolves from the palette option and the current light or dark mode, so in the Palette dialog each option previews its own palette in that mode (D-234). It is decorative (no semantics).
+  - Tests: `MiniTileTest.miniTileDrawsLabelAndBestTileDescription`, `miniTileDrawsHighContrastOutline` and `paletteSwatchShowsFourTilesWithoutSemantics`.
 
 ### 7.9 Material 3 API allow and deny list (verified 2026-10-28 from class files)
 
 | Status | APIs |
 |---|---|
-| **Use** (public, no opt-in, not deprecated) | `MaterialExpressiveTheme`, `MotionScheme.expressive()` and the `MotionScheme` interface (`gameMotionScheme(level)`, D-184), `lightColorScheme`/`darkColorScheme` (48-parameter overloads), `dynamicLightColorScheme`/`dynamicDarkColorScheme`, `Typography.*Emphasized`, `Button`, `FilledTonalButton`, `OutlinedButton`, `TextButton`, `ButtonDefaults.shapes()`/`MediumContainerHeight`/`contentPaddingFor`/`textStyleFor`/`iconSizeFor`, `FilledTonalIconButton`, `OutlinedIconButton` and `IconButton` (non-deprecated overloads), `IconButtonDefaults.shapes()`/`mediumContainerSize()`, `ElevatedCard`, `Card`, `AssistChip`, `ListItem` through its headline-as-trailing-lambda overloads only: `ListItem(modifier, …, supportingContent, trailingContent) { headline }`, `ListItem(checked, onCheckedChange) { … }`, `ListItem(selected, onClick) { … }` and `ListItem(onClick) { … }`, `Switch`, `RadioButton`, `HorizontalDivider`, `AlertDialog` (android), `TopAppBar`, `Scaffold`, `SnackbarHost`, `PrimaryScrollableTabRow`, `Tab`, `DropdownMenu` + classic `DropdownMenuItem`, `Surface`, `Text(autoSize = …)` + foundation `TextAutoSize.StepBased`, ui `Modifier.dropShadow`/`innerShadow`/`preferredFrameRate` |
+| **Use** (public, no opt-in, not deprecated) | `MaterialExpressiveTheme`, `MotionScheme.expressive()` and the `MotionScheme` interface (`gameMotionScheme(level)`, D-184), `lightColorScheme`/`darkColorScheme` (48-parameter overloads), `dynamicLightColorScheme`/`dynamicDarkColorScheme`, `Typography.*Emphasized`, `Button`, `FilledTonalButton`, `OutlinedButton`, `TextButton`, `ButtonDefaults.shapes()`/`MediumContainerHeight`/`contentPaddingFor`/`textStyleFor`/`iconSizeFor`, `FilledTonalIconButton`, `OutlinedIconButton` and `IconButton` (non-deprecated overloads), `IconButtonDefaults.shapes()`/`mediumContainerSize()`, `ElevatedCard`, `Card`, `AssistChip`, `ListItem` through its headline-as-trailing-lambda overloads only: `ListItem(modifier, …, supportingContent, trailingContent) { headline }`, `ListItem(checked, onCheckedChange) { … }`, `ListItem(selected, onClick) { … }` and `ListItem(onClick) { … }` (all four are material3 1.5-only, so they are called only in `ui/components`, D-026, D-246), `Switch`, `RadioButton`, `HorizontalDivider`, `AlertDialog` (android), `TopAppBar`, `Scaffold`, `SnackbarHost`, `PrimaryScrollableTabRow`, `Tab`, `DropdownMenu` + classic `DropdownMenuItem`, `Surface`, `Text(autoSize = …)` + foundation `TextAutoSize.StepBased`, ui `Modifier.dropShadow`/`innerShadow`/`preferredFrameRate` |
 | **Isolated opt-in** (one file) | `ModalBottomSheet`, `rememberBottomSheetState`, `SheetValue` (`ExperimentalMaterial3Api`) → `GameModalSheet.kt` only (D-181) |
 | **Never use** (opt-in) | `TooltipBox`, `PlainTooltip`, `rememberTooltipState` (`ExperimentalMaterial3Api`); `MaterialShapes`, `LoadingIndicator`, `DropdownMenuItem` checked/selected overloads (`ExperimentalMaterial3ExpressiveApi`); foundation `FlowRow`/`FlowColumn` experimental overloads; Roborazzi `captureScreenRoboImage` and `RoborazziOptions(taskType = …)` (`ExperimentalRoborazziApi`; Roborazzi opt-ins are allowed only in `testing/Accessibility.kt` for ATF, D-174) |
 | **Never use** (deprecated, fatal under D-143) | `rememberModalBottomSheetState`, `TabRow`, `ScrollableTabRow`, old `PrimaryScrollableTabRow`/`SecondaryScrollableTabRow` overloads, old `SegmentedButton`, `BasicText` old overloads, and the deprecated overloads of `IconButton`, `FilterChip`, `AssistChip`, `ListItem`, `TopAppBar`, `CenterAlignedTopAppBar`, `Text` and `AlertDialog`. If a call resolves to one, follow its `ReplaceWith` |
@@ -1728,7 +1761,7 @@ Geometry (research/01 §5.3, research/07-critique.md G4):
 
 - **Rendering:** `Bitmap(512, 512, ARGB_8888)`, fill `#E6A11A`, then draw `ic_launcher_foreground` with `setBounds(-128, -128, 640, 640)`.
   - The 108-unit canvas is scaled so that its visible 72-unit centre fills 512 px, which matches what launchers show.
-  - The glyph band becomes 398 × 133 px. No mask is applied; Play applies its own.
+  - The glyph band becomes 398 × 133 px. No mask is applied; a store that shows the icon applies its own (D-257: there is no Google Play listing).
 - **Output:** an opaque PNG at `fastlane/metadata/android/en-US/images/icon.png`, written by the test-only `store/OpaquePngWriter` (`java.util.zip`, bit depth 8, color type 2; D-190).
 
 ### 8.5 Feature graphic, 1024 × 500 (D-115)
@@ -1759,7 +1792,7 @@ Geometry (research/01 §5.3, research/07-critique.md G4):
 | File | Qualifier | Content |
 |---|---|---|
 | `phoneScreenshots/1.png` | `w360dp-h640dp-xxhdpi` (1080×1920) | `FIX_MID_4`, Classic light |
-| `phoneScreenshots/2.png` | same | `FIX_WON_4`, Classic light, win card in its Compact layout (board 280 dp at `w360dp-h640dp`, §6.3a) |
+| `phoneScreenshots/2.png` | same | `FIX_WON_4`, Classic light, win card in its Compact layout (board 328 dp at `w360dp-h640dp`, §6.3a; D-261) |
 | `phoneScreenshots/3.png` | same | `FIX_MID_4`, Neon dark |
 | `phoneScreenshots/4.png` | same | Statistics, 4×4 tab, `FIX_RECORDS`, Classic light |
 | `sevenInchScreenshots/1.png` | `w1067dp-h600dp-land-xhdpi` (2134×1200) | `FIX_MID_4`, Classic light, side panel |
@@ -1854,7 +1887,7 @@ Format: `<screen>[_<state>[-<N>x<N>]]_<palette>-<mode>[-hc][_<variant>]`. Layout
 
 ### 10.3 Fixtures (`app/src/test/kotlin/com/clayboicardi/game2048/fixtures/GoldenFixtures.kt`)
 
-Cells are exponents, row-major, with 0 = empty. Every game fixture is a `SavedGame` with `gameId = 1` and empty `pendingFinalizations`; `FIX_RECORDS` has an empty `lastFinalizedGameId` (D-044). A test that needs other identities uses `copy(gameId = …)`.
+Cells are exponents, row-major, with 0 = empty. Every game fixture is a `SavedGame` with `gameId = 1` and empty `pendingFinalizations`; `FIX_RECORDS` has an empty `lastFinalizedGameId` (D-044). A test that needs other identities uses `copy(gameId = …)`. Game fixtures are built by `fixtureGame(…)` with a synthetic history that passes `GameInvariants` but does not replay, and "best" is their `bestAtStart` (D-216). `FIX_MID_4`, `FIX_MID_3`, `FIX_OVER_4` and `FIX_RECORDS` exist from M2; the rest arrive in M3 part 1.
 
 | Fixture | N | Cells | Score / best / moves / undos / time | Status |
 |---|---|---|---|---|

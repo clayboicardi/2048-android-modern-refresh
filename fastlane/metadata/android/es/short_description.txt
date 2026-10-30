@@ -1,0 +1,1 @@
+Rompecabezas 2048 de fichas deslizantes. Sin conexión, sin anuncios ni rastreo.

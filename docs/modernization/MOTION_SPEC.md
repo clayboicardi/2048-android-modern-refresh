@@ -258,6 +258,7 @@ object GameMotion {
         const val SPARKLE_SIZE_DP = 6f
         const val SPARKLE_SPEED_MIN_DP_S = 120f
         const val SPARKLE_SPEED_MAX_DP_S = 220f
+        const val SPARKLE_JITTER_DEG = 10f
         const val SPARKLE_LIFE_MS = 600
         const val SPARKLE_FADE_MS = 250
     }
@@ -358,6 +359,8 @@ object GameMotion {
 }
 ```
 
+The M3 part 1 contracts append `object GameMotion.Input` (`KEY_REPEAT_MIN_INTERVAL_MS = 120L`, D-053; `NOTHING_TO_UNDO_MIN_INTERVAL_MS = 2000L`, D-186) and `GameMotion.plan(level)` with `MotionPlan` to this listing (D-222). `NewBest.SPARKLE_JITTER_DEG` is the ±10° direction jitter of §3.6, named at the M3 part 1 integration so the particle engine carries no literal.
+
 ---
 
 ## 2. Motion level, animator scale and timing infrastructure
@@ -424,7 +427,7 @@ Consequence under Reduced: a sheet appears without sliding, and it still hides w
 | # | Rule |
 |---|---|
 | T1 | **No raw `delay()` for anything visible** (D-183). A delay that precedes an animation is part of its spec: `tween(…, delayMillis = d)`, `snap(delayMillis = d)` or `delayedSpec(spec, d)`. Compose scales all three by `MotionDurationScale`, starts them on the same frame as the slides, and jumps them to the end at scale 0. A delay before a spring uses the app-local `delayedSpec(spec, delayMs)` in `game/motion/DelayedSpec.kt`: it wraps a `FiniteAnimationSpec`, holds the initial value and velocity for `delayMs`, then plays the wrapped spec with play time − delay; its duration is delay + the wrapped duration. animation-core's own `delayed` spec function is Kotlin-internal (its bytecode looks public) and must not be used. |
-| T2 | **State flips at an offset** (score display update, "+N" creation, new-best start, overlay composition, card-button interactivity (D-200), confetti emission, haptics) use `MoveTimeline.awaitOffset(moveId, ms)` (§2.4). It waits on the frame clock, so the flip lands on the first frame ⌈X⌉ at or after origin + X·scale, never between frames. Two mechanisms follow, and §3 names the one each element uses: **(A) spec-delayed** animations are launched at the origin with the delay inside the spec, so at frame t their play time is exactly t − X. **(B) flip-started** elements appear on frame ⌈X⌉ at their initial values, and any animation they start has play time 0 on the *following* frame (⌈X⌉ + 16 ms on the test grid). Haptics, the interactivity flip and confetti emission act on ⌈X⌉ itself. §9 includes this lag. |
+| T2 | **State flips at an offset** (score display update, "+N" creation, new-best start, overlay composition, card-button interactivity (D-200), confetti emission, haptics) use `MoveTimeline.awaitOffset(moveId, ms)` (§2.4). It waits on the frame clock, so the flip lands on the first frame ⌈X⌉ at or after origin + X·scale, never between frames. Two mechanisms follow, and §3 names the one each element uses: **(A) spec-delayed** animations are launched at the origin with the delay inside the spec, so at frame t their play time is exactly t − X. **(B) flip-started** elements appear on frame ⌈X⌉ at their initial values, and any animation they start has play time 0 on the *following* frame (⌈X⌉ + 16 ms on the test grid). A (B) flip that is drawn writes its state inside the due frame's callback, through `awaitOffset(moveId, ms) { … }`, because a frame resumes the coroutines it woke only after it has recomposed, so a write after `awaitOffset` returns would be drawn one frame late (D-224). Haptics, the interactivity flip and confetti emission act on ⌈X⌉ itself. §9 includes this lag. |
 | T3 | **Custom frame loops** (confetti, sparkles) read `coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f` on every frame. They integrate with `dt = min((frameNanos − lastNanos) / 1e9 / scale, MAX_DT_S)`, and end at once, drawing nothing, when the scale is 0 or `LocalEffectiveMotion` is `OFF`. |
 | T4 | **Rate limits are real time.** The 400 ms Reject limit, the flash limiter and the auto-repeat limit (D-053) use `MonotonicClock` (D-022) and are never multiplied by the animator scale. |
 | T5 | **Off never launches an animation.** Initial values equal end values (§3 tables), and no effect coroutine starts. Everything that Full schedules with `awaitOffset` is derived directly from state in the F0 composition instead: overlays and their interactive buttons, the displayed score, the NEW BEST style. Only haptics still go through the timeline (§6). The whole screen is in its end state on F0. |
@@ -443,6 +446,9 @@ class MoveTimeline {
     /** Suspends until the first frame >= origin(moveId) + ms × scale. Returns false if a newer moveId was
      *  published first (the caller then drops its work, see §4). Returns at once when the scale is 0. */
     suspend fun awaitOffset(moveId: Long, ms: Int): Boolean
+    /** Same, and runs onDue inside the due frame's callback, before that frame recomposes, so a (B) flip is
+     *  drawn on frame ⌈X⌉ itself (T2, D-224). onDue runs only when it returns true. */
+    suspend fun awaitOffset(moveId: Long, ms: Int, onDue: () -> Unit): Boolean
     /** Same, but the offset is never scaled (T6). */
     suspend fun awaitRealTime(moveId: Long, ms: Int): Boolean
     val latestOriginNanos: Long
@@ -562,7 +568,7 @@ The two tiles of a new game use this spec at the new-game offsets (§3.8). Resto
 ### 3.3 Merge pop detail
 
 - **Impulse tier per merged tile** (D-183). The tile's own merged value selects v0: value ≤ 64 → 6 s⁻¹; 128–512 → 8; 1024 → 10; ≥ 2048 → 12. A move merging 2+2 and 1024+1024 pops the 4 gently and the 2048 strongly. The move-level `maxMergedExp` still drives the ≥ 512 `Confirm` (D-065) and the "+N" pill (D-187).
-- **Neighbour cap** (D-183). `v0 = min(tier, (2 · gapPx / tilePx) / POP_PEAK_PER_VELOCITY)`. This keeps the scaled tile from reaching a resting neighbour (overflow per side ≤ gap). With D-075 geometry the cap only bites when the 20 dp gap clamp lowers the ratio below 0.106, which means tiles above about 189 dp (3×3 on boards ≥ 640 dp). Example: 3×3 on 720 dp gives tile 213.3 dp and gap 20 dp, so v0 ≤ 10.6.
+- **Neighbour cap** (D-183). `v0 = min(tier, (2 · gapPx / tilePx) / POP_PEAK_PER_VELOCITY)`. This keeps the scaled tile from reaching a resting neighbour (overflow per side ≤ gap). With D-075 geometry the cap only bites when the 20 dp gap clamp lowers the ratio below 0.106, which means tiles above about 189 dp (3×3 on boards ≥ 640 dp). Example: 3×3 on 720 dp gives tile 213.3 dp and gap 20 dp, so v0 ≤ 10.6. Only the ≥ 2048 tier (12) is above that, and no 3×3 game makes a 2048 (its largest tile is 1024, N² + 1 = 10, D-270), so in play the cap never bites at the 720 dp `BoardMax`. It stays as a guard; `MotionPlanTest` checks its arithmetic (`popImpulse(11)` on that geometry gives 10.63).
 - **Sheen** (merged value ≥ 128): white `drawRoundRect` over the tile fill inside the tile's own `drawBehind`, alpha 0.35 → 0 with `delayedSpec(fastEffects(), 80)`. It is tile-local, so it follows the tile if a new move slides it (D-187).
 - **Glow pulse** (merged value ≥ 512 and the palette defines a glow for that exponent): the `dropShadow` block reads `base + glowBoost`. glowBoost goes 0.25 → 0 with `delayedSpec(defaultEffects(), 80)`. Classic super tiles (≥ 4096) are flat (D-078), so they get no pulse.
 - **Flash limiter** (D-183): a tile that would get a sheen and/or a glow pulse counts once. At most 3 per rolling 1000 ms of real time across the board. Beyond that the tile still pops but gets no sheen or pulse. This enforces D-063's "nothing flashes more than 3 times per second" during key-repeat merging.
@@ -751,7 +757,9 @@ This covers cold start after the splash (D-112), `ActivityScenario.recreate()`, 
   - Every resolved color is `lerp(old, new, fraction)`: `TilePalette` roles and the M3 `ColorScheme` roles.
   - Tile and board colors are read in draw, so they invalidate draw only. Chrome colors necessarily recompose M3 consumers for those ~19 frames. This is the one documented exception to the recomposition budget (§7.2).
   - System-bar icon appearance switches at once at the start.
-- **Reduced and Off:** new colors on F0 (`DESIGN_SYSTEM.md` §5.8).
+- **Reduced and Off:** new colors on F0 (`DESIGN_SYSTEM.md` §5.8). M3 components that animate their own colours through the `MotionScheme` (the `TopAppBar` container) follow D-184's level scheme: one frame later under Off, the expressive effects spring under Reduced (D-251).
+- **Also lerped** under Full: `TileSkin.titleColor` and `tileOutline` (a missing outline is the other at alpha 0). The skin's geometry and numerals switch on F0. A crossfade interrupted by another change starts from the colours shown, frozen at that frame (D-251).
+- **No crossfade on restore** (§3.14): `App()` passes Motion Off to `GameTheme` until `GameViewModel.ready` and until a composition has shown the loaded appearance (`AppearanceUi.loaded`), so a saved appearance applied as the settings load never crossfades from the defaults, also when the settings and the game land in one frame (D-251, D-255).
 
 ### 3.16 Layout changes in a live composition
 
@@ -765,7 +773,8 @@ Bounds animate again for the next change that keeps the new arrangement.
 - **Full** (within one arrangement):
   - Board, panel and rails use `Modifier.animateBounds(lookaheadScope, boundsTransform = { _, _ -> GameMotion.overlaySpatial(Rect.VisibilityThreshold) })` (`DESIGN_SYSTEM.md` §5.8). A 300 px change settles in 399 ms.
   - The hint card exits with `shrinkVertically(overlaySpatial) + fadeOut(fastEffects)`.
-  - The direction pad enters and exits with `fadeIn/fadeOut(fastEffects)`. When its appearance switches the arrangement, the new arrangement composes it already visible, with no fade.
+  - The direction pad enters with `fadeIn(fastEffects)`; when it hides, the bottom region switches back to the controls bar on F0, because it holds either the pad row or the bar and a fading pad would draw over the returning bar (D-252). When its appearance switches the arrangement, the new arrangement composes it already visible, with no fade.
+  - A change of the motion level itself (Off until the game is ready and the loaded appearance has been shown on a cold start, D-251, D-255, or a system animator-scale change) composes the arrangement's chrome anew, statically, from its presented values, like an arrangement switch (D-252).
   - Tile labels are measured at the lookahead (target) tile size and drawn scaled by `currentTilePx / targetTilePx` while the bounds animate. That means at most one text measurement per (exponent, target size), and no text layout during the animation frames.
 - **Reduced and Off:** bounds snap; hint and pad appear and disappear on F0. An arrangement switch is static at every level, as above.
 
@@ -840,7 +849,7 @@ On F0 of board change k+1, in this order:
 
 | ID | Invariant |
 |---|---|
-| I1 | **No tile overlap during moves.** On every frame of a `Moved` change, any two drawn tiles with alpha ≥ 0.05 have disjoint rectangles. Moved, Static, Ghost and Merged tiles use their unscaled rects; Spawned tiles are scaled about the cell centre. The only allowed overlap is inside one merge group (a merged tile and its two ghosts). Pop overflow is bounded by §3.3's cap and is not counted |
+| I1 | **No tile overlap during moves.** On every frame of a `Moved` change, any two drawn tiles with alpha ≥ 0.05 have disjoint rectangles. Moved, Static, Ghost and Merged tiles use their unscaled rects; Spawned tiles are scaled about the cell centre. The allowed overlaps are inside one merge group (a merged tile and its two ghosts) and between a merged tile and a Moved or Ghost tile of the same change that is still sliding towards its own cell: the reveal at +80 precedes the slide's end, and the merged tile is drawn above sliders (I7, D-225). Pop overflow is bounded by §3.3's cap and is not counted |
 | I2 | **Visual order equals model order.** Along the move axis, the order of tiles in any row or column never changes during a slide (all tiles share one spring and one start frame) |
 | I3 | **The final frame equals the engine state.** After a change has settled (§9 settle bounds), every tile's `pos` equals its engine cell exactly. The rendered board bitmap equals the bitmap of the same state rendered from `BoardEvent.Restored` |
 | I4 | **No stale content.** On F0 of change k+1, nothing created by change k−1 or earlier is drawn, except the effects listed as "keep running" in §4.2 |
@@ -922,7 +931,7 @@ Both mappings were verified 2026-10-28 (class files). So the "API 24–29 fallba
 | 4 | ≥ 1 merge | `SegmentTick` | `SEGMENT_TICK` (26) | `CONTEXT_CLICK` (6) | `CONTEXT_CLICK` (6) | 80 ms | +0 | — |
 | 5 | Accepted move, no merge | none | | | | | | |
 | separate | Game over | `Reject` | `REJECT` (17) | `REJECT` (17) | `LONG_PRESS` (0) | 300 ms (frame 304); Ft after Keep going → `OVER` (§3.12) | +0 | once per entry into `OVER` (D-185) |
-| separate | Invalid move | `Reject` | 17 | 17 | none (D-185) | on the nudge's start frame | same | ≤ 1 per 400 ms real time |
+| separate | Invalid move | `Reject` | 17 | 17 | none (D-185) | on the nudge's start frame, its first animation frame (`nudgeOriginMs`; D-224) | same | ≤ 1 per 400 ms real time |
 | separate | Settings switch turned on | `ToggleOn` | `TOGGLE_ON` (21) | `CONTEXT_CLICK` (6) | `CONTEXT_CLICK` (6) | on toggle | same | — |
 | separate | Settings switch turned off | `ToggleOff` | `TOGGLE_OFF` (22) | `CLOCK_TICK` (4) | `CLOCK_TICK` (4) | on toggle | same | — |
 | — | Undo, New game, other buttons, Blocked outcomes | none | | | | | | |
@@ -1006,7 +1015,7 @@ fun Color.desaturate(s: Float): Color {
 | Event | Budget |
 |---|---|
 | Move (16 tiles + up to 16 ghosts on 4×4; up to 128 nodes on 8×8) | No layout or text measurement on animation frames; only placement, layer and draw |
-| Confetti | ≤ 160 particles. `step` ≤ 0.15 ms and draw ≤ 1.0 ms on device. JVM gate: 10,000 steps of 160 particles ≤ 200 ms total, and ≤ 1 KiB allocated over those steps after warm-up |
+| Confetti | ≤ 160 particles. `step` ≤ 0.15 ms and draw ≤ 1.0 ms on device. JVM gate: after 20,000 warm-up steps, the fastest of 5 batches of 10,000 steps of 160 particles takes ≤ 200 ms of the thread's CPU time, with a new burst every 132 steps (D-230, D-235); 10,000 steps allocate ≤ 1 KiB after warm-up |
 | Game over | Desaturation is arithmetic per tile in draw; the ripple is ≤ N² layer-scale animations |
 | Theme crossfade | ≤ 19 frames of chrome recomposition |
 
@@ -1096,9 +1105,11 @@ class MotionHarness private constructor(val rule: ComposeContentTestRule, val pr
     }
     /** Disposes the whole content and composes it again over the same vm, container, probe and haptics fake, which is
      *  what ActivityScenario.recreate() does to the activity-scoped GameViewModel (ARCHITECTURE.md §4.11, §3.14).
-     *  Uses compose-ui-test's StateRestorationTester.emulateSaveAndRestore() (launch sets content through it), so
-     *  rememberSaveable state survives. Returns on R0, the first frame of the new content; the probe then reads the
-     *  new composition. autoAdvance stays false; any frames the restoration needs are advanced one at a time. */
+     *  It saves the content's rememberSaveable state through a SaveableStateRegistry of its own, disposes the content and
+     *  composes it again restoring that state, advancing one frame per step (StateRestorationTester's
+     *  emulateSavedInstanceStateRestore() waits for idle between dispose and restore, which never composes while
+     *  autoAdvance is false; D-229). Returns on R0, the first frame of the new content; the probe then reads the new
+     *  composition. autoAdvance stays false. */
     fun recreate()
     companion object {
         fun launch(rule: ComposeContentTestRule, fixture: GameFixture, motion: MotionPreference,
@@ -1114,6 +1125,7 @@ class MotionHarness private constructor(val rule: ComposeContentTestRule, val pr
 - Tests use `createComposeRule(effectContext = …)` (v2, D-146). The v2 signature with `effectContext: CoroutineContext` was verified 2026-10-28 (class files).
 - For system-scale tests, pass `effectContext = object : MotionDurationScale { override val scaleFactor = s }` **and** `systemScale = s`, so Compose's scale and the app's effective level agree.
 - `MainTestClock` provides `autoAdvance`, `advanceTimeByFrame()`, `advanceTimeBy(ms, ignoreFrameDuration = false)` (rounds up to whole 16 ms frames) and `advanceTimeUntil` (verified 2026-10-28).
+- **Snapshot apply notifications.** With `autoAdvance` false, a state write made outside composition (the ViewModel's flows, the back stack, `recreate()`'s content switch) reaches the next frame only once the global snapshot's apply notifications are sent. The harness idles the main looper and then calls `Snapshot.sendApplyNotifications()` after a gesture, after a navigation action, between `recreate()`'s steps and while it waits for an origin, so the frame on which such a write appears does not depend on what earlier test classes in the same JVM left in Compose's notification scheduling. `staticRender()` keeps the event's `originMs`, and each test's cleanup settles the animations still running.
 - **Off-level tests** check F0 itself (T5). They call the ViewModel and then `rule.mainClock.advanceTimeByFrame()` once, instead of `act`. A board change under Off still publishes its origin on F1 (haptics use it), but an invalid move under Off publishes no nudge origin.
 
 ### 8.2 `MotionProbe` (test hook, like D-150's counter)
@@ -1123,19 +1135,19 @@ class MotionHarness private constructor(val rule: ComposeContentTestRule, val pr
 val LocalMotionProbe = staticCompositionLocalOf<MotionProbe?> { null }
 ```
 
-Components register value readers in a `DisposableEffect` only when the probe is non-null, so the production cost is a null check at composition. Tests read `probe.snapshot()`.
+Components register value readers in a `DisposableEffect` only when the probe is non-null, so the production cost is a null check at composition. Tests read `probe.snapshot()`. The readers are `registerTiles`, `registerBoard`, `registerFloats`, `registerHeader`, `registerEffects`, `registerOverlay`, `registerPalette`, `registerUndoIcon` and `registerRunning`; each returns a `ProbeRegistration` that the registering `onDispose` unregisters.
 
 | Field | Content |
 |---|---|
-| `originMs`, `nudgeOriginMs`, `overlayActionOriginMs`, `overlayOriginMs`, `paletteOriginMs`, `navOriginMs` | Latest `MoveTimeline` origin. First frame of the latest nudge or Reduced outline pulse (from the `animateTo` block's `startTimeNanos`). Ft of the latest card action (§3.12). O of the current overlay (§3.11, §3.13). First frame of the latest palette crossfade (§3.15). First frame of the latest `NavDisplay` transition (§3.17) |
+| `originMs`, `nudgeOriginMs`, `overlayActionOriginMs`, `overlayOriginMs`, `paletteOriginMs`, `navOriginMs` | Latest `MoveTimeline` origin. First frame of the latest nudge or Reduced outline pulse (from the `animateTo` block's `startTimeNanos`). Ft of the latest card action (§3.12). O of the current overlay (§3.11, §3.13). First frame of the latest palette crossfade (§3.15; a `withFrameNanos` launched undispatched beside the crossfade's first frame, because `animateTo`'s block has no `startTimeNanos`, D-251). First frame of the latest `NavDisplay` transition (§3.17) |
 | `boardLoaded`, `isAnyRunning` | First board composed; any registered `Animatable.isRunning` or alive particle |
 | `tiles` | `id`, `exp`, `kind` (the `TileUi` kind), `outgoing: Boolean` (true for a previous epoch's tile drawn by `OutgoingTilesLayer`, D-182), `x`/`y` (cells), `scale`, `alpha`, `sheen`, `glowBoost` |
 | `boardNudgeDp`, `outlinePulseAlpha`, `boardSaturation`, `boardFrameRate` | Board-level values |
 | `floats` | Per "+N": `text`, `alpha`, `translationYDp`, `scale` |
 | `displayedScore`, `displayedBest`, `bestChip` | Odometer values; label key, container fraction, star scale/rotation/alpha, sparkles alive |
-| `ring`, `confettiAlive` | Ring `scale`/`strokeDp`/`alpha`; alive particle count |
+| `ring`, `confettiAlive`, `scrimAlpha` | Ring `scale`/`strokeDp`/`alpha`; alive particle count; the scrim's alpha, also while no card is composed (`null` without a scrim, D-242) |
 | `overlay` | `kind` (WIN/OVER), `scrimAlpha`, `cardAlpha`, `cardScale`, `buttonAlphas`, `interactive` (`OverlayController.interactive`, D-200; buttons are always composed enabled), `badgeMorph`, `badgeScale`, `badgeRotationDeg` |
-| `paletteFraction`, `undoIconRotationDeg` | Theme crossfade fraction; undo icon |
+| `paletteFraction`, `undoIconRotationDeg` | Theme crossfade fraction; undo icon. Reported together as one `ProbeChrome`, but read from two readers (D-248): `registerPalette` (registered by `GameTheme`, M4.2) for the fraction and `registerUndoIcon` (registered by `GameControls`) for the rotation, so AC-THEME-1 needs no file of another work package. Each kind's most recently registered live reader answers; the chrome entry is `null` while neither is registered, and a missing half reads as its rest value (`paletteFraction` 1, rotation 0) |
 
 ### 8.3 Golden filmstrip (D-147; `DESIGN_SYSTEM.md` §10.4 rows 37–41)
 
@@ -1239,6 +1251,28 @@ Paths are under `app/src/test/kotlin/com/clayboicardi/game2048/`. All classes ar
 | `FIX_OVER_PRE_4` | 4 | `1,2,1,2, 2,3,2,1, 4,5,6,7, 0,1,2,3` | `PLAYING`, score 3012, best 24680, `rngState 0x2048` | LEFT: only row 3 moves (→ `1,2,3,0`); spawn exp 1 at index 15; becameOver; deflate origin (3,3), mMax 6, step 30 ms |
 | `FIX_WON_NO_MOVES_4` | 4 | `11,1,2,1, 1,2,1,2, 2,1,2,1, 1,2,1,2` | `WON`, last spawn index 15 | Keep going → `OVER` at once (D-036) |
 
+**Values the table leaves open, and the added fixtures** (as built in `MotionFixtures.kt`; recorded here so the table and the code agree). Every fixture is made by `fixtureGame(…)` (`DESIGN_SYSTEM.md` §10.3) with `undos` 0, `elapsedMs` 0, `seed` 0x2048 and, where no `rngState` is listed, the `rngState` of `Game.newGame(size, 0x2048)`. A fixture that a test undoes has a move count that is a multiple of 32 (`Game.SNAPSHOT_INTERVAL`), so the undo restores it exactly instead of replaying the synthetic history, which does not replay (D-216).
+
+| Fixture | Values chosen in code |
+|---|---|
+| `FIX_LONG_SLIDE_8` | 32 moves; score 0, best 0 |
+| `FIX_INVALID_4` | score 0, best 0 (the table's 10 moves) |
+| `FIX_NEW_BEST_4` | 32 moves, so an undo after LEFT restores it (AC-SCORE-5); seeded with `NEW_BEST_RECORDS` (best 100 on sizes 4–7). `newBestGame(n)` is the same board, score and best on an n×n board (n = 4…7): AC-SCORE-5's "separate runs" in one composition |
+| `FIX_OVER_PRE_4` | 32 moves |
+| `FIX_WON_NO_MOVES_4` | score 20480, best 24680, 992 moves. The table's "last spawn index 15" is not a `SavedGame` field, and no winning move leaves this board with that spawn (the 2048 at index 0 can only have merged in row 0 or column 0, which are full), so no assertion reads Keep going into `OVER`'s deflate origin here; `verifyWonNoMoves()` checks that no move is left and that Keep going gives `OVER` |
+
+| Added fixture | N | Cells | Other fields | Action → expected outcome | Used by |
+|---|---|---|---|---|---|
+| `FIX_WIN_PRE_UNDO_4` | 4 | as `FIX_WIN_PRE_4` | `FIX_WIN_PRE_4`'s fields at **896** moves | LEFT as `FIX_WIN_PRE_4` (spawn exp 1 at index 3, becameWon); its undo restores board, score and status | AC-WIN-8 (900 moves would undo through the synthetic history) |
+| `FIX_OVER_MERGE_4` | 4 | `1,2,1,2, 2,3,2,1, 4,5,6,7, 2,2,4,2` | `PLAYING`, score 3012, best 24680, 32 moves, `rngState 0x2048` | LEFT merges the two 4s of row 3 (+8), spawn exp 1 at index 15, becameOver; UP is invalid | FEATURES.md F14-AC4, F14-AC9 (the losing move with one merge) |
+| `FIX_FLASH_4` | 4 | `7,7,0,0, 7,7,0,0, 7,7,0,0`, then 4 × 0 | `PLAYING`, score 4000, best 100000, 32 moves, `rngState 0x2048` | LEFT makes three 256s (three flashes); UP then merges the top two into a 512 within the same 1000 ms | AC-MOVE-10 (the flash limiter) |
+| `FIX_POP_CAP_3` | 3 | `9,9,0, 0,0,0, 0,0,0` | `KEEP_PLAYING` (`keepGoingAtMove` 10, as 512 is past the 3×3 target), score 50000, best 100000, 32 moves, `rngState 0x2048` | LEFT merges the two 512s into a 1024, the largest 3×3 tile (D-270) | AC-MOVE-12 (the pop on a large 3×3 tile) |
+| `FIX_CHAIN_8` | 8 | row 0 = `4,3,2,1,1,0,0,0`, the rest 0 | `PLAYING`, score 1000, best 100000, 32 moves, `rngState 0x2048` (its three spawns stay out of row 0) | LEFT, RIGHT, LEFT, RIGHT score +4, +8, +16, +32 (`CHAIN_MOVES`) | AC-SCORE-3 (four merging moves with distinct deltas) |
+| `FIX_SLIDE_4` | 4 | as `FIX_INVALID_4` | `PLAYING`, score 0, best 0, 32 moves, `rngState 0x2048` | RIGHT slides both tiles with no merge (`MoveHaptic.NONE`); its undo restores it | the no-merge cases of `HapticsMapTest`, `MotionOffTest` and `FinalFrameEqualsStaticTest` |
+| `pairGame(n, exp, score, best)` | n | two `exp` tiles at indices 0 and 1, the rest 0 | `PLAYING`, score `score`, `bestAtStart` `best`, 32 moves, `rngState 0x2048` | LEFT merges them | `HapticsMapTest` and `MotionOffTest` (one per board size) |
+
+`ENGINE_SPAWN_CHECK` lists `FIX_FILM` LEFT, `FIX_POP_TIERS_4` LEFT, `FIX_LONG_SLIDE_8` RIGHT, `FIX_NEW_BEST_4` LEFT, `FIX_WIN_PRE_4` LEFT, `FIX_WIN_PRE_UNDO_4` LEFT, `FIX_OVER_PRE_4` LEFT and `FIX_OVER_MERGE_4` LEFT; each motion test calls `verify()` on the checks of the actions it plays.
+
 ---
 
 ## 9. Acceptance criteria
@@ -1258,7 +1292,7 @@ Unless stated otherwise: Robolectric SDK 36, Pixel7 qualifiers, Classic light, M
 - **AC-MOVE-4** Then at t = 80 the spawn has alpha 0. At t = 96 it has alpha 0.0537 and scale 0.6054.
 - **AC-MOVE-5** Then at t = 192 ghosts have alpha 1; at t = 208 ghosts have alpha 0.
 - **AC-MOVE-6** Then at t = 288 every non-ghost tile's position equals its engine cell exactly.
-- **AC-MOVE-7** Then at t = 432 nothing is running and `boardFrameRate == Default`. At t = 16 it was `High`.
+- **AC-MOVE-7** Then at t = 432 no board animation is running (every tile at its end values) and `boardFrameRate == Default`. At t = 16 it was `High`. The move's "+N" float still runs until t = 752 (§3.4), so `isAnyRunning` is not checked here (D-229).
 - **AC-MOVE-8** Given `FIX_POP_TIERS_4`, when LEFT commits, then at t = 128 (48 ms into the pops) the merged tiles' scales are 1.1039 (64), 1.1385 (512), 1.1732 (1024) and 1.2078 (4096).
 - **AC-MOVE-9** Then at t = 80:
   - the 512, 1024 and 4096 tiles have sheen 0.35; the 64 has 0;
@@ -1268,7 +1302,7 @@ Unless stated otherwise: Robolectric SDK 36, Pixel7 qualifiers, Classic light, M
   - at t = 112 the spawn has alpha 0 (delay 115);
   - at t = 128 its alpha is > 0;
   - on every frame from 0 to 448, I1 holds between the spawn (alpha ≥ 0.05, scaled rect) and the sliding tile.
-- **AC-MOVE-12** Given a 3×3 board with a 720 dp board size (qualifier `w800dp-h1280dp`) and two adjacent 1024 tiles, when they merge, then the 2048's peak scale is ≤ 1 + 2·gap/tile (≤ 1.188).
+- **AC-MOVE-12** Given a 3×3 board with a 720 dp board size (qualifier `w800dp-h1280dp`) and two adjacent 512 tiles, when they merge, then the 1024's peak scale is ≤ 1 + 2·gap/tile (≤ 1.188). The 1024 is the largest 3×3 tile and its tier the strongest 3×3 pop (D-270); two 1024s would make a 2048 that no 3×3 game makes, which the ViewModel replaces as a corrupt game.
 
 ### 9.2 "+N" and odometer (`ScoreMotionTest`)
 
@@ -1308,11 +1342,11 @@ Unless stated otherwise: Robolectric SDK 36, Pixel7 qualifiers, Classic light, M
 
 ### 9.5 New game, undo, size switch (`NewGameCascadeTest`, `UndoCrossfadeTest`, `SizeSwitchTest`)
 
-- **AC-NEW-1** Given `FIX_MID_4` (14 tiles), when New game is confirmed, then:
+- **AC-NEW-1** Given `FIX_MID_4` (13 tiles, so `step` = 15 and `T_in` = 195), when New game is confirmed, then:
   - outgoing tile i (reported by `MotionProbe` with `outgoing = true`) begins shrinking on the first frame ≥ 15·i ms (its scale is < 1 one frame later);
   - every tile of the new `BoardUi` has kind `Static` (D-182);
-  - incoming tile 0 has alpha 0 at t = 208 and > 0 at t = 224;
-  - incoming tile 1 has alpha 0 at t = 256 and > 0 at t = 272;
+  - incoming tile 0 has alpha 0 at t = 192 and > 0 at t = 208;
+  - incoming tile 1 has alpha 0 at t = 240 and > 0 at t = 256;
   - nothing is running at t = 624.
 - **AC-NEW-2** Then `displayedScore == 0` on F1, and the final frame equals the static render (I3).
 - **AC-UNDO-1** Given `FIX_FILM` after LEFT has settled, when Undo commits, then:
@@ -1390,13 +1424,13 @@ Times below are relative to Ft, the exit origin (§3.12; `MotionHarness.tapCardB
 
   Given `FIX_WIN_PRE_4` (Full), when LEFT commits, then `vm.overlay.value` has entry `Restored` at t = 0, and AC-WIN-4 and AC-WIN-5 still hold (the card composes at 688 and becomes interactive at 880). This case needs `OverlayController`, so the method gains it in M3 part 2; the `FIX_FILM` case passes from M3 part 1.
 - **AC-THEME-1** Given the Settings screen (Full), when Palette changes Classic → Neon, then `paletteFraction` is 0 on F1, 0.5402 at t = 64 and 0.9402 at t = 160, and nothing is running at t = 320. (Reduced/Off) Then the fraction is 1 on F0.
-- **AC-LAYOUT-1** Given the first-launch hint (Full), when "Got it" is tapped, then the board bounds change continuously (strictly increasing height on each frame from 16 to 304) and are final at t = 416. (Reduced/Off) Then the board is at its final bounds on F0.
-- **AC-LAYOUT-2** (`LayoutMotionTest.arrangementSwitchRendersSettledBoard`, with F18-AC13; §3.16, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED with the COMPACT header and, with Robolectric's zero insets, a 258 dp board) and LEFT committed, when touch exploration turns on at t = 48 (mid-slide, before the reveal, the spawn, the "+N" and the `SegmentTick` due at 80), so the pad shows and the arrangement becomes SCROLL (a 298 dp board), then:
-  - the board node measures 258 dp on every frame before the switch and 298 dp from the first frame that draws SCROLL; no frame shows another size;
+- **AC-LAYOUT-1** Given the first-launch hint (Full), when "Got it" is tapped, then the board bounds change continuously (the height rises on each frame from 16 until it first enters the `overlaySpatial` spring's overshoot band, first peak at 269 ms and 1.52 %, and stays within that band after it) and are final at t = 416, frames counted from the AC's origin F1 (D-252). (Reduced/Off) Then the board is at its final bounds on F0.
+- **AC-LAYOUT-2** (`LayoutMotionTest.arrangementSwitchRendersSettledBoard`, with F18-AC13; §3.16, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED with the COMPACT header and, with Robolectric's zero insets, a board of about 255 dp, 258 dp with the nominal chrome; D-251) and LEFT committed, when touch exploration turns on at t = 48 (mid-slide, before the reveal, the spawn, the "+N" and the `SegmentTick` due at 80), so the pad shows and the arrangement becomes SCROLL (a board of about 295 dp, 298 dp with the nominal chrome), then:
+  - the board node measures the STACKED board on every frame before the switch and the SCROLL board from the first frame that draws SCROLL, each `resolveGameLayout`'s over the measured chrome; no frame shows another size;
   - on that frame every probe tile is `Static` at its engine cell with scale 1 and alpha 1, `displayedScore == vm.header.value.score`, and nothing is running; no "+N" float exists on it or on any later frame;
   - `vm.board.value.moveId`, the move log and `probe.originMs` are unchanged, and through t = 1,000 the recorded haptics are exactly the move's one `SegmentTick`, at t = 80: the screen scope's `HapticsController` keeps it and `MoveTimeline` keeps the origin (§2.4, §3.16).
-  - Given then touch exploration off again with nothing running, the first frame that draws STACKED has the 258 dp board, with no intermediate size.
-- **AC-LAYOUT-3** (`LayoutMotionTest.arrangementSwitchAfterPresentedMoveReplaysNothing`, with F18-AC14; §3.16, D-047, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED, 258 dp board with zero insets), LEFT committed and run to t = 1,000, so the move was presented and has settled (nothing running, `vm.board.value` is `BoardPresenter.settled` of the move's board, `vm.header.value.lastDelta == 0`, and the haptics fake holds exactly the one `SegmentTick` at t = 80), when touch exploration turns on (the arrangement becomes SCROLL, 298 dp board) and, 1,000 ms after that switch with nothing running, turns off again (STACKED, 258 dp board), then after each switch, on every frame from the first frame that draws the new arrangement through 1,000 ms later:
+  - Given then touch exploration off again with nothing running, the first frame that draws STACKED has the STACKED board again (about 255 dp, 258 dp with the nominal chrome), with no intermediate size.
+- **AC-LAYOUT-3** (`LayoutMotionTest.arrangementSwitchAfterPresentedMoveReplaysNothing`, with F18-AC14; §3.16, D-047, D-095) Given `FIX_FILM` at `w411dp-h450dp` (Full; STACKED, with zero insets a board of about 255 dp, 258 dp with the nominal chrome; D-251), LEFT committed and run to t = 1,000, so the move was presented and has settled (nothing running, `vm.board.value` is `BoardPresenter.settled` of the move's board, `vm.header.value.lastDelta == 0`, and the haptics fake holds exactly the one `SegmentTick` at t = 80), when touch exploration turns on (the arrangement becomes SCROLL, a board of about 295 dp, 298 dp nominal) and, 1,000 ms after that switch with nothing running, turns off again (STACKED, about 255 dp), then after each switch, on every frame from the first frame that draws the new arrangement through 1,000 ms later:
   - every probe tile is `Static` at its engine cell with scale 1 and alpha 1, and no tile is `outgoing`;
   - `floats` is empty and `displayedScore == vm.header.value.score`;
   - `isAnyRunning` is false: the new arrangement's `BoardAnimator` launches nothing;
@@ -1442,7 +1476,8 @@ Times below are relative to Ft, the exit origin (§3.12; `MotionHarness.tapCardB
   - `SegmentTick` is recorded at t = 160.
 - **AC-SCALE-3** Given scale 2.0 and `FIX_WIN_PRE_4`, then:
   - confetti alive is 0 at t = 384 and 96 at t = 400 (emission at ⌈2 × 200⌉);
-  - at t = 784 (192 ms of simulated time) every particle is within 2 dp of the same particle at scale 1 after 192 ms (t = 400). The only difference is the integration step: 8 ms versus 16 ms of simulated time;
+  - at t = 784 (192 ms of simulated time) every particle is within 4 dp of the same particle at scale 1 after 192 ms (t = 400). The only difference is the integration step: 8 ms versus 16 ms of simulated time (after a first step of 16 and 32 ms that covers the emission frame), which by itself puts up to 3.5 dp between the two with the step scheme of §3.11 (D-243);
+  - on every frame from t = 416 to 4816, confetti alive equals the count of the same burst stepped as the canvas steps it at scale 2: no step on t = 416, 16 ms of simulated time on t = 432, then 8 ms per frame. So the live canvas steps the sequence that the trajectories above use (D-247), and all 96 are alive through t = 2416;
   - confetti alive is 0 by t = 4816.
 - **AC-SCALE-4** (`SettingsScreenTest`, M4) Given system scale 0 (fake `AnimatorScaleSource`), the Settings Motion row is disabled with summary `motion_off_system`.
 
@@ -1460,12 +1495,12 @@ Times below are relative to Ft, the exit origin (§3.12; `MotionHarness.tapCardB
   - all three are applied to successive states (D-052);
   - on each later commit's F1, every persisting tile starts exactly at its previous target;
   - a spawn whose alpha was 0 at the later commit has scale 1 and alpha 1 on that F1.
-- **AC-CONS-3** (`FinalFrameEqualsStaticTest`) For move, merge, win, game over, undo, new game and size switch: after the event's settle bound, the root bitmap equals the bitmap after `presenter.reemitStatic()` (a test-only call that re-emits the current state as `BoardEvent.Restored`).
+- **AC-CONS-3** (`FinalFrameEqualsStaticTest`) For move, merge, win, game over, undo, new game and size switch: after the event's settle bound, the root bitmap equals `MotionHarness.staticRender()`: the content composed anew after the settle bound, which draws the ViewModel's settled state as `BoardEvent.Restored` (D-229).
 - **AC-PERF-1** (`TileRecompositionTest.noTileRecompositionDuringSlide`, with F13-AC12; D-150) Given `FIX_FILM`, when LEFT commits, then every tile key composes at most once on F0 and 0 times from F1 to t = 432.
 - **AC-PERF-2** (`BoardRecompositionBudgetTest`) Then `BoardView` recomposes ≤ 2 times and `GameScreen` 0 times from F0 to t = 448.
 - **AC-PERF-3** (`ConfettiSystemTest`) Given seed 0x2048 and 160 particles:
-  - 10,000 `step(1/60f)` calls take ≤ 200 ms in total;
-  - they allocate ≤ 1 KiB after 100 warm-up steps;
+  - after 20,000 untimed warm-up steps, the fastest of 5 batches of 10,000 `step(1/60f)` calls takes ≤ 200 ms of the calling thread's CPU time; a new burst of 160 immortal particles starts every 132 steps, the longest confetti life, outside the timing (D-230, D-235);
+  - 10,000 calls on one burst allocate ≤ 1 KiB after 100 warm-up steps;
   - a particle with v = (500, −1000) dp/s stepped 30 × 1/60 s ends at x = 148.86 ± 0.5 dp, y = −135.22 ± 0.5 dp, vy = 203.02 ± 0.5 dp/s (the discrete scheme of §3.11; the closed form is −142.26).
 - **AC-PERF-4** (`ConfettiSystemTest`) Given the same seed twice, then the particle arrays are bit-identical after 120 steps.
 - **AC-GOLD-1** (`MotionFilmstripTest.mergeAndSpawnFilmstrip`, with F13-AC8) The five filmstrip goldens (rows 37–41, D-204) match exactly in verify mode, and their content matches §8.3 when Read.
@@ -1519,6 +1554,8 @@ All paths are under `app/src/main/kotlin/com/clayboicardi/game2048/` unless stat
 
 ## Open issues
 
-- **AC-BACK-1 predictive back under Robolectric** (verify at first use). Whether Robolectric can drive `OnBackPressedDispatcher.dispatchOnBackStarted/Progressed` into Nav3 is checked when `PredictiveBackTest` is written. Fallback (§9.9): replace AC-BACK-1 with a unit test of `GameNavTransitions.predictivePop(level, edge)` and record it in the PR body.
+None open.
+
+Resolved in M3: **AC-BACK-1 predictive back under Robolectric.** Robolectric drives `OnBackPressedDispatcher.dispatchOnBackStarted`, `dispatchOnBackProgressed`, `dispatchOnBackCancelled` and `onBackPressed` into Nav3 1.2.0's `NavDisplay` at SDK 36, so `PredictiveBackTest` proves AC-BACK-1 as written and the §9.9 fallback (a unit test of `GameNavTransitions.predictivePop(level, edge)`) was not used.
 
 Resolved during planning: MS-OI-1 → D-182; MS-OI-2, -3, -4, -6, -8, -13, -18, -19 → D-183; MS-OI-5 → D-184; MS-OI-7, -17 → D-185; MS-OI-9 → D-187; MS-OI-10 → not built (§7.6); MS-OI-11 → removed by D-184; MS-OI-12 → D-063 kept (§2.1); MS-OI-14 → TC-7, D-210; MS-OI-15 → D-185; MS-OI-16 → D-204.

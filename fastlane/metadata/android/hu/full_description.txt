@@ -1,0 +1,32 @@
+A 2048 a klasszikus csúsztatós lapkás fejtörő, az alapoktól újraírva, gyors, natív Android-alkalmazásként. Csúsztassa az ujját, és az összes lapka egyszerre elmozdul. Két azonos számú lapka eggyé olvad össze. Érje el a 2048-as lapkát, aztán folytassa, ameddig csak tudja.
+
+Beépített adatvédelem
+• Teljesen offline működik: az alkalmazásnak nincs internet-hozzáférése.
+• Nincsenek hirdetések, nincs nyomkövetés, analitika és fiók.
+• Nincsenek futásidejű engedélyek. A játékai és a statisztikái az Ön eszközén maradnak.
+
+Játsszon úgy, ahogy szeretne
+• Táblaméretek 3×3-tól 8×8-ig. Minden méretnek saját mentett játéka, rekordja és statisztikája van. A 3×3-as táblán a cél 256.
+• Korlátlan visszavonás, a játék vége után is. A visszavonás ugyanazt a következő lapkát hozza vissza, így kijavíthatja a tévedéseit anélkül, hogy a szerencséje megváltozna. A visszavonásokat a játék számolja, és egy külön rekord követi a visszavonás nélkül játszott játékokat.
+• A játék minden lépés után mentésre kerül, és pontosan ott folytatódik, ahol abbahagyta.
+• Statisztika minden táblamérethez: lejátszott játékok, győzelmek, legnagyobb lapka, átlagos pontszám, összes lépés, játékidő és felhasznált visszavonások.
+
+Megjelenés
+• Két színpaletta, a Classic Refined és a Neon Arcade, világos és sötét témával, valamint nagy kontrasztú beállítással.
+• Gördülékeny animációk Teljes, Csökkentett és Ki beállítással. Ha az Android beállításaiban kikapcsolja az animációkat, itt is kikapcsolnak.
+• Választható haptikus visszajelzés, állítható csúsztatási érzékenység és lépésidőzítés, valamint teljes képernyős mód, amely elrejti a rendszersávokat.
+• Elrendezések telefonokra, táblagépekre, összehajtható eszközökre, fekvő tájolásra és asztali ablakokra.
+
+Akadálymentesség
+• Teljes TalkBack-támogatás: minden mező felolvasható, az alkalmazás minden lépést bemond, és iránygombok jelennek meg, amíg a TalkBack be van kapcsolva.
+• Játék billentyűzettel, iránykereszttel vagy kontrollerrel: nyílbillentyűk, WASD vagy HJKL a mozgatáshoz; U, Ctrl+Z vagy Backspace a visszavonáshoz.
+• Nagy betűméretnél is olvasható szöveg, valamint kontrasztra és színlátási zavarokra ellenőrzött lapkaszínek.
+
+Új alkalmazás
+Ez egy új alkalmazás új csomagnévvel (com.clayboicardi.game2048); a régi alkalmazás mellette telepítve maradhat; a pontszámok nem kerülnek át.
+
+Nyílt forráskód
+Ingyenes és nyílt forráskódú, MIT-licenc alatt: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Közreműködők
+Az eredeti 2048 játékot Gabriele Cirulli készítette. Az eredeti 2048 Android-alkalmazást Paul Sarbinowski (uberspot), valamint az alkalmazás közreműködői és fordítói készítették. Ennek a verziónak a fordításai gépi segítséggel készültek; a javításokat szívesen fogadjuk a GitHubon.

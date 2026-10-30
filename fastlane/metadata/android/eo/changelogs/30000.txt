@@ -1,0 +1,6 @@
+Versio 3.0.0 estas plena reverkado kiel denaska aplikaĵo kun nova pakaĵnomo. Ĝi instaliĝas apud la originala aplikaĵo 2048; poentoj el la originala aplikaĵo ne transiras.
+• Tabulaj grandecoj de 3×3 ĝis 8×8
+• Senlima malfaro, eĉ post la fino de la ludo
+• Etosoj Neon Arcade, malhela kaj altkontrasta
+• Statistiko, klavaro kaj subteno de TalkBack
+• Ankoraŭ senkonekta: sen reklamoj, sen spurado

@@ -1,0 +1,32 @@
+2048 je klasična uganka s premikanjem ploščic, na novo izdelana kot hitra izvorna aplikacija za Android. Povlecite, da hkrati premaknete vse ploščice. Dve ploščici z enakim številom se združita v eno. Dosezite ploščico 2048 in nato nadaljujte, kolikor daleč lahko.
+
+Zasebnost že v zasnovi
+• Deluje povsem brez povezave: aplikacija nima dostopa do interneta.
+• Brez oglasov, brez sledenja, brez analitike in brez računov.
+• Brez dovoljenj med izvajanjem. Vaše igre in statistika ostanejo v vaši napravi.
+
+Igrajte po svoje
+• Velikosti plošče od 3×3 do 8×8. Vsaka velikost ima svojo shranjeno igro, najboljši rezultat in statistiko. Na plošči 3×3 je cilj 256.
+• Neomejena razveljavitev, tudi po koncu igre. Razveljavitev vrne isto naslednjo ploščico, zato popravi spodrsljaje, ne da bi spremenila vašo srečo. Razveljavitve se štejejo, ločen rekord pa beleži igre, odigrane brez razveljavitev.
+• Igra se shrani po vsaki potezi in se nadaljuje natanko tam, kjer je bila prekinjena.
+• Statistika za vsako velikost plošče: odigrane igre, zmage, najboljša ploščica, povprečni rezultat, skupno število potez, čas igranja in uporabljene razveljavitve.
+
+Videz in občutek
+• Dve paleti, Classic Refined in Neon Arcade, v svetli in temni temi ter možnost visokega kontrasta.
+• Gladke animacije z nastavitvami Polne, Zmanjšane in Izklopljene. Če animacije izklopite v nastavitvah Androida, se izklopijo tudi tukaj.
+• Izbirni haptični odziv, nastavljiva občutljivost vlečenja in trenutek poteze ter celozaslonski način, ki skrije sistemske vrstice.
+• Postavitve za telefone, tablice, zložljive naprave, ležeči način in okna na računalniku.
+
+Dostopnost
+• Popolna podpora za TalkBack: vsako polje je mogoče prebrati, vsaka poteza je napovedana, ko je TalkBack vklopljen, pa se prikažejo smerni gumbi.
+• Igrajte s tipkovnico, smernimi tipkami (D-pad) ali igralnim krmilnikom: puščične tipke, WASD ali HJKL za premikanje; U, Ctrl+Z ali Backspace za razveljavitev.
+• Besedilo, ki ostane berljivo tudi pri velikih pisavah, in barve ploščic, preverjene glede kontrasta in motenj barvnega vida.
+
+Nova aplikacija
+To je nova aplikacija z novim imenom paketa (com.clayboicardi.game2048); stara aplikacija lahko ostane nameščena poleg nje; rezultati se ne prenesejo.
+
+Odprta koda
+Prosta in odprtokodna programska oprema pod licenco MIT: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Zasluge
+Izvirno igro 2048 je ustvaril Gabriele Cirulli. Izvirno aplikacijo 2048 za Android je ustvaril Paul Sarbinowski (uberspot) s sodelavci in prevajalci. Prevodi te različice so nastali s pomočjo strojnega prevajanja; popravki so dobrodošli na GitHubu.

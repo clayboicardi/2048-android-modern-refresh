@@ -1,0 +1,32 @@
+2048 est le casse-tête classique à tuiles coulissantes, reconstruit de zéro en application Android native et rapide. Balayez pour déplacer toutes les tuiles à la fois. Deux tuiles affichant le même nombre fusionnent en une seule. Atteignez la tuile 2048, puis continuez aussi loin que possible.
+
+Confidentialité dès la conception
+• Fonctionne entièrement hors ligne : l’application n’a pas accès à Internet.
+• Pas de publicité, pas de pistage, pas d’outil d’analyse et pas de compte.
+• Aucune autorisation d’exécution. Vos parties et vos statistiques restent sur votre appareil.
+
+Jouez à votre façon
+• Tailles de grille de 3×3 à 8×8. Chaque taille conserve sa propre partie sauvegardée, son meilleur score et ses statistiques. En 3×3, l’objectif est 256.
+• Annulation illimitée, même une fois la partie terminée. L’annulation ramène la même tuile suivante : elle corrige les erreurs d’inattention sans changer votre chance. Les annulations sont comptées, et un meilleur score distinct suit les parties jouées sans annulation.
+• Votre partie est sauvegardée après chaque coup et reprend exactement là où vous l’avez laissée.
+• Statistiques pour chaque taille de grille : parties jouées, victoires, meilleure tuile, score moyen, total des coups, temps de jeu et annulations utilisées.
+
+Apparence et sensations
+• Deux palettes, Classic Refined et Neon Arcade, en thème clair et sombre, plus une option à contraste élevé.
+• Des animations fluides, réglables sur Complètes, Réduites ou Désactivées. Si vous désactivez les animations dans les paramètres d’Android, elles sont aussi désactivées ici.
+• Retour haptique facultatif, sensibilité du balayage et déclenchement du coup réglables, et un mode plein écran qui masque les barres système.
+• Mises en page pour téléphones, tablettes, appareils pliables, mode paysage et fenêtres sur ordinateur.
+
+Accessibilité
+• Prise en charge complète de TalkBack : chaque case peut être lue, chaque coup est annoncé et un pavé directionnel apparaît lorsque TalkBack est activé.
+• Jouez au clavier, à la croix directionnelle ou à la manette : touches fléchées, WASD ou HJKL pour déplacer ; U, Ctrl+Z ou Retour arrière pour annuler.
+• Un texte qui reste lisible avec de grandes tailles de police, et des couleurs de tuiles vérifiées pour le contraste et les troubles de la vision des couleurs.
+
+Une nouvelle application
+Il s’agit d’une nouvelle application avec un nouveau nom de package (com.clayboicardi.game2048) ; l’ancienne application peut rester installée à côté ; les scores ne sont pas transférés.
+
+Open source
+Libre et open source sous licence MIT : https://github.com/clayboicardi/2048-android-modern-refresh
+
+Crédits
+Le jeu 2048 original est de Gabriele Cirulli. L’application Android 2048 d’origine est de Paul Sarbinowski (uberspot), de ses contributeurs et de ses traducteurs. Les traductions de cette version sont faites avec l’aide de la traduction automatique ; les corrections sont les bienvenues sur GitHub.

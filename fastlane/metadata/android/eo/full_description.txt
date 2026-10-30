@@ -1,0 +1,32 @@
+2048 estas la klasika puzlo kun glitantaj kaheloj, rekreita de nulo kiel rapida denaska Android-aplikaĵo. Ŝovu por movi ĉiujn kahelojn samtempe. Du kaheloj kun la sama nombro kunfandiĝas en unu. Atingu la kahelon 2048, kaj poste daŭrigu kiel eble plej longe.
+
+Privateco laŭ la dezajno
+• Funkcias tute senkonekte: la aplikaĵo ne havas aliron al la interreto.
+• Neniuj reklamoj, neniu spurado, neniu analizado kaj neniuj kontoj.
+• Neniuj rultempaj permesoj. Viaj ludoj kaj statistiko restas en via aparato.
+
+Ludu laŭ via maniero
+• Tabulaj grandecoj de 3×3 ĝis 8×8. Ĉiu grandeco havas sian propran konservitan ludon, plej altan poentaron kaj statistikon. Sur 3×3 la celo estas 256.
+• Senlima malfaro, eĉ post la fino de la ludo. Malfaro revenigas la saman sekvan kahelon, do ĝi korektas erarojn sen ŝanĝi vian bonŝancon. Malfaroj estas kalkulataj, kaj aparta plej alta poentaro registras ludojn luditajn sen malfaro.
+• Via ludo estas konservata post ĉiu movo kaj daŭras ĝuste tie, kie vi lasis ĝin.
+• Statistiko por ĉiu grandeco de la tabulo: luditaj ludoj, venkoj, plej bona kahelo, meza poentaro, movoj entute, ludotempo kaj uzitaj malfaroj.
+
+Aspekto kaj sento
+• Du paletroj, Classic Refined kaj Neon Arcade, en helaj kaj malhelaj etosoj, plus altkontrasta elekto.
+• Glataj animacioj kun la agordoj Plenaj, Reduktitaj kaj Malŝaltitaj. Se vi malŝaltas la animaciojn en la agordoj de Android, ili malŝaltiĝas ankaŭ ĉi tie.
+• Nedeviga haptika reago, alĝustigebla sentemo de ŝovo kaj momento de la movo, kaj tutekrana reĝimo, kiu kaŝas la sistemajn bretojn.
+• Aranĝoj por telefonoj, tabulkomputiloj, faldeblaj aparatoj, horizontala orientiĝo kaj labortablaj fenestroj.
+
+Alirebleco
+• Plena subteno de TalkBack: ĉiu ĉelo estas legebla, ĉiu movo estas anoncata, kaj direktobutonaro aperas, dum TalkBack estas ŝaltita.
+• Ludu per klavaro, D-pad aŭ ludregilo: sagoklavoj, WASD aŭ HJKL por movi; U, Ctrl+Z aŭ Retropaŝo por malfari.
+• Teksto, kiu restas legebla ĉe grandaj tiparograndoj, kaj kahelkoloroj kontrolitaj pri kontrasto kaj kolorvidaj malfortoj.
+
+Nova aplikaĵo
+Ĉi tio estas nova aplikaĵo kun nova pakaĵnomo (com.clayboicardi.game2048); la malnova aplikaĵo povas resti instalita apude; poentoj ne transiras.
+
+Malfermita kodo
+Libera kaj malfermitkoda laŭ la permesilo MIT: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Dankoj
+La originalan ludon 2048 kreis Gabriele Cirulli. La originalan Android-aplikaĵon 2048 kreis Paul Sarbinowski (uberspot) kaj ĝiaj kontribuantoj kaj tradukantoj. La tradukoj de ĉi tiu versio estas faritaj kun helpo de maŝina tradukado; korektoj estas bonvenaj ĉe GitHub.

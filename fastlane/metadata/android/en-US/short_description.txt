@@ -1,0 +1,1 @@
+Classic 2048 sliding-tile puzzle. Offline, no ads, no tracking.

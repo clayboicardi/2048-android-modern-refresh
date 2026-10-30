@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.ttf binary
+*.p12 binary
+*.jar binary
+app/src/main/res/raw/ofl_google_sans_flex.txt -text

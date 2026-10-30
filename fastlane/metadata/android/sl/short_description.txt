@@ -1,0 +1,1 @@
+Klasična uganka 2048 s premikanjem ploščic. Brez povezave, oglasov in sledenja.

@@ -1,0 +1,32 @@
+O 2048 é o clássico quebra-cabeças de peças deslizantes, recriado de raiz como uma aplicação Android nativa e rápida. Deslize o dedo para mover todas as peças de uma vez. Duas peças com o mesmo número juntam-se numa só. Chegue à peça 2048 e continue até onde conseguir.
+
+Privacidade desde a conceção
+• Funciona totalmente offline: a aplicação não tem acesso à Internet.
+• Sem anúncios, sem rastreio, sem análises e sem contas.
+• Nenhuma autorização em tempo de execução. Os seus jogos e estatísticas ficam no seu dispositivo.
+
+Jogue à sua maneira
+• Tamanhos de tabuleiro de 3×3 a 8×8. Cada tamanho tem o seu próprio jogo guardado, a sua melhor pontuação e as suas estatísticas. No 3×3, o objetivo é 256.
+• Desfazer ilimitado, mesmo depois do fim do jogo. Desfazer traz de volta a mesma peça seguinte, por isso corrige deslizes sem mudar a sua sorte. As jogadas desfeitas são contadas, e uma melhor pontuação à parte regista as partidas jogadas sem desfazer.
+• O seu jogo é guardado após cada jogada e continua exatamente onde o deixou.
+• Estatísticas para cada tamanho de tabuleiro: partidas jogadas, vitórias, melhor peça, pontuação média, total de jogadas, tempo de jogo e jogadas desfeitas.
+
+Aspeto e sensação
+• Duas paletas, Classic Refined e Neon Arcade, nos temas claro e escuro, além de uma opção de alto contraste.
+• Animações fluidas com as opções Completas, Reduzidas e Desativadas. Desativar as animações nas definições do Android também as desativa aqui.
+• Resposta tátil opcional, sensibilidade do deslize e momento da jogada ajustáveis, e um modo de ecrã inteiro que oculta as barras do sistema.
+• Esquemas para telemóveis, tablets, dobráveis, modo horizontal e janelas de computador.
+
+Acessibilidade
+• Suporte total ao TalkBack: cada casa pode ser lida, cada jogada é anunciada e aparece um painel direcional quando o TalkBack está ativado.
+• Jogue com teclado, cruz direcional ou comando: teclas de seta, WASD ou HJKL para mover; U, Ctrl+Z ou Retrocesso para desfazer.
+• Texto que continua legível com tamanhos de letra grandes e cores das peças verificadas quanto ao contraste e às deficiências na visão das cores.
+
+Uma nova aplicação
+Esta é uma nova aplicação com um novo nome de pacote (com.clayboicardi.game2048); a aplicação antiga pode continuar instalada lado a lado; as pontuações não são transferidas.
+
+Código aberto
+Livre e de código aberto ao abrigo da Licença MIT: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Créditos
+O jogo 2048 original é de Gabriele Cirulli. A aplicação Android 2048 original é de Paul Sarbinowski (uberspot) e dos seus colaboradores e tradutores. As traduções desta versão são feitas com a ajuda de tradução automática; as correções são bem-vindas no GitHub.

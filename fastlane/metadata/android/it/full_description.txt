@@ -1,0 +1,32 @@
+2048 è il classico puzzle a tessere scorrevoli, ricostruito da zero come app Android nativa e veloce. Scorri per muovere tutte le tessere insieme. Due tessere con lo stesso numero si uniscono in una sola. Raggiungi la tessera 2048, poi continua fin dove riesci.
+
+Privacy fin dalla progettazione
+• Funziona completamente offline: l’app non ha accesso a Internet.
+• Niente pubblicità, niente tracciamento, niente analisi e nessun account.
+• Nessuna autorizzazione in fase di esecuzione. Le tue partite e le tue statistiche restano sul tuo dispositivo.
+
+Gioca a modo tuo
+• Dimensioni della griglia da 3×3 a 8×8. Ogni dimensione ha la propria partita salvata, il proprio miglior punteggio e le proprie statistiche. Su 3×3 l’obiettivo è 256.
+• Annullamento illimitato, anche a partita finita. Annullare riporta la stessa tessera successiva, così correggi le sviste senza cambiare la tua fortuna. Gli annullamenti vengono contati, e un miglior punteggio separato registra le partite giocate senza annullamenti.
+• La partita viene salvata dopo ogni mossa e riprende esattamente da dove l’hai lasciata.
+• Statistiche per ogni dimensione della griglia: partite giocate, vittorie, tessera migliore, punteggio medio, mosse totali, tempo di gioco e annullamenti usati.
+
+Aspetto e sensazioni
+• Due tavolozze, Classic Refined e Neon Arcade, con temi chiaro e scuro, più un’opzione ad alto contrasto.
+• Animazioni fluide con le impostazioni Complete, Ridotte e Disattivate. Se disattivi le animazioni nelle impostazioni di Android, si disattivano anche qui.
+• Feedback aptico facoltativo, sensibilità dello scorrimento e tempistica della mossa regolabili, e una modalità a schermo intero che nasconde le barre di sistema.
+• Layout per telefoni, tablet, pieghevoli, orientamento orizzontale e finestre desktop.
+
+Accessibilità
+• Supporto completo per TalkBack: ogni cella può essere letta, ogni mossa viene annunciata e, con TalkBack attivo, compare un pad direzionale.
+• Gioca con tastiera, croce direzionale o controller: tasti freccia, WASD o HJKL per muovere; U, Ctrl+Z o Backspace per annullare.
+• Testo che resta leggibile anche con caratteri grandi, e colori delle tessere verificati per il contrasto e per le alterazioni della visione dei colori.
+
+Una nuova app
+Questa è una nuova app con un nuovo nome di pacchetto (com.clayboicardi.game2048); la vecchia app può restare installata accanto a questa; i punteggi non vengono trasferiti.
+
+Open source
+Libera e open source con licenza MIT: https://github.com/clayboicardi/2048-android-modern-refresh
+
+Riconoscimenti
+Il gioco 2048 originale è di Gabriele Cirulli. L’app Android 2048 originale è di Paul Sarbinowski (uberspot) e dei suoi collaboratori e traduttori. Le traduzioni di questa versione sono realizzate con l’aiuto della traduzione automatica; le correzioni sono benvenute su GitHub.

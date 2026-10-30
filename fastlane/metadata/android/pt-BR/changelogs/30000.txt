@@ -1,0 +1,6 @@
+A versão 3.0.0 é uma reescrita completa como app nativo, com um novo nome de pacote. Ela é instalada ao lado do app 2048 original; as pontuações do app original não são transferidas.
+• Tamanhos de tabuleiro de 3×3 a 8×8
+• Desfazer ilimitado, mesmo depois do fim de jogo
+• Temas Neon Arcade, escuro e de alto contraste
+• Estatísticas, teclado e suporte ao TalkBack
+• Continua offline: sem anúncios, sem rastreamento

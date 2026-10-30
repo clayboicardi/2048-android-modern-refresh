@@ -1,0 +1,93 @@
+{
+  "credits": [
+    {
+      "name": "Gabriele Cirulli",
+      "role": "original game"
+    },
+    {
+      "name": "Paul Sarbinowski (uberspot)",
+      "role": "Android port"
+    },
+    {
+      "name": "Contributors",
+      "role": "alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark159123, Diogo Pereira, djura-san, fraggerfox, gurshabad, Hans-Christoph Steiner, Igor A, Laura Arjona Reina, lishoujun, Matej, Mauro Scomparin, Mongata, Oluwaleke Fakorede, Paul Verest, pierre, Poussinou, princessruthie, Robin van der Vliet, RyuzakiKK, shubham1701, SMahdiFaghih, Steven Lee, TacoTheDank, TeknoCepni, Vladyslav Pohrebniakov, xin, zygimantus"
+    },
+    {
+      "name": "clayboicardi",
+      "role": "native rewrite"
+    }
+  ],
+  "releases": [
+    {
+      "version": "2.2",
+      "versionCode": 25,
+      "changes": [
+        "(2.2) Bumped minSdkVersion from 8 (Froyo) to 14 (ICS)",
+        "(2.2) Update changelog library that had breaking changes",
+        "(2.1) Detect and utilise the phone's system language (thank you BValeo)",
+        "(2.1) Added Slovenian translation (thank you urmatej)",
+        "(2.1) Added Czech translation (thank you Mongata)",
+        "(2.1) Added Italian translation (thank you RyuzakiKK)"
+      ]
+    },
+    {
+      "version": "2.1",
+      "versionCode": 24,
+      "changes": [
+        "Bad build. This version of the app crashed on startup due to a user-made (*cough* Taco *cough*) error that occurred when rearranging the project. Changes introduced in 2.1 will be mentioned in the 2.2 changelog."
+      ]
+    },
+    {
+      "version": "2.08",
+      "versionCode": 23,
+      "changes": [
+        "Added Esperanto and Dutch (thx Robin van der Vliet)",
+        "Fix bug with floating windows (thx diogopereira)"
+      ]
+    },
+    {
+      "version": "2.06",
+      "versionCode": 22,
+      "changes": [
+        "Limit undo button to last 50 moves to avoid using too much memory"
+      ]
+    },
+    {
+      "version": "2.05",
+      "versionCode": 21,
+      "changes": [
+        "Added changelog in app"
+      ]
+    },
+    {
+      "version": "2.0",
+      "versionCode": 20,
+      "changes": [
+        "Added undo button (thx to fraggerfox on GitHub)"
+      ]
+    },
+    {
+      "version": "1.96",
+      "versionCode": 19,
+      "changes": [
+        "Rebuilt APK with new buildTools"
+      ]
+    },
+    {
+      "version": "1.95",
+      "versionCode": 18,
+      "changes": [
+        "Added German, Spanish, Polish, Serbian translations (thx to contributors on GitHub)",
+        "Added experimental night mode button",
+        "Minor optimizations to responsiveness"
+      ]
+    },
+    {
+      "version": "1.91",
+      "versionCode": 18,
+      "changes": [
+        "Added Greek and French app translation; minor build improvements"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+Klasszikus 2048 csúsztatós fejtörő. Offline, hirdetés és nyomkövetés nélkül.

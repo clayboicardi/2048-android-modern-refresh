@@ -60,7 +60,7 @@ What it does not restate: build files and the manifest (`ARCHITECTURE.md` §2, �
 9. The Apache-2.0 text from `https://www.apache.org/licenses/LICENSE-2.0.txt`: 11,358 bytes, sha256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`.
 10. The final `LICENSE` of §4.2: 1,151 bytes, sha256 `ad96d837d59c50cb3c8e23a17d7ee19a396c5a1a6c4bc952a269896fcbdbfd19`.
 11. The en-US store texts of §2.3 measure 4 / 63 / 2,295 / 345 characters (limits 30 / 80 / 4,000 / 500). The listing and image checker (now `check_store_listing` and `check_store_images` in `QUALITY.md` §1.16) passed on a synthetic 22-locale tree and failed, as intended, on an untranslated file, an RGBA feature graphic and Persian digits.
-12. Legacy contributors (§4.5) come from `git log --format='%an' e097460` and `git -C assets/2048 log --format='%an' fc1ef4f..7a477eb`. Translators per locale come from `git log --follow` on each `res/values-xx/strings.xml`.
+12. Legacy contributors (§4.5) come from `git log --format='%an' e097460` and `git -C assets/2048 log --format='%an' fc1ef4f..7a477eb`. Translators per locale come from `git log --follow` on each `res/values-xx/strings.xml`. All of these run on the full history: a clone that is shallow at `8a04f5d` misses `pierre`, the French translator (`74990c4`), and makes `8a04f5d` look like the creator of `values-fr` (D-213).
 13. Android developer verification (developer.android.com, pages dated 2026-09-30 and 2026-10-23): since 2026-09-30, unregistered apps cannot be installed **from participating stores** on certified devices in Brazil, Indonesia, Singapore and Thailand. Direct sideloading is outside this first phase, `adb` installs are exempt, a one-time "advanced flow" lets power users install unregistered apps, and Google plans a global rollout from 2027 (§5.6).
 14. The Kotlin snippets of §1.10, §1.13 and §2.5 and the store-icon code of §3.7 compiled under `allWarningsAsErrors` and passed a Robolectric SDK 36 test on a copy of the architecture scratch build:
     - `formatCount(24680, locale)` gave "24,680" (en), "24.680" (de), "24,680" (fa) and "24 680" with U+00A0 (ru);
@@ -177,11 +177,11 @@ After M0, `values/strings.xml` holds exactly `app_name` (non-translatable) and `
 
 Rules:
 1. **Complete.** These are all the string resources of v1.0. A key is added only when code uses it, and it is added to this table in the same commit. From M5 on, a new key is added together with its 20 translations.
-2. **Used.** Every key is referenced from main code in the commit that adds it, because Lint `UnusedResources` is fatal (D-142). A key whose last call site goes away is deleted from every locale in the same commit.
+2. **Used.** Every key is referenced from main code in the commit that adds it, because Lint `UnusedResources` is fatal (D-142). A key whose last call site goes away is deleted from every locale in the same commit. The one exception is `settings` between M3 part 1, which removes the M0 placeholder, and M3 part 2, whose game menu uses it again (D-232).
 3. **No fragment concatenation** (D-103). Sentences come from format strings. The two allowed joins: the TalkBack status line joins whole sentences with one space (`FEATURES.md` F17), and the size label `"$n×$n"` is built in code.
 4. **Arguments** are positional strings `%1$s`, `%2$s` … filled with pre-formatted text (§1.10). `%d` is never used.
 5. **English apostrophes** are escaped as `\'`.
-6. **Context comments.** In `values/strings.xml` (and `strings_pending.xml`), each key is preceded by an XML comment holding its context and arguments, exactly as in the tables below. Locale files carry no comments.
+6. **Context comments.** In `values/strings.xml` (and `strings_pending.xml`), each key is preceded by an XML comment holding its context and arguments, exactly as in the tables below. Locale files carry no comments. Each locale file declares `xmlns:tools` on `<resources>` because its `in_progress` carries `tools:override="true"` (D-258).
 7. **Order.** Keys appear in the order of these tables, in every file.
 8. **Origin column.** "legacy" = migrated in M0; "web" = seeded for ru/uk (§1.2); "DESIGN_SYSTEM §x" or "FEATURES Fxx" = key and English fixed by that file; "D-NNN" = key fixed by that decision; "added here" = key first named by this file, canonical in every document (`PLAN.md` §2.4). The six "added here" keys exist because a sibling text needed a resource it did not name: `setting_app_language_system` agrees with "language", not with `theme_system`'s "theme" (ru "Системный" vs "Системная"; the same in pl, cs, uk); `a11y_action_change` and `a11y_action_open` are the `onClickLabel`s of choice and link rows; `a11y_chip_value` replaces a concatenation that D-103 forbids; `a11y_best_tile` gives "Best tile, {full value}" a format string; `a11y_board_loading` covers the Loading state, which has no tiles.
 9. **M column** = the milestone whose code first uses the key.
@@ -194,7 +194,7 @@ Rules:
 | `app_name` ✱ | 2048 | — | Launcher label and the title on the Game screen. Never translated (U2). Lives only in `values/`; the debug source set overrides it with "2048 Debug". | Manifest `android:label`; `GameTitle`; About header | M0 | legacy |
 | `settings` | Settings | — | Name of the Settings screen: game-menu item and top-bar title. The 20 legacy translations are kept verbatim (D-101). | `GameMoreMenu`; Settings `TopAppBar`; M0 placeholder | M0 | legacy `action_settings` |
 | `cancel` | Cancel | — | Dismiss button of every dialog. Never means "undo". | `ConfirmDialog`, `ChoiceDialog` | M3 | web `cancel` |
-| `navigate_up` | Navigate up | — | Spoken label of the back arrow in every top app bar. | Sub-screen `TopAppBar` navigation icon | M4 | DESIGN_SYSTEM §6.8 |
+| `navigate_up` | Navigate up | — | Spoken label of the back arrow in every top app bar. | Sub-screen `TopAppBar` navigation icon | M3 | DESIGN_SYSTEM §6.8 |
 | `more_options` | More options | — | Spoken label of the ⋮ button that opens the game menu. | `GameMoreMenu` icon button | M3 | DESIGN_SYSTEM §6.1 |
 | `got_it` | Got it | — | Button that dismisses an informational card or sheet. Short acknowledgement. | `HintCard`; `WhatsNewSheet` | M4 | DESIGN_SYSTEM §6.2, §6.13 |
 | `link_open_failed` | No app can open this link | — | Snackbar when no browser or settings app can handle a link. No final period (matches English). | About source link; Settings App language | M4 | DESIGN_SYSTEM §7.6 |
@@ -230,7 +230,7 @@ Rules:
 | `board_size_best` | Best %1$s | %1$s = best score from `formatCount` (Latin digits, locale grouping) | Best score on that size, e.g. "Best 24,680". | `BoardSizeSheet` rows | M3 | DESIGN_SYSTEM §6.7 |
 | `board_size_no_best` | No best score yet | — | Shown instead of the best score when that size has never been scored. | `BoardSizeSheet` rows | M3 | DESIGN_SYSTEM §6.7 |
 | `board_size_supporting` ✱ | %1$s · %2$s | %1$s = `board_size_goal`; %2$s = `board_size_best` or `board_size_no_best` | Joins the goal and best parts of a row. Contains no words. | `BoardSizeSheet` rows | M3 | DESIGN_SYSTEM §6.7 |
-| `in_progress` | In progress | — | Small pill on a size whose saved game is unfinished. ≤ 14 characters. | `BoardSizeSheet` rows | M3 | DESIGN_SYSTEM §6.7 |
+| `in_progress` | In progress | — | Small pill on a size whose saved game is unfinished. ≤ 12 characters (§1.7 rule 7; D-259). | `BoardSizeSheet` rows | M3 | DESIGN_SYSTEM §6.7 |
 
 #### D. New-game dialog, win card, game-over card, share
 
@@ -285,7 +285,7 @@ Rules:
 
 | Key | English (source) | Arguments | Context for translators | Used in | M | Origin |
 |---|---|---|---|---|---|---|
-| `statistics` | Statistics | — | Title of the Statistics screen. | Stats `TopAppBar` | M4 | DESIGN_SYSTEM §6.9 |
+| `statistics` | Statistics | — | Title of the Statistics screen. | Stats `TopAppBar` | M3 | DESIGN_SYSTEM §6.9 |
 | `stats_reset` | Reset statistics | — | Spoken label of the trash icon in the Statistics top bar. | Stats top-bar action | M4 | DESIGN_SYSTEM §6.9 |
 | `stats_all_sizes` | All sizes | — | First tab: totals over every board size. Other tabs are "3×3" … "8×8" built in code. | Stats tabs | M4 | DESIGN_SYSTEM §6.9 |
 | `stats_best_score` | Best score | — | Label of the hero value. | Stats hero card | M4 | DESIGN_SYSTEM §6.9 |
@@ -358,18 +358,18 @@ Rules:
 
 | Key | English (source) | Arguments | Context for translators | Used in | M | Origin |
 |---|---|---|---|---|---|---|
-| `how_to_play` | How to play | — | Title of the rules screen. | How to play `TopAppBar` | M4 | DESIGN_SYSTEM §6.10 |
+| `how_to_play` | How to play | — | Title of the rules screen. | How to play `TopAppBar` | M3 | DESIGN_SYSTEM §6.10 |
 | `htp_goal` | Goal | — | Section heading (noun). | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_goal_body` | Slide the tiles to merge equal numbers and build the %1$s tile. On a 3×3 board the goal is %2$s. | %1$s = "2048"; %2$s = "256" | Keep "3×3" exactly (Latin digits, U+00D7). | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_moving` | Moving | — | Section heading (noun or gerund). | How to play | M4 | DESIGN_SYSTEM §6.10 |
-| `htp_moving_body` | Swipe up, down, left or right. Every tile slides as far as it can in that direction. | — | — | How to play | M4 | DESIGN_SYSTEM §6.10 |
+| `htp_moving_body` | Swipe up, down, left or right. Every tile slides as far as it can in that direction. | — | Body of the How to play section "Moving". | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_merging` | Merging | — | Section heading. | How to play | M4 | DESIGN_SYSTEM §6.10 |
-| `htp_merging_body` | Two touching tiles with the same number merge into one tile with their sum. A tile merges only once per move. | — | — | How to play | M4 | DESIGN_SYSTEM §6.10 |
+| `htp_merging_body` | Two touching tiles with the same number merge into one tile with their sum. A tile merges only once per move. | — | Body of the How to play section "Merging". | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_merging_illustration_cd` | Example: 2, 2, 2, 2 moved left becomes 4, 4 | — | Spoken description of the left-to-right example picture. Keep the digits and their order. | `MergeIllustration` | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_new_tiles` | New tiles | — | Section heading. | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_new_tiles_body` | After every move that changes the board, a new tile appears in a random empty cell: a 2 nine times out of ten, otherwise a 4. | — | "2" and "4" are tile values: keep them as Latin digits. "nine times out of ten" is written in words. | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_board_sizes` | Board sizes | — | Section heading. | How to play | M4 | DESIGN_SYSTEM §6.10 |
-| `htp_board_sizes_body` | Each size keeps its own game, best score and statistics. | — | — | How to play | M4 | DESIGN_SYSTEM §6.10 |
+| `htp_board_sizes_body` | Each size keeps its own game, best score and statistics. | — | Body of the How to play section "Board sizes", below the table of sizes and goals. | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_undo` | Undo | — | Section heading (noun; may differ from the `undo` button verb). | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_undo_body` | Undo is unlimited and also works after game over. Undo brings back the same next tile, so repeating a move gives the same result. Undos are counted, and games with undo don't count toward Best without undo. | — | "Best without undo" is the statistic name; match `stats_best_no_undo`. | How to play | M4 | DESIGN_SYSTEM §6.10 |
 | `htp_keys` | Keyboard and controllers | — | Section heading for the key table. | How to play | M4 | DESIGN_SYSTEM §6.10 |
@@ -384,17 +384,17 @@ Rules:
 
 | Key | English (source) | Arguments | Context for translators | Used in | M | Origin |
 |---|---|---|---|---|---|---|
-| `about` | About | — | Title of the About screen. | About `TopAppBar` | M4 | DESIGN_SYSTEM §6.11 |
+| `about` | About | — | Title of the About screen. | About `TopAppBar` | M3 | DESIGN_SYSTEM §6.11 |
 | `about_version` | Version %1$s (%2$s) | %1$s = versionName; %2$s = versionCode (Latin digits) | Version line, e.g. "Version 3.0.0 (30000)". | About header | M4 | DESIGN_SYSTEM §6.11 |
 | `about_whats_new` | What's new | — | Section heading listing every release of this app. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `about_source_code` | Source code | — | Row that opens the GitHub repository. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `about_source_code_url` ✱ | github.com/clayboicardi/2048-android-modern-refresh | — | Supporting text of the source row. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `about_privacy` | Privacy | — | Section heading. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `privacy_text` | This app collects nothing. It has no network access, no accounts, no ads and no analytics. Game data stays on your device. Android's own backup may copy it to your Google account if you enabled device backup. | — | The privacy policy shown in the app (D-123). Translate faithfully; do not add or remove claims. Keep "Android" and "Google". | About | M4 | D-123 |
-| `about_licenses` | Open-source licenses | — | Row that opens the licenses screen. | About | M4 | DESIGN_SYSTEM §6.11 |
+| `about_licenses` | Open-source licenses | — | Row that opens the licenses screen. | About | M3 | DESIGN_SYSTEM §6.11 |
 | `about_credits` | Credits | — | Section heading; its rows are English names. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `about_legacy_history` | Legacy history | — | Section heading: release history of the original Android app (shown in English). | About | M4 | DESIGN_SYSTEM §6.11 |
-| `licenses` | Open-source licenses | — | Title of the licenses screen. Same words as `about_licenses`. | Licenses `TopAppBar` | M4 | DESIGN_SYSTEM §6.12 |
+| `licenses` | Open-source licenses | — | Title of the licenses screen. Same words as `about_licenses`. | Licenses `TopAppBar` | M3 | DESIGN_SYSTEM §6.12 |
 | `license_mit_name` ✱ | MIT License | — | Official license name. | Licenses group header | M4 | DESIGN_SYSTEM §6.12 |
 | `license_ofl_name` ✱ | SIL Open Font License 1.1 | — | Official license name. | Licenses group header | M4 | DESIGN_SYSTEM §6.12 |
 | `license_apache_name` ✱ | Apache License 2.0 | — | Official license name. | Licenses group header | M4 | DESIGN_SYSTEM §6.12 |
@@ -447,7 +447,9 @@ Rules:
 | Tile labels, scores, "+N", "2048"/"256" arguments | Game | Game numerals, `Long.toString()` (D-103) |
 | "–" | Loading chips; average score with 0 games | Typographic placeholder (`DESIGN_SYSTEM.md` §6.1, §6.9) |
 | "m:ss", "h:mm:ss" | Game-over card, Statistics, share text | `formatElapsed`, `Locale.ROOT` (§1.10) |
-| "3.0.0", "2.2 (25)" | About | `BuildConfig.VERSION_NAME` (compile-time, D-134); legacy data |
+| "3.0.0", "2.2 (25)" | About | `BuildConfig.VERSION_NAME` (compile-time, D-134) and `versionNameOf(versionCode)` for the What's new history titles (D-130); the legacy releases' "version (code)" titles from `legacy_history.json` (D-254) |
+| "•" | About's What's new history, the What's new sheet | The bullet glyph of a bullet row (D-254) |
+| " — " | About's credits rows | The separator in "name — role", around static English data (D-124, D-254) |
 | Credits and legacy history rows | About | English static data in `res/raw/legacy_history.json` (D-124, §4.5) |
 | License entry names, copyright lines and texts | Licenses | `res/raw/` data (D-122, §4.4) |
 | Share-text emoji | Share | Code table (`FEATURES.md` F10) |
@@ -471,7 +473,7 @@ Rules:
    ```
 
    Lint 32.4.1 honors `tools:ignore` on `<resources>`: 0 errors with it and 158 without it (verified, §0.3 item 15). If a later Lint stops honoring it, put `tools:ignore="MissingTranslation"` on each element of this file instead, each with the same same-line reason comment.
-2. Nothing else is suppressed. `ExtraTranslation`, `MissingQuantity`, `UnusedQuantity`, `UnusedResources` and the `StringFormat*` checks stay errors throughout.
+2. Nothing else is suppressed. `ExtraTranslation`, `MissingQuantity`, `UnusedQuantity`, `UnusedResources` and the `StringFormat*` checks stay errors throughout. The one exception was D-232's same-line `tools:ignore="UnusedResources"` on `settings` in `values/strings.xml`, from the M3 part 1 commit until the M3 part 2 commit removed it. `in_progress` carries `tools:override="true"` with a same-line reason, because compose-ui ships a private string of that name (D-239); that marks the intended override for Lint's `PrivateResource` check and suppresses none of the checks above.
 3. M0–M2 add no string beyond the migrated `settings`.
 4. In M5, the commit that adds the 20 translations also moves every entry of `strings_pending.xml` into `strings.xml` (in §1.3 order) and deletes `strings_pending.xml`. The same commit adds `check_strings_final` to `check-metadata.sh` (`QUALITY.md` §1.16, D-190), which fails while the file exists. From then on, a string arrives with all 20 translations in the same commit.
 
@@ -555,12 +557,12 @@ The key names "Arrow keys", "Backspace" and "D-pad" may be translated or kept, w
 | el | Ρεκόρ | Νέο ρεκόρ | Ρεκόρ χωρίς αναίρεση | Νέο παιχνίδι | Συνέχεια | Τέλος παιχνιδιού | Κερδίσατε! |
 | eo | Rekordo | Nova rekordo | Rekordo sen malfaro | Nova ludo | Daŭrigi | Ludo finiĝis | Vi venkis! |
 | es | Récord | Nuevo récord | Récord sin deshacer | Nueva partida | Seguir jugando | Fin de la partida | ¡Has ganado! |
-| fa | رکورد | رکورد جدید | رکورد بدون واگرد | بازی جدید | ادامه بازی | پایان بازی | برنده شدید! |
-| fr | Record | Nouveau record | Record sans annulation | Nouvelle partie | Continuer | Partie terminée | Vous avez gagné ! |
+| fa | رکورد | رکورد جدید | رکورد بدون واگرد | بازی جدید | ادامهٔ بازی | پایان بازی | برنده شدید! |
+| fr | Record | Record battu | Record sans annulation | Nouvelle partie | Continuer | Partie terminée | Vous avez gagné ! |
 | hu | Rekord | Új rekord | Rekord visszavonás nélkül | Új játék | Folytatás | Vége a játéknak | Győzelem! |
 | it | Record | Nuovo record | Record senza annullamenti | Nuova partita | Continua | Partita finita | Hai vinto! |
 | ko | 최고 | 신기록 | 되돌리기 없는 최고 점수 | 새 게임 | 계속하기 | 게임 오버 | 승리! |
-| lt | Rekordas | Naujas rekordas | Rekordas be atšaukimų | Naujas žaidimas | Tęsti | Žaidimas baigtas | Laimėjote! |
+| lt | Rekordas | Rekordas! | Rekordas be atšaukimų | Naujas žaidimas | Tęsti | Žaidimas baigtas | Laimėjote! |
 | nl | Record | Nieuw record | Record zonder ongedaan maken | Nieuw spel | Doorspelen | Spel voorbij | Je hebt gewonnen! |
 | pl | Rekord | Nowy rekord | Rekord bez cofania | Nowa gra | Graj dalej | Koniec gry | Wygrana! |
 | pt | Recorde | Novo recorde | Recorde sem desfazer | Novo jogo | Continuar | Fim de jogo | Ganhou! |
@@ -602,18 +604,19 @@ Notes:
 - **fr and it:** Android uses "Annuler"/"Annulla" for both Undo and Cancel. They never share a dialog here, so both follow the platform. The How to play heading `htp_undo` uses the noun ("Annulation", "Annullamento").
 - **Best without undo** is the name of a statistic. Write it identically in `stats_best_no_undo`, `undo_hint_no_undo_best` and `htp_undo_body` (inflected only where grammar forces it).
 - **pt** is shared by Brazil and Portugal (§1.7). "Tela cheia" is the legacy Brazilian seed; the pt-PT store listing uses "ecrã" in its own text (§2.4).
+- **Changed during M5 (D-259):** fr and lt "New best" are "Record battu" and "Rekordas!", so the chip label stays within the 12 characters of §1.7 rule 7 ("Nouveau record" and "Naujas rekordas" were longer); fa "Keep going" is "ادامهٔ بازی", with the ezafe written as in the other fa compounds.
 
 ### 1.7 Style rules
 
 General rules for every locale:
 1. Translate the meaning, not the words. Add or drop nothing. Keep every placeholder, digit and never-translate token.
 2. Sentence case for labels, titles, buttons and menu items. German capitalizes nouns.
-3. Punctuation parity with English: a translation ends with a period exactly when the English does. Each language's own question and exclamation marks apply (el `;`, fa `؟`, es `¿…?`/`¡…!`, fr no-break space).
+3. Punctuation parity with English: a translation ends with a period exactly when the English does. Each language's own question and exclamation marks apply (el `;`, fa `؟`, es `¿…?`/`¡…!`, fr no-break space). The one exception is lt `new_best_label` "Rekordas!": lt `best_label` is "Rekordas", and the mark keeps the two chip labels different (D-263).
 4. Address the player in the register of §1.1, and never with a gendered form. Prefer the formal plural, an impersonal form or a noun ("Wygrana!" rather than "Wygrałeś/aś!").
 5. A setting value agrees in gender and number with its setting noun. The context comment names the noun (`theme_*` with `setting_theme`, `motion_*` with `setting_motion`, `sensitivity_*` with `setting_swipe_sensitivity`, `setting_app_language_system` with "language").
 6. Use Android's own terms for system UI: status bar, navigation bar, the "Remove animations" accessibility setting, TalkBack.
 7. Length: `score_label`, `best_label`, `new_best_label` and `in_progress` stay at most 12 characters. Buttons and titles aim at no more than 1.3× the English length; longer text may wrap to two lines (D-084), and goldens 24 (`de`) and 25 (`en-XA`) show the result.
-8. Escaping: write `\'` for an ASCII apostrophe, or use U+2019 ’. Never leave `'` or `"` unescaped (aapt2 rejects an unescaped apostrophe). Write no-break spaces as ` ` so reviewers can see them.
+8. Escaping: write `\'` for an ASCII apostrophe, or use U+2019 ’. Never leave `'` or `"` unescaped (aapt2 rejects an unescaped apostrophe). Write no-break spaces as the escape `\u00A0` so reviewers can see them (D-258); store-listing files, which take no escapes, carry the U+00A0 character.
 9. No HTML or `<xliff:g>` tags. Arguments are positional `%n$s` and may be reordered.
 10. Latin digits only (0–9) in every string. No Persian or Arabic-Indic digits (D-103).
 
@@ -628,7 +631,7 @@ Per locale:
 | eo | vi | „…“ | Write ĉ ĝ ĥ ĵ ŝ ŭ; never the x- or h-system |
 | es | tú | «…» | `¿…?` and `¡…!`; neutral Spanish (no vosotros); "partida" for one game |
 | fa | شما | «…» | Persian ی (U+06CC) and ک (U+06A9), never Arabic ي (U+064A) or ك (U+0643); ZWNJ U+200C in compounds ("می‌شود", "تمام‌صفحه"); `؟` and `،`; Latin digits; isolate mis-ordered Latin runs (§1.11) |
-| fr | vous | « … » with ` ` inside | ` ` before `?`, `!`, `:` and `;`; apostrophe ’ |
+| fr | vous | « … » with `\u00A0` inside | `\u00A0` before `?`, `!`, `:` and `;`; apostrophe ’ |
 | hu | Ön (implied): "Csúsztassa" | „…” | A noun after a number stays singular |
 | it | tu | «…» | Apostrophe ’ |
 | ko | polite instructions (-세요); nouns for buttons | "…" | No plural forms; counter "회" for times |
@@ -648,7 +651,7 @@ Nobody fluent reviews these translations before merge (U7 is hands-off), so the 
 
 1. **Freeze.** M4 is complete, and every English string in `strings_pending.xml` is final.
 2. **Glossary commit.** Commit `docs/modernization/i18n-glossary.md`, a copy of §1.6, with the subject `M5: add i18n glossary`. Nothing is translated yet (D-105).
-3. **Translate.** In the next commit, write each `values-xx/strings.xml`: XML declaration, `<resources>`, the legacy `settings` line unchanged, then the other 164 translatable keys in §1.3 order, without comments. Do de, ru and fa first: de has the longest strings, ru has four plural categories, and fa is RTL, so problems show up early. Seeds: `settings` (all locales), the seven web keys (ru, uk) and the immersive nouns (§1.6).
+3. **Translate.** In the next commit, write each `values-xx/strings.xml`: XML declaration, `<resources xmlns:tools="http://schemas.android.com/tools">` (D-258), the legacy `settings` line unchanged, then the other 164 translatable keys in §1.3 order, without comments. Do de, ru and fa first: de has the longest strings, ru has four plural categories, and fa is RTL, so problems show up early. Seeds: `settings` (all locales), the seven web keys (ru, uk) and the immersive nouns (§1.6).
 4. **Merge pending.** The same commit merges `strings_pending.xml` into `strings.xml` and deletes it (§1.4).
 5. **Self-check each locale** against: placeholders; plural categories (§1.5); glossary terms; register and agreement (§1.7); never-translate tokens; script rules (§1.9); chip label length.
 6. **Back-translation sample.** For every locale, translate these 8 keys back into English and compare the meaning with the source: `undo`, `keep_going`, `new_game_confirm_title`, `hint_first_launch`, `move_timing_release`, `undo_hint_no_undo_best`, `stats_reset_body`, `privacy_text`. Fix any mismatch before handing off. The integrator hands the 160 rows (8 keys × 20 locales) to the orchestrator, which puts them in a collapsed `<details>` table in the PR body (D-194).
@@ -691,6 +694,7 @@ Android Lint (all fatal under D-142 `warningsAsErrors`; "verified" marks issues 
 | `notIdenticalToEnglish` | No translated value equals the English value, except pairs listed in `app/src/test/resources/i18n/identical-to-english.txt` (lines `<locale or *> <key>`, each with a `#` reason). Seed lines: `fr score_label`, `nl score_label`, `de setting_palette`, `fr setting_palette`, `* htp_key_undo_keys` |
 | `localeHasDistinctiveLetters` | For Latin locales, the concatenated values contain at least one of: cs ěščřžýůďťň, da æøå, de äöüß, eo ĉĝĥĵŝŭ, es ñáéíóú¿¡, fr éèêàçùœ, hu őűáéíóöú, it àèéìòù, lt ąčęėįšųūž, pl ąćęłńóśźż, pt ãõçáéêó, sl čšž, tr ğışçöüİ (nl is covered by `notIdenticalToEnglish`) |
 | `pluralsCarryTheNumber` | For every plural and n ∈ {0, 1, 2, 3, 4, 5, 11, 12, 21, 22, 25, 101, 102, 1000000}, `getQuantityString(id, n, "#N#")` contains `#N#` |
+| `chipLabelsAtMostTwelveCharacters` | `score_label`, `best_label`, `new_best_label` and `in_progress` have at most 12 characters (code points) in every locale (§1.7 rule 7; D-259) |
 
 `FEATURES.md`'s `LocalizationTest` keeps its methods (F24-AC8, F28-AC2…AC6). The two classes do not overlap.
 
@@ -748,7 +752,7 @@ fun formatElapsed(ms: Long): String {
 - Icons: `ic_arrow_back`, `ic_chevron_right`, `ic_open_in_new`, `ic_help` and `ic_undo` auto-mirror; `ic_pad_*` do not (`DESIGN_SYSTEM.md` §8.1).
 - **Mixed-direction text.** fa strings contain Latin runs ("TalkBack", "Ctrl+Z", "3×3") and receive Latin-digit arguments. The Unicode bidi algorithm orders them correctly in almost all cases, and numbers and "4×4" read the same in either direction. If a golden or an agent Read shows a Latin run out of order, wrap that run inside the fa string in first-strong isolates, U+2066 … U+2069, written as `⁦…⁩`. Never scatter U+200E/U+200F marks.
 - **Goldens:** 23 `game_mid-4x4_classic-light_fa` and 26 `game_mid-4x4_classic-light_ar-XB` (`DESIGN_SYSTEM.md` §10.4). On Read, check:
-  - title and score chips mirrored; controls bar order [⋮][New game][Undo];
+  - title and score chips mirrored; the size chip's header row mirrored (More at the start, D-249); controls bar order [New game][Undo];
   - the board identical to the LTR golden 3;
   - all numerals Latin;
   - Persian text neither clipped nor overlapping;
@@ -758,7 +762,7 @@ fun formatElapsed(ms: Long): String {
 ### 1.12 Pseudo-locales (D-106)
 
 - `buildTypes.debug { isPseudoLocalesEnabled = true }` (`ARCHITECTURE.md` §2.6). It compiled and produced `en-XA` and `ar-XB` in the architecture scratch build (`ARCHITECTURE.md` §0). If it fails later, D-106's fallback applies: drop it and goldens 25–26, and record this in the PR body.
-- Goldens set the locale with `RuntimeEnvironment.setQualifiers("+en-rXA")` or `"+ar-rXB"` before composing.
+- Goldens set the locale with `RuntimeEnvironment.setQualifiers("+en-rXA")` or `"+ar-rXB"` before composing, restating the Pixel 7 window in the same call (`"+en-rXA-w411dp-h914dp"`): each `+` call otherwise recomputes the window from its pixel size rounded down to whole dp and loses about 1 dp, so the board would no longer match golden 3.
 - **Hard-coded text detector.** Pseudo-localization rewrites every translatable resource, but code literals stay plain. When Reading golden 25 (`settings_classic-light_en-XA`), every visible word must be bracketed and accented, except: ✱ keys ("2048", the palette names), game numerals, size labels and "–". Any plain English word is a hard-coded string: move it into §1.3 and translate it.
 - **Expansion.** `en-XA` lengthens text by roughly a third. Nothing may clip; labels wrap to at most 2 lines (D-084).
 - **Bidi.** In golden 26 (`ar-XB`), the chrome is mirrored, the board is not, and numerals are Latin.
@@ -773,16 +777,15 @@ fun formatElapsed(ms: Long): String {
 ```kotlin
 // settings/AppLanguage.kt
 @RequiresApi(33)
-fun openAppLanguageSettings(context: Context, onFailure: () -> Unit) {
-    val intent = Intent(
-        Settings.ACTION_APP_LOCALE_SETTINGS,
-        Uri.fromParts("package", context.packageName, null),
+fun openAppLanguageSettings(context: Context, launch: (Intent) -> Unit) {
+    // `launch` is `rememberIntentLauncher(snackbars)`'s function (ui/components/Intents.kt): it
+    // starts the intent and shows R.string.link_open_failed when no activity handles it (D-253).
+    launch(
+        Intent(
+            Settings.ACTION_APP_LOCALE_SETTINGS,
+            Uri.fromParts("package", context.packageName, null),
+        ),
     )
-    try {
-        context.startActivity(intent)
-    } catch (_: ActivityNotFoundException) {
-        onFailure() // snackbar R.string.link_open_failed
-    }
 }
 
 @RequiresApi(33)
@@ -807,7 +810,7 @@ fun appLanguageSummary(context: Context): String {
 | L-AC1 | The M0 commit | The §1.2 check runs | It prints nothing; `values/strings.xml` holds exactly `app_name` (✱) and `settings` | Gate: `lintDebug` (`Untranslatable`, `UnusedResources`; technical correction TC-3); check-metadata.sh `check_no_bom` (D-179); F28-AC2, F28-AC4 |
 | L-AC2 | Any commit from M5 on | `scripts/check-metadata.sh` | `app/src/main/res/values/strings_pending.xml` does not exist | Gate: check-metadata.sh `check_strings_final` (D-190) |
 | L-AC3 | All 21 locale files after M5 | `:app:lintDebug` | No `MissingTranslation`, `ExtraTranslation`, `Untranslatable`, `MissingQuantity`, `UnusedQuantity`, `ImpliedQuantity` or `StringFormat*` issue | Gate: lintDebug (F28-AC1) |
-| L-AC4 | All 20 translations | `TranslationQualityTest` runs | All 9 methods of §1.9 pass | `TranslationQualityTest.*` |
+| L-AC4 | All 20 translations | `TranslationQualityTest` runs | All 10 methods of §1.9 pass | `TranslationQualityTest.*` |
 | L-AC5 | The strings "١٢٣" (U+0661–U+0663) and "۲۰۴۸" | `toLatinDigits()` | "123" and "2048"; ASCII input is returned unchanged | `FormattingTest.toLatinDigitsMapsArabicIndicAndPersian` |
 | L-AC6 | SDK 36, no per-app locale set | Settings renders | The App language row reads `setting_app_language_system` ("System default") | `SettingsScreenTest.appLanguageSummaryDefaultsToSystem` |
 | L-AC7 | Golden 25 (`en-XA`) recorded | The agent Reads it | No plain English word outside the §1.12 exceptions | Inspection, listed in the M5 commit body |
@@ -982,7 +985,7 @@ The changelog says plainly that 3.0.0 is a fresh start: a new package, a separat
 - Conditions: motion Off, dynamic color off, locale en-US, `onboardingDone = true`, `lastSeenVersionCode = 30000`, the bundled font, fixtures from `DESIGN_SYSTEM.md` §10.3.
 - Composable captures run inside `Box(Modifier.requiredSize(widthDp, heightDp).testTag("store:frame"))`. The capture size is therefore exact whatever the window decor. Each test captures with `composeRule.onNodeWithTag("store:frame").captureToImage().asAndroidBitmap()` and passes the bitmap to `OpaquePngWriter.write(bitmap, background, file)` (below), with `background` = the frame's opaque background color.
 - The pixel size comes from the density of the test's `@Config(qualifiers = …)`: `w360dp-h640dp-xxhdpi` → 1080×1920, and likewise for the other rows of the table.
-- Every store PNG, the icon included (§3.7), is written by `OpaquePngWriter`: an 8-bit PNG of color type 2, which Play requires for the feature graphic and screenshots ("JPEG or 24-bit PNG, no alpha"). There is no Roborazzi API, no opt-in, no temporary PNG and no `BitmapFactory.decodeFile` (D-190). The file names stay those of D-115, and the images stay lossless.
+- Every store PNG, the icon included (§3.7), is written by `OpaquePngWriter`: an 8-bit PNG of color type 2, the format app stores ask for in feature graphics and screenshots (Google Play's rule is "JPEG or 24-bit PNG, no alpha"; there is no Google Play listing, D-257). There is no Roborazzi API, no opt-in, no temporary PNG and no `BitmapFactory.decodeFile` (D-190). The file names stay those of D-115, and the images stay lossless.
 
 ```kotlin
 // app/src/test/kotlin/com/clayboicardi/game2048/store/OpaquePngWriter.kt
@@ -1082,7 +1085,7 @@ The listing and image logic was run on a synthetic 22-locale tree (§0.3 item 11
 
 ### 2.7 F-Droid compatibility
 
-No F-Droid submission is part of this overhaul (D-004 item 10; D-133 forbids tags). The repository is kept ready for one.
+No F-Droid submission is part of this overhaul (D-004 item 10; D-133 forbids tags). There is no Google Play listing; the owner plans an F-Droid submission after the execution PR merges (D-257), and the repository is kept ready for it.
 
 | F-Droid expectation | v1.0 status | Evidence |
 |---|---|---|
@@ -1208,7 +1211,7 @@ The fallback vectors reuse the adaptive glyph group (`DESIGN_SYSTEM.md` §8.2, `
 | Visible adaptive icon (72 dp crop) | — | 78 % of the icon width | Launcher mask |
 | Legacy fallback (48 dp, 96-unit shape) | same group | 58 % of the shape width | Accepted (§3.4) |
 | Splash icon with background (240 dp) | 2.222 dp per unit | 124.4 × 41.5 dp, diagonal 131.2 dp | Inside the 160 dp circle |
-| Store icon (512 px, 72-unit crop) | 7.111 px per unit | 398 × 133 px (measured 396 × 131 px of solid glyph color, §0.3 item 14) | Full square, Play applies its mask |
+| Store icon (512 px, 72-unit crop) | 7.111 px per unit | 398 × 133 px (measured 396 × 131 px of solid glyph color, §0.3 item 14) | Full square, a store applies its own mask |
 
 ### 3.6 Splash (D-112)
 
@@ -1235,7 +1238,7 @@ val background = ContextCompat.getColor(context, R.color.ic_launcher_background)
 OpaquePngWriter.write(bmp, background, File(outDir, "icon.png")) // color type 2, like every store PNG (D-190)
 ```
 
-The store icon therefore shows exactly what a launcher shows inside its mask (research/07 G4). It is a full opaque square, and Play applies its own rounding.
+The store icon therefore shows exactly what a launcher shows inside its mask (research/07 G4). It is a full opaque square, and a store that shows it applies its own rounding.
 
 The About header composes the same layers at 72 dp: a `#E6A11A` circle and the foreground drawable (`DESIGN_SYSTEM.md` §6.11), because Compose cannot load an `<adaptive-icon>`.
 
@@ -1324,12 +1327,12 @@ material below. Each item keeps its own license and copyright notice.
    Ukrainian game strings, the vector paths of the "2048" glyphs in the
    launcher icon, and the release history shown under About > Legacy history.
    Translators of the reused strings: Mongata (cs), dark159123 (da),
-   uberspot and alexara (de), uberspot (el, fr, pl), Robin van der Vliet
-   (eo, nl), Laura Arjona Reina (es), SMahdiFaghih (fa), Balázs Meskó (hu),
-   RyuzakiKK (it), amoseui (ko), zygimantus (lt), Caio Melo (pt), Igor A
-   (ru; Russian and Ukrainian game strings), Matej (sl), djura-san (sr),
-   TeknoCepni (tr), Vladyslav Pohrebniakov (uk). Every legacy contributor is
-   credited in the app under About > Credits.
+   uberspot and alexara (de), uberspot (el, pl), Robin van der Vliet
+   (eo, nl), Laura Arjona Reina (es), SMahdiFaghih (fa), pierre (fr),
+   Balázs Meskó (hu), RyuzakiKK (it), amoseui (ko), zygimantus (lt),
+   Caio Melo (pt), Igor A (ru; Russian and Ukrainian game strings),
+   Matej (sl), djura-san (sr), TeknoCepni (tr), Vladyslav Pohrebniakov (uk).
+   Every legacy contributor is credited in the app under About > Credits.
 
 3. Google Sans Flex (numeral subset)
    https://github.com/googlefonts/googlesans-flex
@@ -1363,7 +1366,7 @@ Raw files under `app/src/main/res/raw/` (M4):
 |---|---|---|
 | `license_mit.txt` | Byte copy of `LICENSE` (§4.2) | `check_legal_texts` (§2.6) |
 | `license_apache_2_0.txt` | `https://www.apache.org/licenses/LICENSE-2.0.txt` verbatim | 11,358 bytes, sha256 `cfc7749b…3d30` (`check_legal_texts`, §2.6) |
-| `ofl_google_sans_flex.txt` | `google/fonts` `ofl/googlesansflex/OFL.txt` verbatim | 4,488 bytes, sha256 `fc13d69f…3137` at `9b59ea9f…` (§0.3 item 8). `scripts/fonts/subset-google-sans-flex.sh` copies it and records its sha256 next to the TTF's |
+| `ofl_google_sans_flex.txt` | `google/fonts` `ofl/googlesansflex/OFL.txt` verbatim, CRLF line endings included (`.gitattributes` marks it `-text`, D-251) | 4,488 bytes, sha256 `fc13d69f…3137` at `9b59ea9f…` (§0.3 item 8). `scripts/fonts/subset-google-sans-flex.sh` copies it and records its sha256 next to the TTF's (19,016 bytes, sha256 `3d804957…d6a7`, `DESIGN_SYSTEM.md` §3.1) |
 | `third_party_licenses.json` | Below | `LicensesCoverageTest` (F26-AC1) |
 
 **`third_party_licenses.json`** is a JSON array. Entry fields: `name` (display), `groupOrPath` (Maven group, repository URL or file path), `licenseId` (SPDX: `MIT`, `OFL-1.1`, `Apache-2.0`) and `copyright`. The screen groups entries by `licenseId` in the order MIT, OFL-1.1, Apache-2.0, keeping file order inside each group (`DESIGN_SYSTEM.md` §6.12). There is one entry per Maven group, so `LicensesCoverageTest` can match `groupOrPath` against `config/license-groups.txt` exactly.
@@ -1678,15 +1681,15 @@ When a dependency change adds a group, the same commit adds it here and in the J
 3. "Translators of reused strings": the table below.
 4. "Legacy releases": `res/raw/changelog_master.xml` verbatim in a code block.
 
-Expected deduplicated contributor list (§0.3 item 12):
+Expected deduplicated contributor list (§0.3 item 12; both commands run on the full history, D-213):
 - Alias merges: uberspot = Paul Sarbinowski, who gets his own credit row; Taco = TacoTheDank.
 - Gabriele Cirulli and Paul Sarbinowski are excluded from this list because they have their own rows.
 - gurshabad is added: legacy commit `f889036` credits the night-mode idea to him (D-209; research/02 §7 item 3).
 - Sorted case-insensitively.
 
-Result, 31 names: alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark159123, Diogo Pereira, djura-san, fraggerfox, gurshabad, Hans-Christoph Steiner, Igor A, Laura Arjona Reina, lishoujun, Matej, Mauro Scomparin, Mongata, Oluwaleke Fakorede, Paul Verest, Poussinou, princessruthie, Robin van der Vliet, RyuzakiKK, shubham1701, SMahdiFaghih, Steven Lee, TacoTheDank, TeknoCepni, Vladyslav Pohrebniakov, xin, zygimantus.
+Result, 32 names: alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark159123, Diogo Pereira, djura-san, fraggerfox, gurshabad, Hans-Christoph Steiner, Igor A, Laura Arjona Reina, lishoujun, Matej, Mauro Scomparin, Mongata, Oluwaleke Fakorede, Paul Verest, pierre, Poussinou, princessruthie, Robin van der Vliet, RyuzakiKK, shubham1701, SMahdiFaghih, Steven Lee, TacoTheDank, TeknoCepni, Vladyslav Pohrebniakov, xin, zygimantus.
 
-**Translators of reused strings** (`git log --follow res/values-xx/strings.xml`, earliest content author):
+**Translators of reused strings** (`git log --follow res/values-xx/strings.xml` on the full history, earliest content author):
 
 | Locale | Translator | Commit |
 |---|---|---|
@@ -1697,7 +1700,7 @@ Result, 31 names: alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark15912
 | eo | Robin van der Vliet | `238b152` (2016) |
 | es | Laura Arjona Reina | `f7b3ff4` (2014) |
 | fa | SMahdiFaghih | `e097460` (2021) |
-| fr | uberspot | `8a04f5d` (2014) |
+| fr | pierre | `74990c4` (2014) |
 | hu | Balázs Meskó | `825e39f` (2019) |
 | it | RyuzakiKK | `ea3b08d` (2018) |
 | ko | amoseui | `d9acf52` (2017) |
@@ -1726,7 +1729,7 @@ Result, 31 names: alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark15912
     },
     {
       "name": "Contributors",
-      "role": "alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark159123, Diogo Pereira, djura-san, fraggerfox, gurshabad, Hans-Christoph Steiner, Igor A, Laura Arjona Reina, lishoujun, Matej, Mauro Scomparin, Mongata, Oluwaleke Fakorede, Paul Verest, Poussinou, princessruthie, Robin van der Vliet, RyuzakiKK, shubham1701, SMahdiFaghih, Steven Lee, TacoTheDank, TeknoCepni, Vladyslav Pohrebniakov, xin, zygimantus"
+      "role": "alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark159123, Diogo Pereira, djura-san, fraggerfox, gurshabad, Hans-Christoph Steiner, Igor A, Laura Arjona Reina, lishoujun, Matej, Mauro Scomparin, Mongata, Oluwaleke Fakorede, Paul Verest, pierre, Poussinou, princessruthie, Robin van der Vliet, RyuzakiKK, shubham1701, SMahdiFaghih, Steven Lee, TacoTheDank, TeknoCepni, Vladyslav Pohrebniakov, xin, zygimantus"
     },
     {
       "name": "clayboicardi",
@@ -1988,10 +1991,10 @@ Consequences:
 
 None of this is part of the execution PR (U5, D-133). When the owner adds secrets, a follow-up PR:
 1. Adds an upload/release key held only in GitHub secrets, for example `GAME2048_RELEASE_KEYSTORE_BASE64`, `GAME2048_RELEASE_STORE_PASSWORD`, `GAME2048_RELEASE_KEY_ALIAS` and `GAME2048_RELEASE_KEY_PASSWORD`. It is never committed.
-2. Adds `signingConfigs.create("release")`, read from Gradle properties or environment variables. It is used only by a new release-only path, a `bundleRelease` (AAB) for Play App Signing or a signed release APK. Debug and the CI `assembleRelease` artifact keep `ciSideload`, so sideload users keep updating in place.
+2. Adds `signingConfigs.create("release")`, read from Gradle properties or environment variables. It is used only by a new release-only path, a signed release APK (no AAB: there is no Google Play listing, D-257). Debug and the CI `assembleRelease` artifact keep `ciSideload`, so sideload users keep updating in place.
 3. Changes `check-apk.sh` step 6 for the store artifact only: its digest is checked against a new committed public certificate digest, while the CI APKs keep checking `signing/ci-sideload.sha256`.
 4. Adds `release.yml` (tag `v*`, tag == versionName, D-130), and raises versionCode per D-130's scheme.
-5. Registers the package with Android developer verification using the real key (§5.6), and fills in the Play Console privacy policy link (`PRIVACY.md`) and a Data safety form that declares no data collected.
+5. Registers the package with Android developer verification using the real key (§5.6). There is no Play Console listing, so there is no Data safety form (D-257).
 6. Tells users plainly that store builds cannot update CI sideload installs (§5.3). Players move by Android backup restore or start fresh.
 
 ### 5.8 Acceptance criteria (signing)
@@ -2006,6 +2009,7 @@ None of this is part of the execution PR (U5, D-133). When the owner adds secret
 
 ## Open issues
 
-- **L-OI-13 (Greek upper-case chip labels; verification at first use).** `DESIGN_SYSTEM.md` §3.7 upper-cases chip labels with `uppercase(locale)`. Greek typography drops stress marks in capitals ("ΡΕΚΟΡ"), and whether the runtime's case mapping does so for `el` cannot be verified on the JVM. The el glossary keeps "Σκορ" (no stress mark). Checked in M5 when the integrator Reads the el captures: one capture of the Game header in `el`, written under `app/build/` and not committed. Fallback: if it shows "ΡΕΚΌΡ", `ScoreChip` in `ui/components/ScoreCard.kt` strips U+0301 after upper-casing when `locale.language == "el"`, a one-line change with no decision impact, recorded in the M5 commit body.
+- **L-OI-13 (Greek upper-case chip labels; verification at first use; resolved in M5, D-261).** `DESIGN_SYSTEM.md` §3.7 upper-cases chip labels with `uppercase(locale)`. Greek typography drops stress marks in capitals ("ΡΕΚΟΡ"), and whether the runtime's case mapping does so for `el` cannot be verified on the JVM. The el glossary keeps "Σκορ" (no stress mark). Checked in M5 when the integrator Reads the el captures: one capture of the Game header in `el`, written under `app/build/` and not committed. Fallback: if it shows "ΡΕΚΌΡ", `ScoreChip` in `ui/components/ScoreCard.kt` strips U+0301 after upper-casing when `locale.language == "el"`, a one-line change with no decision impact, recorded in the M5 commit body.
+  **Outcome:** the JVM kept the mark ("Ρεκόρ" → "ΡΕΚΌΡ"), so M5 applied the fallback in `chipLabelText` (`ui/components/ScoreCard.kt`), which `ScoreChip` and the game-over card use; the el captures then read "ΣΚΟΡ" and "ΡΕΚΟΡ". `LocalizationTest.greekChipLabelsDropStressMarks` (M6) guards it (D-261).
 
-Resolved during planning: L-OI-1, L-OI-3, L-OI-6, L-OI-7, L-OI-12 → D-208; L-OI-2, L-OI-4 → canonical keys (`PLAN.md` §2); L-OI-5 → D-190; L-OI-8, L-OI-14 → out of scope (D-004); L-OI-9 → D-209; L-OI-10, L-OI-11 → accepted as specified in §1.3 and §3.4.
+Resolved during planning: L-OI-1, L-OI-3, L-OI-6, L-OI-7, L-OI-12 → D-208; L-OI-2, L-OI-4 → canonical keys (`PLAN.md` §2); L-OI-5 → D-190; L-OI-8, L-OI-14 → out of scope (D-004); L-OI-9 → D-209; L-OI-10, L-OI-11 → accepted as specified in §1.3 and §3.4. Resolved during execution: L-OI-13 → the M5 fallback, guarded since M6 (D-261). None is open.
