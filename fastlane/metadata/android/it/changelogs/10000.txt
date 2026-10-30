@@ -1,4 +1,4 @@
-La versione 3.0.0 è una riscrittura completa come app nativa, con un nuovo nome di pacchetto. Si installa accanto all’app 2048 originale; i punteggi dell’app originale non vengono trasferiti.
+La versione 1.0.0 è una riscrittura completa come app nativa, con un nuovo nome di pacchetto. Si installa accanto all’app 2048 originale; i punteggi dell’app originale non vengono trasferiti.
 • Dimensioni della griglia da 3×3 a 8×8
 • Annullamento illimitato, anche a partita finita
 • Temi Neon Arcade, scuro e ad alto contrasto

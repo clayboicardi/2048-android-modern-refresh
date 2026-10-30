@@ -173,10 +173,10 @@
     <string name="license_hide_text">Lisans metnini gizle</string>
     <string name="whats_new_title">Yenilikler</string>
     <string name="whats_new_version">Sürüm %1$s</string>
-    <string name="whatsnew_30000_1">Hızlı, yerel bir uygulama olarak sıfırdan yeniden geliştirildi</string>
-    <string name="whatsnew_30000_2">3×3\'ten 8×8\'e kadar tahta boyutları, her biri kendi rekoruyla</string>
-    <string name="whatsnew_30000_3">Sınırsız geri alma, oyun bittikten sonra bile</string>
-    <string name="whatsnew_30000_4">Açık, koyu, Neon Arcade ve yüksek kontrastlı temalar</string>
-    <string name="whatsnew_30000_5">İstatistikler, klavye kontrolleri ve TalkBack desteği</string>
+    <string name="whatsnew_10000_1">Hızlı, yerel bir uygulama olarak sıfırdan yeniden geliştirildi</string>
+    <string name="whatsnew_10000_2">3×3\'ten 8×8\'e kadar tahta boyutları, her biri kendi rekoruyla</string>
+    <string name="whatsnew_10000_3">Sınırsız geri alma, oyun bittikten sonra bile</string>
+    <string name="whatsnew_10000_4">Açık, koyu, Neon Arcade ve yüksek kontrastlı temalar</string>
+    <string name="whatsnew_10000_5">İstatistikler, klavye kontrolleri ve TalkBack desteği</string>
 
 </resources>

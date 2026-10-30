@@ -98,25 +98,25 @@ class AboutScreenTest {
     fun versionLine() {
         showAbout()
 
-        compose.onNodeWithTag(ABOUT_VERSION_TAG).assertTextEquals("Version 3.0.0 (30000)")
+        compose.onNodeWithTag(ABOUT_VERSION_TAG).assertTextEquals("Version 1.0.0 (10000)")
     }
 
     /** F25-AC2 */
     @Test
     fun whatsNewHistoryAlwaysShown() {
-        AppRig(tmp.newFolder(), Settings(onboardingDone = true, lastSeenVersionCode = 30000)).use {
+        AppRig(tmp.newFolder(), Settings(onboardingDone = true, lastSeenVersionCode = 10000)).use {
             rig ->
             rig.show()
             rig.openAboutFromMenu()
-            val lines = WHATS_NEW_30000.map(app::getString)
+            val lines = WHATS_NEW_10000.map(app::getString)
 
             aboutList().performScrollToNode(hasText(lines.last()))
 
             assertWithMessage("the What's new heading")
                 .that(topOf(compose.onNode(isHeading() and hasText("What's new"))))
-                .isLessThan(topOf(compose.onNodeWithText("3.0.0")))
+                .isLessThan(topOf(compose.onNodeWithText("1.0.0")))
             val tops = lines.map { topOf(compose.onNodeWithText(it)) }
-            assertThat(topOf(compose.onNodeWithText("3.0.0"))).isLessThan(tops.first())
+            assertThat(topOf(compose.onNodeWithText("1.0.0"))).isLessThan(tops.first())
             assertWithMessage("the five bullets, in order").that(tops).isInStrictOrder()
         }
     }
@@ -304,7 +304,7 @@ class AboutScreenTest {
      */
     @Test
     fun whatsNewSheetListsEntriesAndGotItDismisses() {
-        val entries = decideWhatsNew(29999, 30000, CHANGELOG).entries.toImmutableList()
+        val entries = decideWhatsNew(9999, 10000, CHANGELOG).entries.toImmutableList()
         var dismissed = 0
         var open by mutableStateOf(true)
         compose.setContent {
@@ -323,8 +323,8 @@ class AboutScreenTest {
         compose.waitForIdle()
 
         compose.onNode(isHeading() and hasText("What's new")).assertExists()
-        compose.onNodeWithText("Version 3.0.0").assertExists()
-        for (line in WHATS_NEW_30000) compose.onNodeWithText(app.getString(line)).assertExists()
+        compose.onNodeWithText("Version 1.0.0").assertExists()
+        for (line in WHATS_NEW_10000) compose.onNodeWithText(app.getString(line)).assertExists()
 
         compose.onNodeWithTag(WHATS_NEW_GOT_IT_TAG).performClick()
         compose.waitForIdle()
@@ -455,13 +455,13 @@ class AboutScreenTest {
         const val LOAD_TIMEOUT_MS = 10_000L
         const val RIG_SEED = 0x2048L
 
-        val WHATS_NEW_30000 =
+        val WHATS_NEW_10000 =
             listOf(
-                R.string.whatsnew_30000_1,
-                R.string.whatsnew_30000_2,
-                R.string.whatsnew_30000_3,
-                R.string.whatsnew_30000_4,
-                R.string.whatsnew_30000_5,
+                R.string.whatsnew_10000_1,
+                R.string.whatsnew_10000_2,
+                R.string.whatsnew_10000_3,
+                R.string.whatsnew_10000_4,
+                R.string.whatsnew_10000_5,
             )
 
         /** D-123, verbatim. */

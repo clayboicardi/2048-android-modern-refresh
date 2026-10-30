@@ -1,4 +1,4 @@
-Wersja 3.0.0 to całkowicie przepisana natywna aplikacja z nową nazwą pakietu. Instaluje się obok oryginalnej aplikacji 2048; wyniki z oryginalnej aplikacji nie są przenoszone.
+Wersja 1.0.0 to całkowicie przepisana natywna aplikacja z nową nazwą pakietu. Instaluje się obok oryginalnej aplikacji 2048; wyniki z oryginalnej aplikacji nie są przenoszone.
 • Rozmiary planszy od 3×3 do 8×8
 • Nieograniczone cofanie, nawet po zakończeniu gry
 • Motywy Neon Arcade, ciemny i o wysokim kontraście

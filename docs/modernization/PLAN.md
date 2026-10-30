@@ -151,7 +151,7 @@ Every document already uses the canonical names. The left column lists names tha
 
 | Earlier name | Canonical | Notes |
 |---|---|---|
-| `whats_new_30000_N` | `whatsnew_30000_1` … `whatsnew_30000_5` | |
+| `whats_new_10000_N` | `whatsnew_10000_1` … `whatsnew_10000_5` | `whatsnew_30000_*` until D-271 |
 | `theme_system` (App language summary) | `setting_app_language_system` | |
 | `"$label $valueLatin"` concatenation | `a11y_chip_value` = `%1$s %2$s` | |
 | unnamed `onClickLabel` on choice / link rows | `a11y_action_change` / `a11y_action_open` | |
@@ -197,7 +197,7 @@ Every document already uses the canonical names. The left column lists names tha
 ### 2.7 Naming acceptance check
 
 ```bash
-grep -rnE 'onNewGameConfirmed|MotionSetting|RecordingHaptics|MotionFilmstripGoldenTest|TileLabelTest|testing/Fixtures|whats_new_30000|LocalMotionLevel|GameHaptics|TileAnimator|AnimatorScaleSource.kt|game/BoardView.kt|delayScaled|BoardLayoutTest|GameLayoutMode|TilePalettes.kt|GameButtons.kt|SettingsRows.kt|Review guidelines|PropTestConfig|RoborazziTaskType|gh pr ready' docs/modernization/*.md AGENTS.md CLAUDE.md
+grep -rnE 'onNewGameConfirmed|MotionSetting|RecordingHaptics|MotionFilmstripGoldenTest|TileLabelTest|testing/Fixtures|whats_new_[0-9]|LocalMotionLevel|GameHaptics|TileAnimator|AnimatorScaleSource.kt|game/BoardView.kt|delayScaled|BoardLayoutTest|GameLayoutMode|TilePalettes.kt|GameButtons.kt|SettingsRows.kt|Review guidelines|PropTestConfig|RoborazziTaskType|gh pr ready' docs/modernization/*.md AGENTS.md CLAUDE.md
 ```
 
 It prints only lines of this §2, of DECISIONS.md D-183, D-190, D-192 and Appendix B, and the fallback of DECISIONS.md verification-pending item 11. The M6.4 check runs it.
@@ -562,7 +562,7 @@ Run each from the repository root on the M6 candidate commit; paste results into
 | A6 | No `Vibrator`, `VibrationEffect`, `INTERNET`, `FLAG_IGNORE_GLOBAL_SETTING`, `material-icons`, `ui-text-google-fonts`, `ui-tooling` on the classpath | `git grep -n -E 'Vibrator\|VibrationEffect\|android\.permission\.INTERNET\|FLAG_IGNORE_GLOBAL_SETTING\|material-icons\|ui-text-google-fonts' -- app gradle`; `grep -n 'ui.tooling' app/build.gradle.kts` |
 | A7 | No named companion object on a `@Serializable` class; no `buildConfigField`; no `PackageManager` in main sources, so the version comes only from `BuildConfig` (D-134) | Review every `@Serializable` declaration listed by `git grep -n '@Serializable' -- app/src/main`; `git grep -n -E 'buildConfigField' -- app/build.gradle.kts` and `git grep -n -E 'PackageManager\|packageManager\|PackageInfo\|getPackageInfo' -- app/src/main/kotlin` print nothing |
 | A8 | Suppression inventory, each with a same-line reason (D-142, QUALITY §2.5) | `git grep -n -E '@([a-z]+:)?Suppress\(\|tools:ignore=' -- app core` (the optional use-site target also lists file-level `@file:Suppress(`, D-260) |
-| A9 | Workflows, modules and non-gates (D-133, D-153) | `ls .github/workflows` = `ci.yml`; no `app/src/androidTest`, no `.github/dependabot.yml`, no `gradle/verification-metadata.xml`, no `:baselineprofile` |
+| A9 | Workflows, modules and non-gates (D-133, D-153, D-271) | `ls .github/workflows` = `ci.yml` `release.yml` (`release.yml` since D-271); no `app/src/androidTest`, no `.github/dependabot.yml`, no `gradle/verification-metadata.xml`, no `:baselineprofile` |
 | A10 | Every check-metadata function of QUALITY §1.16 (D-179, D-190) is called | `grep -c -E '^check_[a-z_]+\(\) *\{' scripts/check-metadata.sh` (the definitions) equals `grep -c -E '^check_[a-z_]+( +#.*)?$' scripts/check-metadata.sh` (the call lines), and each defined name is called once (D-260) |
 | A11 | 45 goldens (D-204), all compared | `ls app/src/test/screenshots/*.png \| wc -l` = 45; last verify's `check-test-counts.sh` prints no G1–G5 error (QUALITY §1.15), so all 45 have an `unchanged` result |
 | A12 | AC coverage (S4) | the script below prints `0 missing` |
@@ -934,10 +934,10 @@ Steps:
 | D-122 | In-app licenses, coverage | M0.12, M4.5 | `check-licenses`; `LicensesCoverageTest.everyRuntimeGroupHasAnEntry`; `AboutScreenTest.licensesGroupedMitOflApache` |
 | D-123 | Privacy | M4.5, M5.4 | `AboutScreenTest.privacyTextMatchesPolicy`; `check_legal_and_privacy` |
 | D-124 | Credits, legacy history | M0.3, M4.5 | `AboutScreenTest.creditsRows`, `legacyHistoryListsNineReleases` |
-| D-130 | 3.0.0 / 30000 literals | M0.8 | `check-apk` item 1; `AppContainerTest.versionComesFromBuildConfigStandardFields` |
+| D-130 | 1.0.0 / 10000 literals (D-271; 3.0.0 / 30000 before it) | M0.8 | `check-apk` item 1; `AppContainerTest.versionComesFromBuildConfigStandardFields` |
 | D-131 | Public sideload key | M0.11 | `check-apk` item 6 |
 | D-132 | Build types | M0.8 | `check-apk` items 1, 4; `mapping.txt` in the CI artifact |
-| D-133 | No release workflow | all | M6.1 A9 |
+| D-133 | No release workflow in the overhaul (a hand-run `release.yml` after it, D-271) | all | M6.1 A9 |
 | D-134 | Reproducibility hygiene; BuildConfig (standard fields) as the only version source | M0.8, M2.2 | M6.1 A7; `repro-probe.sh` (M6.3); `AppContainerTest.createDoesNotTouchPackageManager`, `versionComesFromBuildConfigStandardFields` |
 | D-140 | `verify.sh` is the gate | M0.12 | CI step 7 runs it |
 | D-141 | Spotless + ktfmt 0.65 | M0.8 | `spotlessCheck` |

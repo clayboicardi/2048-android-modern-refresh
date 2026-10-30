@@ -1,4 +1,4 @@
-3.0.0 ist eine komplette Neuentwicklung als native App mit neuem Paketnamen. Sie wird neben der ursprünglichen 2048-App installiert; Punktestände aus der ursprünglichen App werden nicht übernommen.
+1.0.0 ist eine komplette Neuentwicklung als native App mit neuem Paketnamen. Sie wird neben der ursprünglichen 2048-App installiert; Punktestände aus der ursprünglichen App werden nicht übernommen.
 • Spielfeldgrößen 3×3 bis 8×8
 • Unbegrenztes Rückgängigmachen, auch nach Spielende
 • Designs: Neon Arcade, dunkel und kontrastreich

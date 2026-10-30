@@ -1,8 +1,8 @@
 # Privacy policy
 
-Applies to the Android app "2048" (package `com.clayboicardi.game2048`, and its debug build `com.clayboicardi.game2048.debug`), version 3.0.0 and later, built from https://github.com/clayboicardi/2048-android-modern-refresh.
+Applies to the Android app "2048" (package `com.clayboicardi.game2048`, and its debug build `com.clayboicardi.game2048.debug`), version 1.0.0 and later, built from https://github.com/clayboicardi/2048-android-modern-refresh.
 
-Last updated: 2026-10-28.
+Last updated: 2026-10-30.
 
 ## Summary
 

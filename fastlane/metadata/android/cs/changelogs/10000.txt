@@ -1,4 +1,4 @@
-Verze 3.0.0 je kompletně přepsaná jako nativní aplikace s novým názvem balíčku. Nainstaluje se vedle původní aplikace 2048; skóre z původní aplikace se nepřenáší.
+Verze 1.0.0 je kompletně přepsaná jako nativní aplikace s novým názvem balíčku. Nainstaluje se vedle původní aplikace 2048; skóre z původní aplikace se nepřenáší.
 • Velikosti plochy 3×3 až 8×8
 • Neomezené vracení tahů, i po konci hry
 • Motivy Neon Arcade, tmavý a vysoce kontrastní

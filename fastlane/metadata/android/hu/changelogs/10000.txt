@@ -1,4 +1,4 @@
-A 3.0.0 teljes újraírás natív alkalmazásként, új csomagnévvel. Az eredeti 2048 alkalmazás mellé települ; az eredeti alkalmazás pontszámai nem kerülnek át.
+Az 1.0.0 teljes újraírás natív alkalmazásként, új csomagnévvel. Az eredeti 2048 alkalmazás mellé települ; az eredeti alkalmazás pontszámai nem kerülnek át.
 • Táblaméretek 3×3-tól 8×8-ig
 • Korlátlan visszavonás, a játék vége után is
 • Neon Arcade, sötét és nagy kontrasztú témák

@@ -173,10 +173,10 @@
     <string name="license_hide_text">Kaŝi la tekston de la permesilo</string>
     <string name="whats_new_title">Novaĵoj</string>
     <string name="whats_new_version">Versio %1$s</string>
-    <string name="whatsnew_30000_1">Rekreita de nulo kiel rapida denaska aplikaĵo</string>
-    <string name="whatsnew_30000_2">Tabulaj grandecoj de 3×3 ĝis 8×8, ĉiu kun sia propra plej alta poentaro</string>
-    <string name="whatsnew_30000_3">Senlima malfaro, eĉ post la fino de la ludo</string>
-    <string name="whatsnew_30000_4">Helaj, malhelaj, Neon Arcade kaj altkontrastaj etosoj</string>
-    <string name="whatsnew_30000_5">Statistiko, klavaraj regiloj kaj subteno de TalkBack</string>
+    <string name="whatsnew_10000_1">Rekreita de nulo kiel rapida denaska aplikaĵo</string>
+    <string name="whatsnew_10000_2">Tabulaj grandecoj de 3×3 ĝis 8×8, ĉiu kun sia propra plej alta poentaro</string>
+    <string name="whatsnew_10000_3">Senlima malfaro, eĉ post la fino de la ludo</string>
+    <string name="whatsnew_10000_4">Helaj, malhelaj, Neon Arcade kaj altkontrastaj etosoj</string>
+    <string name="whatsnew_10000_5">Statistiko, klavaraj regiloj kaj subteno de TalkBack</string>
 
 </resources>

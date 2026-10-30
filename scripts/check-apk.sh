@@ -41,9 +41,9 @@ check_apk() { # apk package label expected-exported-set
   if [[ ! -f "$apk" ]]; then err "$apk is missing"; return; fi
   badging="$("$BT/aapt2" dump badging "$apk")" || { err "aapt2 dump badging failed: $apk"; return; }
 
-  # 1. Badging.
-  grep -qF "package: name='$pkg' versionCode='30000' versionName='3.0.0'" <<< "$badging" ||
-    err "$apk: package line is not name='$pkg' versionCode='30000' versionName='3.0.0'"
+  # 1. Badging (D-130, D-271).
+  grep -qF "package: name='$pkg' versionCode='10000' versionName='1.0.0'" <<< "$badging" ||
+    err "$apk: package line is not name='$pkg' versionCode='10000' versionName='1.0.0'"
   grep -qxF "application-label:'$label'" <<< "$badging" || err "$apk: label is not '$label'"
   grep -qxF "minSdkVersion:'24'" <<< "$badging" || err "$apk: minSdkVersion is not 24"
   grep -qxF "targetSdkVersion:'37'" <<< "$badging" || err "$apk: targetSdkVersion is not 37"

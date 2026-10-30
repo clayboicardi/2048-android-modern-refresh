@@ -177,10 +177,10 @@
     <string name="license_hide_text">Nascondi il testo della licenza</string>
     <string name="whats_new_title">Novità</string>
     <string name="whats_new_version">Versione %1$s</string>
-    <string name="whatsnew_30000_1">Ricostruita da zero come app nativa e veloce</string>
-    <string name="whatsnew_30000_2">Dimensioni della griglia da 3×3 a 8×8, ognuna con il proprio miglior punteggio</string>
-    <string name="whatsnew_30000_3">Annullamento illimitato, anche a partita finita</string>
-    <string name="whatsnew_30000_4">Temi chiaro, scuro, Neon Arcade e ad alto contrasto</string>
-    <string name="whatsnew_30000_5">Statistiche, controlli da tastiera e supporto per TalkBack</string>
+    <string name="whatsnew_10000_1">Ricostruita da zero come app nativa e veloce</string>
+    <string name="whatsnew_10000_2">Dimensioni della griglia da 3×3 a 8×8, ognuna con il proprio miglior punteggio</string>
+    <string name="whatsnew_10000_3">Annullamento illimitato, anche a partita finita</string>
+    <string name="whatsnew_10000_4">Temi chiaro, scuro, Neon Arcade e ad alto contrasto</string>
+    <string name="whatsnew_10000_5">Statistiche, controlli da tastiera e supporto per TalkBack</string>
 
 </resources>

@@ -94,8 +94,8 @@ class AppViewModel(settings: SettingsRepository, val versionCode: Int) : ViewMod
 
     /**
      * The entries newer than the last seen version while the What's new sheet is shown over the
-     * Game root (D-009); `null` otherwise, and in every v1.0 build (versionCode 30000 is the
-     * first).
+     * Game root (D-009); `null` otherwise, and in every v1.0 build (versionCode 10000 is the first,
+     * D-271).
      */
     val whatsNew: StateFlow<ImmutableList<ChangelogEntry>?> = pendingWhatsNew.asStateFlow()
 

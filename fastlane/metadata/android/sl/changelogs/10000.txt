@@ -1,4 +1,4 @@
-Različica 3.0.0 je povsem na novo napisana izvorna aplikacija z novim imenom paketa. Namesti se poleg izvirne aplikacije 2048; rezultati iz izvirne aplikacije se ne prenesejo.
+Različica 1.0.0 je povsem na novo napisana izvorna aplikacija z novim imenom paketa. Namesti se poleg izvirne aplikacije 2048; rezultati iz izvirne aplikacije se ne prenesejo.
 • Velikosti plošče od 3×3 do 8×8
 • Neomejena razveljavitev, tudi po koncu igre
 • Teme Neon Arcade, temna in visokokontrastna

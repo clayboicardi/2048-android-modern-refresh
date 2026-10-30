@@ -31,7 +31,7 @@ class AppContainerTest {
 
         val container = AppContainer.create(wrapper)
 
-        assertThat(container.versionCode).isEqualTo(30000)
+        assertThat(container.versionCode).isEqualTo(10000)
         container.applicationScope.cancel()
     }
 
@@ -50,7 +50,7 @@ class AppContainerTest {
                 "VERSION_CODE",
                 "VERSION_NAME",
             )
-        assertThat(BuildConfig.VERSION_CODE).isEqualTo(30000)
-        assertThat(BuildConfig.VERSION_NAME).isEqualTo("3.0.0")
+        assertThat(BuildConfig.VERSION_CODE).isEqualTo(10000)
+        assertThat(BuildConfig.VERSION_NAME).isEqualTo("1.0.0")
     }
 }

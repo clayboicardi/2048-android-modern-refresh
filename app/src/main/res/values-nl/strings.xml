@@ -173,10 +173,10 @@
     <string name="license_hide_text">Licentietekst verbergen</string>
     <string name="whats_new_title">Wat is er nieuw</string>
     <string name="whats_new_version">Versie %1$s</string>
-    <string name="whatsnew_30000_1">Helemaal opnieuw gebouwd als snelle native app</string>
-    <string name="whatsnew_30000_2">Bordgroottes van 3×3 tot 8×8, elk met een eigen record</string>
-    <string name="whatsnew_30000_3">Onbeperkt ongedaan maken, ook als het spel voorbij is</string>
-    <string name="whatsnew_30000_4">Thema’s: licht, donker, Neon Arcade en hoog contrast</string>
-    <string name="whatsnew_30000_5">Statistieken, toetsenbordbediening en ondersteuning voor TalkBack</string>
+    <string name="whatsnew_10000_1">Helemaal opnieuw gebouwd als snelle native app</string>
+    <string name="whatsnew_10000_2">Bordgroottes van 3×3 tot 8×8, elk met een eigen record</string>
+    <string name="whatsnew_10000_3">Onbeperkt ongedaan maken, ook als het spel voorbij is</string>
+    <string name="whatsnew_10000_4">Thema’s: licht, donker, Neon Arcade en hoog contrast</string>
+    <string name="whatsnew_10000_5">Statistieken, toetsenbordbediening en ondersteuning voor TalkBack</string>
 
 </resources>

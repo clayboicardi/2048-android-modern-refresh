@@ -15,8 +15,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 
-/** The `versionCode` every test container reports (D-130). */
-const val TEST_VERSION_CODE = 30000
+/** The `versionCode` every test container reports, this build's (D-130, D-271). */
+const val TEST_VERSION_CODE = 10000
 
 /**
  * The container of every JVM test (ARCHITECTURE.md §4.2, QUALITY.md §1.6): real DataStores over

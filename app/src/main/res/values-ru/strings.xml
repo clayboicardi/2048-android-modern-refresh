@@ -181,10 +181,10 @@
     <string name="license_hide_text">Скрыть текст лицензии</string>
     <string name="whats_new_title">Что нового</string>
     <string name="whats_new_version">Версия %1$s</string>
-    <string name="whatsnew_30000_1">Создано с нуля как быстрое нативное приложение</string>
-    <string name="whatsnew_30000_2">Размеры поля от 3×3 до 8×8, у каждого свой рекорд</string>
-    <string name="whatsnew_30000_3">Неограниченная отмена ходов, даже после окончания игры</string>
-    <string name="whatsnew_30000_4">Светлая, тёмная, Neon Arcade и контрастная темы</string>
-    <string name="whatsnew_30000_5">Статистика, управление с клавиатуры и поддержка TalkBack</string>
+    <string name="whatsnew_10000_1">Создано с нуля как быстрое нативное приложение</string>
+    <string name="whatsnew_10000_2">Размеры поля от 3×3 до 8×8, у каждого свой рекорд</string>
+    <string name="whatsnew_10000_3">Неограниченная отмена ходов, даже после окончания игры</string>
+    <string name="whatsnew_10000_4">Светлая, тёмная, Neon Arcade и контрастная темы</string>
+    <string name="whatsnew_10000_5">Статистика, управление с клавиатуры и поддержка TalkBack</string>
 
 </resources>

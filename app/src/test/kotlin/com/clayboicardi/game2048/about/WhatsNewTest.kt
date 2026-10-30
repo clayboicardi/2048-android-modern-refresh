@@ -37,10 +37,10 @@ class WhatsNewTest {
     /** F24-AC1 */
     @Test
     fun freshInstallStoresVersionAndShowsNothing() = runTest {
-        val decision = decideWhatsNew(lastSeen = 0, current = 30000, changelog = CHANGELOG)
+        val decision = decideWhatsNew(lastSeen = 0, current = 10000, changelog = CHANGELOG)
 
         assertThat(decision.entries).isEmpty()
-        assertThat(decision.storeVersionCode).isEqualTo(30000)
+        assertThat(decision.storeVersionCode).isEqualTo(10000)
 
         // A fresh install: no settings file, so `lastSeenVersionCode` is the default 0.
         appViewModel(seed = null) { container, vm ->
@@ -56,27 +56,27 @@ class WhatsNewTest {
     /** F24-AC2 */
     @Test
     fun updateShowsEntriesNewerThanLastSeen() = runTest {
-        val decision = decideWhatsNew(lastSeen = 29999, current = 30000, changelog = CHANGELOG)
+        val decision = decideWhatsNew(lastSeen = 9999, current = 10000, changelog = CHANGELOG)
 
         assertThat(decision.entries)
             .containsExactly(
                 ChangelogEntry(
-                    30000,
+                    10000,
                     persistentListOf(
-                        R.string.whatsnew_30000_1,
-                        R.string.whatsnew_30000_2,
-                        R.string.whatsnew_30000_3,
-                        R.string.whatsnew_30000_4,
-                        R.string.whatsnew_30000_5,
+                        R.string.whatsnew_10000_1,
+                        R.string.whatsnew_10000_2,
+                        R.string.whatsnew_10000_3,
+                        R.string.whatsnew_10000_4,
+                        R.string.whatsnew_10000_5,
                     ),
                 ),
             )
-        assertThat(decision.storeVersionCode).isEqualTo(30000)
+        assertThat(decision.storeVersionCode).isEqualTo(10000)
 
-        appViewModel(seed = SEEN.copy(lastSeenVersionCode = 29999)) { container, vm ->
+        appViewModel(seed = SEEN.copy(lastSeenVersionCode = 9999)) { container, vm ->
             assertThat(vm.whatsNew.value).containsExactlyElementsIn(decision.entries).inOrder()
             assertThat(container.settingsRepository.state.value.lastSeenVersionCode)
-                .isEqualTo(30000)
+                .isEqualTo(10000)
 
             vm.onWhatsNewDismissed()
 
@@ -87,27 +87,26 @@ class WhatsNewTest {
     /** F24-AC3 */
     @Test
     fun entriesCoverExactlyTheSkippedRange() {
-        val changelog = mapOf(20100 to listOf(LINE_A), 30000 to listOf(LINE_B))
+        val changelog = mapOf(10000 to listOf(LINE_A), 10100 to listOf(LINE_B))
 
-        val fromOld = decideWhatsNew(lastSeen = 20000, current = 30000, changelog = changelog)
-        val fromMiddle = decideWhatsNew(lastSeen = 20100, current = 30000, changelog = changelog)
+        val fromOld = decideWhatsNew(lastSeen = 9999, current = 10100, changelog = changelog)
+        val fromMiddle = decideWhatsNew(lastSeen = 10000, current = 10100, changelog = changelog)
 
-        assertThat(fromOld.entries.map { it.versionCode }).containsExactly(20100, 30000).inOrder()
+        assertThat(fromOld.entries.map { it.versionCode }).containsExactly(10000, 10100).inOrder()
         assertThat(fromOld.entries.flatMap { it.lines }).containsExactly(LINE_A, LINE_B).inOrder()
-        assertThat(fromOld.storeVersionCode).isEqualTo(30000)
-        assertThat(fromMiddle.entries.map { it.versionCode }).containsExactly(30000)
+        assertThat(fromOld.storeVersionCode).isEqualTo(10100)
+        assertThat(fromMiddle.entries.map { it.versionCode }).containsExactly(10100)
         assertThat(fromMiddle.entries.flatMap { it.lines }).containsExactly(LINE_B)
-        assertThat(fromMiddle.storeVersionCode).isEqualTo(30000)
+        assertThat(fromMiddle.storeVersionCode).isEqualTo(10100)
         // An entry newer than the running version is never shown.
-        val ahead = mapOf(30000 to listOf(LINE_A), 30100 to listOf(LINE_B))
-        assertThat(decideWhatsNew(lastSeen = 20000, current = 30000, changelog = ahead).entries)
-            .containsExactly(ChangelogEntry(30000, persistentListOf(LINE_A)))
+        assertThat(decideWhatsNew(lastSeen = 9999, current = 10000, changelog = changelog).entries)
+            .containsExactly(ChangelogEntry(10000, persistentListOf(LINE_A)))
     }
 
     /** F24-AC4 */
     @Test
     fun sameVersionShowsNothing() = runTest {
-        val decision = decideWhatsNew(lastSeen = 30000, current = 30000, changelog = CHANGELOG)
+        val decision = decideWhatsNew(lastSeen = 10000, current = 10000, changelog = CHANGELOG)
 
         assertThat(decision.entries).isEmpty()
         assertThat(decision.storeVersionCode).isNull()
@@ -121,17 +120,19 @@ class WhatsNewTest {
     /** F24-AC5 */
     @Test
     fun downgradeShowsNothingAndKeepsLastSeen() = runTest {
-        val decision = decideWhatsNew(lastSeen = 40000, current = 30000, changelog = CHANGELOG)
+        // A settings file written by a build before D-271 renumbered the first release.
+        val decision =
+            decideWhatsNew(lastSeen = BEFORE_RENUMBERING, current = 10000, changelog = CHANGELOG)
 
         assertThat(decision.entries).isEmpty()
         assertThat(decision.storeVersionCode).isNull()
 
-        appViewModel(seed = SEEN.copy(lastSeenVersionCode = 40000)) { container, vm ->
+        appViewModel(seed = SEEN.copy(lastSeenVersionCode = BEFORE_RENUMBERING)) { container, vm ->
             assertThat(vm.whatsNew.value).isNull()
             assertThat(container.settingsRepository.submissions).isEqualTo(0L)
             assertThat(container.settingsRepository.state.value.lastSeenVersionCode)
-                .isEqualTo(40000)
-            assertThat(container.fileSettings().lastSeenVersionCode).isEqualTo(40000)
+                .isEqualTo(BEFORE_RENUMBERING)
+            assertThat(container.fileSettings().lastSeenVersionCode).isEqualTo(BEFORE_RENUMBERING)
         }
     }
 
@@ -139,7 +140,7 @@ class WhatsNewTest {
     @Test
     fun versionStoredBeforeSheetIsShown() = runTest {
         val container = testAppContainer(tmp.newFolder())
-        container.seedSettings(SEEN.copy(lastSeenVersionCode = 29999))
+        container.seedSettings(SEEN.copy(lastSeenVersionCode = 9999))
         val store = ViewModelStore()
         try {
             val vm = testAppViewModel(container, store)
@@ -159,23 +160,25 @@ class WhatsNewTest {
 
             assertWithMessage("submitted saves and lastSeenVersionCode at the first emission")
                 .that(atEmission)
-                .isEqualTo(1L to 30000)
+                .isEqualTo(1L to 10000)
             assertThat(vm.whatsNew.value).isNotEmpty()
             settings.awaitIdle()
-            assertThat(container.fileSettings().lastSeenVersionCode).isEqualTo(30000)
+            assertThat(container.fileSettings().lastSeenVersionCode).isEqualTo(10000)
         } finally {
             store.clear()
         }
     }
 
     /**
-     * D-130: the About screen's version titles follow the versionCode scheme `MAJOR·10000 +
+     * D-130, D-271: the About screen's version titles follow the versionCode scheme `MAJOR·10000 +
      * MINOR·100 + PATCH`, and the shipped entry's name is the build's.
      */
     @Test
     fun versionNameFollowsTheVersionScheme() {
         assertThat(versionNameOf(BuildConfig.VERSION_CODE)).isEqualTo(BuildConfig.VERSION_NAME)
-        assertThat(versionNameOf(30000)).isEqualTo("3.0.0")
+        assertThat(versionNameOf(10000)).isEqualTo("1.0.0")
+        assertThat(versionNameOf(10001)).isEqualTo("1.0.1")
+        assertThat(versionNameOf(10100)).isEqualTo("1.1.0")
         assertThat(versionNameOf(30102)).isEqualTo("3.1.2")
         assertThat(versionNameOf(101112)).isEqualTo("10.11.12")
         assertThat(CHANGELOG.keys).contains(BuildConfig.VERSION_CODE)
@@ -207,6 +210,12 @@ class WhatsNewTest {
     private companion object {
         /** DESIGN_SYSTEM.md §10.2: onboarding done, the current version seen. */
         val SEEN = Settings(onboardingDone = true, lastSeenVersionCode = TEST_VERSION_CODE)
+
+        /**
+         * The versionCode of the CI builds before D-271 renumbered the first release to 10000; a
+         * settings file they wrote holds it (as the v1 fixture does, D-041).
+         */
+        const val BEFORE_RENUMBERING = 30000
 
         /** Stand-ins for two string resources of a test changelog. */
         const val LINE_A = 1

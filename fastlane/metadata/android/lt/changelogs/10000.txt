@@ -1,4 +1,4 @@
-Versija 3.0.0 visiškai perrašyta kaip vietinė programa su nauju paketo pavadinimu. Ji įdiegiama šalia originalios 2048 programos; originalios programos rezultatai neperkeliami.
+Versija 1.0.0 visiškai perrašyta kaip vietinė programa su nauju paketo pavadinimu. Ji įdiegiama šalia originalios 2048 programos; originalios programos rezultatai neperkeliami.
 • Lentos dydžiai nuo 3×3 iki 8×8
 • Neribotas atšaukimas, net žaidimui pasibaigus
 • Neon Arcade, tamsi ir didelio kontrasto temos

@@ -3230,7 +3230,7 @@ private val WIN_NEXT_LEFT_4: SavedGame =
 private const val UNDOABLE_MOVES = 416
 
 /** DESIGN_SYSTEM.md §10.4 row 44: a version seen before this one, so What's new shows. */
-private const val SEEN_BEFORE_UPDATE = 20000
+private const val SEEN_BEFORE_UPDATE = 9999
 
 /**
  * One header of F09-AC8: [form], Score and Best of [digits] digits, in the NEW BEST style or not.

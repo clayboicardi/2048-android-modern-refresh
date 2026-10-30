@@ -1,4 +1,5 @@
-# The only workflow of this repository (D-151, as refined by D-177). Design and rationale:
+# The CI workflow of this repository (D-151, as refined by D-177); release.yml, run by hand,
+# publishes releases (D-271). Design and rationale:
 # docs/modernization/QUALITY.md §5; merge protocol: QUALITY.md §6.
 #
 # Bootstrap behaviour. Until execution milestone M0 lands, the tree holds the legacy Groovy build

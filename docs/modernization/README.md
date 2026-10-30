@@ -1,6 +1,6 @@
 # Modernization docs
 
-Specification and plan for rewriting 2048 for Android as a native Kotlin + Jetpack Compose + Material 3 app (`com.clayboicardi.game2048` 3.0.0). The work lands in two pull requests (DECISIONS.md D-160): the plan PR, which adds this directory, `.github/workflows/ci.yml`, `AGENTS.md` and `CLAUDE.md`, and one execution PR that implements milestones M0–M6.
+Specification and plan for rewriting 2048 for Android as a native Kotlin + Jetpack Compose + Material 3 app (`com.clayboicardi.game2048`, first released as 1.0.0, DECISIONS.md D-271). The work lands in two pull requests (DECISIONS.md D-160): the plan PR, which adds this directory, `.github/workflows/ci.yml`, `AGENTS.md` and `CLAUDE.md`, and one execution PR that implements milestones M0–M6.
 
 ## Reading order
 
@@ -30,7 +30,7 @@ Research (evidence; frozen, cited by the documents above):
 
 Files added later in this directory: `legacy-credits.md` (M0, legacy authors and translators captured before the submodule is removed) and `i18n-glossary.md` (M5, committed before any translation).
 
-Related files outside this directory: [`AGENTS.md`](../../AGENTS.md) (agent instructions and Codex review rules), [`CLAUDE.md`](../../CLAUDE.md) (agent session notes), [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) (CI, a no-op until M0 adds `settings.gradle.kts`), and `core/engine/AGENTS.md` (engine review rules, added in M0).
+Related files outside this directory: [`AGENTS.md`](../../AGENTS.md) (agent instructions and Codex review rules), [`CLAUDE.md`](../../CLAUDE.md) (agent session notes), [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) (CI, a no-op until M0 adds `settings.gradle.kts`), [`.github/workflows/release.yml`](../../.github/workflows/release.yml) (a GitHub Release per version, dispatched by hand, D-271), and `core/engine/AGENTS.md` (engine review rules, added in M0).
 
 ## Status
 

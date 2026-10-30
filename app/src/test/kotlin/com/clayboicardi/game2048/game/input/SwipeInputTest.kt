@@ -531,7 +531,7 @@ private const val SCROLL_CASES = 3
 private const val SWIPE_DP = 60f
 
 /** A version seen before this one, so What's new shows (DESIGN_SYSTEM.md §10.4 row 44). */
-internal const val SEEN_BEFORE = 20000
+internal const val SEEN_BEFORE = 9999
 
 /** Waits until a node tagged [tag] exists, running the main looper between checks. */
 internal fun ComposeContentTestRule.awaitTag(tag: String) {
