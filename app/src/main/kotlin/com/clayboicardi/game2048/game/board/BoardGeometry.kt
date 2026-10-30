@@ -189,7 +189,9 @@ interface ChromeMeasure {
     /** The controls bar (Undo and New game, D-249). */
     fun controls(width: Float): Float
 
-    /** The TalkBack status line at its reserved two-line height. */
+    /**
+     * The TalkBack status line at its reservation: its longest announcements, at least two lines.
+     */
     fun status(width: Float): Float
 
     /** The direction pad with the New game column beside it (DESIGN_SYSTEM.md §6.6, D-249). */

@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.isSpecified
@@ -229,9 +230,12 @@ private fun RowScope.ButtonLabel(text: String, icon: (@Composable () -> Unit)?) 
         text = text,
         style = ButtonDefaults.textStyleFor(GameDimens.ControlHeight),
         textAlign = TextAlign.Center,
-        maxLines = 2,
+        maxLines = LABEL_MAX_LINES,
     )
 }
+
+/** A game button's label wraps to at most two lines (DESIGN_SYSTEM.md §7.3; D-084). */
+private const val LABEL_MAX_LINES = 2
 
 /**
  * The narrowest a [GameButton] of [text] (no icon) can be without cutting a word of its label, in
@@ -250,6 +254,34 @@ fun rememberGameButtonMinWidth(text: String): Int {
         val sides =
             padding.calculateStartPadding(direction) + padding.calculateEndPadding(direction)
         word + with(density) { sides.roundToPx() }
+    }
+}
+
+/**
+ * Whether a [GameButton] of [text] (no icon), [width] wide, lays its label out on at most two lines
+ * without breaking a word (D-084, D-266): no word of the label is wider than
+ * [rememberGameButtonMinWidth] allows, and the label in the button's text style wraps to at most
+ * two lines at [width] minus `contentPaddingFor(ControlHeight)`. A column that fails this puts the
+ * button on a row of its own.
+ */
+@Composable
+fun rememberGameButtonLabelFits(text: String, width: Dp): Boolean {
+    val measurer = rememberTextMeasurer()
+    val style = ButtonDefaults.textStyleFor(GameDimens.ControlHeight)
+    val padding = ButtonDefaults.contentPaddingFor(GameDimens.ControlHeight, false)
+    val density = LocalDensity.current
+    val direction = LocalLayoutDirection.current
+    val narrowest = rememberGameButtonMinWidth(text)
+    return remember(text, width, style, padding, density, direction, measurer, narrowest) {
+        val widthPx = with(density) { width.roundToPx() }
+        val sides =
+            with(density) {
+                (padding.calculateStartPadding(direction) + padding.calculateEndPadding(direction))
+                    .roundToPx()
+            }
+        val label = Constraints(maxWidth = (widthPx - sides).coerceAtLeast(0))
+        narrowest <= widthPx &&
+            measurer.measure(text, style, constraints = label).lineCount <= LABEL_MAX_LINES
     }
 }
 

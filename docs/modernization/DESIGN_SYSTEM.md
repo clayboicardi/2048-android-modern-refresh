@@ -831,18 +831,18 @@ D-075's narrow-window rule (`availW < 280dp`: board `max(220dp, availW)`, title 
 | `header(COMPACT, w)` | the §6.1 COMPACT header, no title, chip layout as above: INLINE: one row [size chip][Score][Best][More]; OWN_ROW: size-chip row (More at its end) + chip row; STACKED: size-chip row (More at its end) + Score + 8 + Best | 64 (INLINE) |
 | `gap(h)` | header↔board and board↔controls: `StackGap` for FULL, `Space8` for COMPACT | 24; 8 |
 | `top(h, w)` | `header(h, w)` + (hint shown ? 8 + hint card + 8 : `gap(h)`) | FULL 136; COMPACT 72 (no hint) |
-| `bottom(h, w)` | without the pad: `gap(h)` + controls bar (Undo and New game, 1 : 1). With it: (FULL ? 16 : 8) + status line + 8 + pad row (the pad and New game, §6.6) | FULL 104 / 200; COMPACT 88 / 192 |
+| `bottom(h, w)` | without the pad: `gap(h)` + controls bar (Undo and New game, 1 : 1). With it: (FULL ? 16 : 8) + status line (its reservation, below) + 8 + pad row (the pad and New game beside it, or below it when its label does not fit, §6.6, D-266) | FULL 104 / 200; COMPACT 88 / 192 |
 | `stacked(h, w)` | `top(h, w) + bottom(h, w)` | FULL 240 / 336; COMPACT 160 / 264 |
 | `statusBlock` | SCROLL only: 8 + status line at `w0` while the pad is shown, else 0 | 48 / 0 |
 | rails | the taller of the stats rail without its title and the actions rail, at the rail width (§5.4); the stats rail's chips are STACKED and wrap as §7.2 says for the live digit count | 192; 312 with the pad |
 | panel | the panel's content at the panel width (§5.4), its chips OWN_ROW or STACKED for the live digit count | 256; 448 with the pad |
 
-The status line enters every term at its reserved two-line height, not with its current text, so an announcement never changes the arrangement; §6.6's absorption of a longer status line then shrinks the board, never below `BoardFloor`.
+The status line enters every term at its **reservation**, not with its current text (D-265): the height of the tallest of its longest announcements for the current locale, at the term's width, for the live digit count `d`, and never less than its two-line minimum. The nominal 40 dp above is two lines; the measured reservation at 328 dp is two lines in English up to five digits and three from six, and three lines in German. Each arrangement gives its status line the reservation at the width it draws the line as a minimum height, so an announcement never changes the arrangement, the board or the pad's position, and never reaches into the board. STACKED's safety net: should the bottom chrome ever be taller than its reservation (the one frame of a size switch to a size with fewer digits, which still shows the previous size's status), it moves down into the bottom margin instead of over the board.
 
 The score chips, unlike the status line, enter with the live digit count `d = digits(max(score, best))` (§7.2): a header that must stack its chips is measured stacked, so the board shrinks, the STACKED header falls back from FULL to COMPACT, or the arrangement becomes SCROLL, instead of the header clipping or overlapping the board. `d` changes only when the larger value gains or loses a digit (a record game crossing 10^k, an undo back across it, a new game, a size switch). Such a change is a live layout change like the others: it keeps `GameLayoutSpec.mode` and animates as §5.8 says, or it changes `mode` and is an arrangement switch (below).
 
 `GameLayout` (`game/GameLayout.kt`) is a `SubcomposeLayout`, and the resolution runs in its measure block:
-1. It subcomposes a **measurement probe** of the chrome: the header in both styles (each with More in its size-chip row, D-249), the hint, the controls bar (Undo and New game), the status line, the pad row, both rails and the panel. The probe is wrapped in `Modifier.clearAndSetSemantics {}` and composed under `LocalChromeProbe provides true`, which turns off every effect in chrome composables (`GameHeader`'s header moments and its `onHeaderPresented` report, ARCHITECTURE.md §4.11). It shows placeholder values: Score and Best both show `10^(d − 1)`, a value with the live digit count `d` (§7.2), so the probe's chips take the layout and line count the real chips will; the status line is its `Text` with `minLines = 2` and no text. The probe reads `d` from the `header` collector that `GameScreen` passes in (not a retention state; ARCHITECTURE.md §4.11 item 2) through `derivedStateOf { digits(max(header.score, header.best)) }`, so it recomposes only when `d` changes, never on an ordinary move or a presentation report. It is never placed, so it draws nothing and takes no input, focus or semantics.
+1. It subcomposes a **measurement probe** of the chrome: the header in both styles (each with More in its size-chip row, D-249), the hint, the controls bar (Undo and New game), the status line, the pad row, both rails and the panel. The probe is wrapped in `Modifier.clearAndSetSemantics {}` and composed under `LocalChromeProbe provides true`, which turns off every effect in chrome composables (`GameHeader`'s header moments and its `onHeaderPresented` report, ARCHITECTURE.md §4.11). It shows placeholder values: Score and Best both show `10^(d − 1)`, a value with the live digit count `d` (§7.2), so the probe's chips take the layout and line count the real chips will. The status line is `ReservedStatusLine(d)` (`game/StatusLine.kt`, D-265): the tallest status line `Text` (`minLines = 2`) showing one of `longestStatusTexts(resources, locale, d)`, the announcements built from the locale's real strings with the widest values a game of `d` digits can name: every score and merged value (a created tile, never above the score) as the largest number of `d` digits in prose format; each moved sentence followed by each merged sentence (`a11y_merged_1`–`_3`, and `a11y_merged_more` in every plural form that 1–29 further merges select, written with 29, since an 8×8 move merges at most 32 pairs), a spawned 4 at row 8, column 8 and the score; Move undone, New game with two such start tiles, "Board 8×8" and the four blocked moves. Game digits are Latin and of one width, so no announcement wraps to more lines; the rails and the panel compose their status line blank at that reservation. The pad row is the same `PadRowLayout` the arrangements compose (§6.6, D-266). The probe reads `d` from the `header` collector that `GameScreen` passes in (not a retention state; ARCHITECTURE.md §4.11 item 2) through `derivedStateOf { digits(max(header.score, header.best)) }`, so it recomposes only when `d` changes, never on an ordinary move or a presentation report. It is never placed, so it draws nothing and takes no input, focus or semantics.
 2. A `ChromeMeasure` answers each term with the probe's `maxIntrinsicHeight` at the asked width.
 3. `resolveGameLayout` picks the arrangement. `GameLayout` subcomposes that arrangement, measures each child once and places it. Each arrangement is its own subcomposition slot, keyed by `GameLayoutSpec.mode`, and holds the board, header, controls and the rest of the visible chrome. The slot's content first makes the arrangement's own presentation scope: `rememberPresented` retention states over the `board` and `header` collectors that `GameScreen` passes in (`ARCHITECTURE.md` §4.11 item 2), read by the slot's one `BoardView`, its one `GameHeader` (its `HeaderStyle` is a parameter) and the status line. `GameLayout` uses the default `SubcomposeLayoutState`, which keeps no slot for reuse.
 
@@ -868,7 +868,7 @@ interface ChromeMeasure {   // the measured-chrome terms above; each is non-incr
     fun header(style: HeaderStyle, width: Float): Float
     fun hint(width: Float): Float
     fun controls(width: Float): Float
-    fun status(width: Float): Float      // the reserved two-line height
+    fun status(width: Float): Float      // the reservation: the longest announcements, at least two lines (D-265)
     fun padRow(width: Float): Float
     fun rails(rail: Float): Float
     fun panel(panel: Float): Float
@@ -1049,6 +1049,8 @@ STACKED, THREE_COLUMN and SIDE_PANEL put the board on the vertical centre line o
 │    └───── 136 high ────────┘    └──────────────┘
 │    (More stays at the end of header row 2, D-249)
 ```
+
+When New game's label does not lay out on two lines in the 104 dp column without breaking a word (`fontScale` 2.0; French "Nouvelle partie" even at 1.0), the pad is centred and New game follows 8 dp below it at the full width of the column (D-266).
 
 **F. Narrow window, `availW < 280dp`.** The board is `max(220, availW)`, and the header becomes the COMPACT header with no title (D-075). Its one 64 dp row (size chip without its grid icon, Score, Best, More) needs about 314 dp at fontScale 1.0 (D-249), so in these windows the chips take their own row below the size-chip row, which keeps More at its end (OWN_ROW, 112 dp nominal; §6.1, §7.2). If the window is also too short for that board, the arrangement is SCROLL (§5.3).
 
@@ -1301,7 +1303,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 
 - **Visible while** `AccessibilityManager.isTouchExplorationEnabled` (listener-observed).
 - **Status line** (`game/StatusLine.kt`):
-  - `Text` with `bodyMedium`, `onSurfaceVariant`, `minHeight = 40.dp`, no `maxLines` (it wraps; the measured chrome of §5.3 absorbs the growth, D-084);
+  - `Text` with `bodyMedium`, `onSurfaceVariant`, `minHeight = 40.dp`, no `maxLines` (it wraps, D-084). Its minimum height in each arrangement is §5.3's reservation, the tallest of its longest announcements at that width, so a longer announcement grows into reserved space and moves neither the board nor the pad (D-265);
   - `semantics { liveRegion = LiveRegionMode.Polite }`, and `hideFromAccessibility()` while it is still blank, so TalkBack has no stop that reads nothing (D-252);
   - a status whose text equals the text shown (a second blocked move in the same direction, two undos to the same score) blanks the line for one frame and then shows the text again, so the live region's text changes and TalkBack reads the repeat (D-252);
   - content per D-081, completed by D-202. Besides D-081's move and merge sentences, it reads:
@@ -1317,6 +1319,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
   - the whole pad sits in a forced-LTR subtree (D-104).
 - While the pad is visible, the controls bar's Undo is **removed** (the pad has Undo), so TalkBack meets no duplicate.
   - In STACKED and SCROLL the controls become a 104 dp column (`GameDimens.PadControlsWidth`) holding New game only (text only), beside the pad; More stays at the end of the size chip's header row (§5.5 E, G; D-249).
+  - When New game's label does not lay out on two lines in that column without breaking a word (`rememberGameButtonLabelFits`: no word wider than `rememberGameButtonMinWidth` allows, at most two lines at 104 dp minus `contentPaddingFor(56.dp)`), the pad is centred and New game takes the full width of the column 8 dp below it (`ControlsForm.BELOW_PAD`). The rule depends only on the locale, the font scale and the density; the traversal stays status line, pad, New game (D-266).
 - The `move_*` strings are the same resources as the board's custom actions (D-080).
 
 ### 6.7 Board-size picker (D-007; `game/overlay/BoardSizeSheet.kt`)
@@ -1633,7 +1636,8 @@ TalkBack announces snackbars politely by default. No snackbar is used for the wi
 
 - `Modifier.focusRing(shape: Shape)` draws, while focused in keyboard input mode (`InputMode.Keyboard`, D-227), a 2 dp `primary` stroke **outside** the element. There is a 2 dp gap, and the outset shape's corner radius is the element's radius + 2 + 1 dp.
 - The ring therefore sits on the background (`primary` on `background` ≥ 6.28:1, §2.9) and never on the board or a tile.
-- Applied by every `ui/components` wrapper and to the board (`shape` = board shape). M3 state layers alone are below 3:1.
+- Applied by every `ui/components` wrapper and to the board (`shape` = board shape). M3 state layers alone are below 3:1. The interactive list rows (`SettingsSwitchRow`, `SettingsChoiceRow`, `SettingsLinkRow`, `SelectableRow`, `LinkRow` and `ChoiceDialog`'s options) use `ListItemDefaults.shapes().shape`, M3's resting list shape (D-267).
+- While the ring shows, `focusRing` places its element at z-index 1, above its siblings, so the next list row's opaque container does not cover the ring's lower edge. In a full-width list the ring's sides lie outside the window, and its top and bottom edges show (D-267).
 - The game buttons (`GameButton`, `GameIconButton`) show the M3 focused state layer only in keyboard input mode too: focus still moves to a card's primary button (D-081), and a touch player sees no focused tint on it (D-240).
 - The board requests focus when Game appears (D-053), unless a card is shown then: its primary button keeps the focus, and the board takes it back when the card leaves (D-240).
 

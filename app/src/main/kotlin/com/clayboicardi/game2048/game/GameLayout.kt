@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.rememberScrollState
@@ -52,6 +53,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.isTraversalGroup
@@ -67,6 +69,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.clayboicardi.game2048.R
 import com.clayboicardi.game2048.data.platform.MonotonicClock
 import com.clayboicardi.game2048.engine.BoardSize
 import com.clayboicardi.game2048.engine.Direction
@@ -88,6 +91,7 @@ import com.clayboicardi.game2048.game.overlay.FirstLaunchHint
 import com.clayboicardi.game2048.game.overlay.HintContent
 import com.clayboicardi.game2048.ui.components.GameSnackbarHost
 import com.clayboicardi.game2048.ui.components.LayoutMode
+import com.clayboicardi.game2048.ui.components.rememberGameButtonLabelFits
 import com.clayboicardi.game2048.ui.components.stackedSnackbarTop
 import com.clayboicardi.game2048.ui.theme.GameDimens
 import com.clayboicardi.game2048.ui.theme.GameMotion
@@ -275,8 +279,9 @@ internal fun GameLayout(
         val railTitle =
             spec.mode == LayoutMode.THREE_COLUMN &&
                 chrome.statsRailWithTitle(spec.rail) <= window.availH
+        val status = if (talkBack) chrome.status(statusWidth(spec, window)) else 0f
         probe.end()
-        val frame = ArrangementFrame(spec, window, railTitle)
+        val frame = ArrangementFrame(spec, window, railTitle, status)
         val content =
             subcompose(spec.mode) {
                 // The arrangement scope (ARCHITECTURE.md §4.11 item 2): made first in this slot,
@@ -328,15 +333,38 @@ private data class ArrangementFrame(
      * THREE_COLUMN: the stats rail keeps its title (it is dropped first, DESIGN_SYSTEM.md §5.4).
      */
     val railTitle: Boolean,
+    /**
+     * The status line's reserved height in dp while the pad is shown, else 0: the probe's
+     * [ReservedStatusLine] at the width the arrangement draws it (DESIGN_SYSTEM.md §5.3, D-265).
+     */
+    val status: Float,
 ) {
     /** The STACKED and SCROLL content width `w0` (DESIGN_SYSTEM.md §5.3). */
     val w0: Float
-        get() = minOf(maxOf(window.availW, GameDimens.BoardFloor.value), GameDimens.BoardMax.value)
+        get() = contentWidth(window)
 
     /** The title's `autoSize` maximum: 64 sp in an expanded window, else 56 sp (§3.5, §5.1). */
     val titleMax: TextUnit
         get() = titleMaxFor(window)
 }
+
+/** The STACKED and SCROLL content width `w0` of [window] (DESIGN_SYSTEM.md §5.3). */
+private fun contentWidth(window: LayoutWindow): Float =
+    minOf(maxOf(window.availW, GameDimens.BoardFloor.value), GameDimens.BoardMax.value)
+
+/**
+ * The width [spec]'s arrangement draws the status line at (DESIGN_SYSTEM.md §5.4): the STACKED
+ * column (the board under the FULL header, `w0` under the COMPACT one), the SCROLL column, the rail
+ * or the panel.
+ */
+private fun statusWidth(spec: GameLayoutSpec, window: LayoutWindow): Float =
+    when (spec.mode) {
+        LayoutMode.STACKED ->
+            if (spec.header == HeaderStyle.FULL) spec.board else contentWidth(window)
+        LayoutMode.SCROLL -> contentWidth(window)
+        LayoutMode.THREE_COLUMN -> spec.rail
+        LayoutMode.SIDE_PANEL -> spec.panel
+    }
 
 /** The title's `autoSize` maximum for [window] (DESIGN_SYSTEM.md §3.5: 64 sp when expanded). */
 private fun titleMaxFor(window: LayoutWindow): TextUnit =
@@ -494,18 +522,23 @@ private class ArrangementParts(
         )
     }
 
+    /** The status line, at least as tall as its reservation (DESIGN_SYSTEM.md §6.6; D-265). */
     @Composable
     fun Status(modifier: Modifier = Modifier) {
-        StatusLine(board, header, inputs.nudge, modifier)
+        StatusLine(board, header, inputs.nudge, modifier.heightIn(min = frame.status.dp))
     }
 
-    /** The pad and the New game column beside it (DESIGN_SYSTEM.md §5.5 E, §6.6; D-249). */
+    /**
+     * The pad and New game beside it, or below it when its label does not fit the column
+     * (DESIGN_SYSTEM.md §5.5 E, §6.6; D-249, D-266).
+     */
     @Composable
     fun PadRow(modifier: Modifier = Modifier) {
-        PadRowLayout(modifier) {
-            Pad()
-            Controls(ControlsForm.PAD_COLUMN, Modifier.traversal(TRAVERSAL_CONTROLS))
-        }
+        PadRowLayout(
+            pad = { Pad() },
+            newGame = { form -> Controls(form, Modifier.traversal(TRAVERSAL_CONTROLS)) },
+            modifier = modifier,
+        )
     }
 
     /**
@@ -544,16 +577,38 @@ private class SlotStart {
     var composed = false
 }
 
-/** The pad, 16 dp, and the New game column, centred on one row (DESIGN_SYSTEM.md §5.5 E). */
+/**
+ * The pad row (DESIGN_SYSTEM.md §5.5 E, §6.6; D-249, D-266): the [pad], 16 dp and New game's
+ * `PadControlsWidth` column, centred on one row. When New game's label does not lay out on two
+ * lines in that column without breaking a word (a large font scale, a long translation), New game
+ * takes the full width 8 dp below the pad instead. [newGame] composes New game in the form given.
+ */
 @Composable
-private fun PadRowLayout(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement =
-            Arrangement.spacedBy(GameDimens.Space16, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.Top,
-    ) {
-        content()
+private fun PadRowLayout(
+    pad: @Composable () -> Unit,
+    newGame: @Composable (ControlsForm) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(R.string.new_game)
+    if (rememberGameButtonLabelFits(label, GameDimens.PadControlsWidth)) {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement =
+                Arrangement.spacedBy(GameDimens.Space16, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.Top,
+        ) {
+            pad()
+            newGame(ControlsForm.PAD_COLUMN)
+        }
+    } else {
+        Column(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(GameDimens.Space8),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            pad()
+            newGame(ControlsForm.BELOW_PAD)
+        }
     }
 }
 
@@ -610,14 +665,18 @@ private fun StackedArrangement(
         val boardX = m.left + (m.availW - side) / 2
         val top = m.vertical
         val headerH = headerP?.height ?: 0
-        val bottomTop = height - m.vertical - (bottomP?.height ?: 0)
         val gap = gapPx(style)
         // The hint with its two 8 dp gaps replaces gap(h); while it shrinks out, gap(h) is the
         // floor.
         val minAbove = top + headerH + max(hintP?.height ?: 0, gap)
         val belowGap = if (talkBack) padGapPx(style) else gap
-        val free = (bottomTop - belowGap - minAbove - side).coerceAtLeast(0)
+        val bottomAt = height - m.vertical - (bottomP?.height ?: 0)
+        val free = (bottomAt - belowGap - minAbove - side).coerceAtLeast(0)
         val boardY = minAbove + free / 2
+        // The bottom chrome is as tall as the probe reserved; should it ever be taller (the frame
+        // of a size switch that still shows the previous status, D-265), it moves down into the
+        // margin rather than over the board.
+        val bottomTop = max(bottomAt, boardY + side + belowGap)
         if (!isLookingAhead) {
             val placed = IntOffset(m.x(boardX, side), boardY)
             inputs.boardBounds.publish(IntRect(placed, IntSize(side, side)))
@@ -1071,41 +1130,49 @@ private class ProbeChrome(
     override fun controls(width: Float): Float =
         measure(ProbeTerm.CONTROLS, width) { ProbeControls(ControlsForm.BAR) }
 
+    /** The status line's reservation at [width]: [ReservedStatusLine] (D-265). */
     override fun status(width: Float): Float =
-        measure(ProbeTerm.STATUS, width) { StatusLine(null, null, null, text = "") }
+        measure(ProbeTerm.STATUS, width) { ReservedStatusLine(probe.digits.value) }
 
     override fun padRow(width: Float): Float =
         measure(ProbeTerm.PAD_ROW, width) {
-            PadRowLayout {
-                DirectionPad(onMove = {}, onUndo = {}, canUndo = false, enabled = false)
-                ProbeControls(ControlsForm.PAD_COLUMN)
-            }
-        }
-
-    override fun rails(rail: Float): Float =
-        measure(ProbeTerm.RAILS, rail) {
-            TallestOf(
-                { ProbeHeader(HeaderForm.RAIL, showTitle = false) },
-                { ProbeActionsRail() },
+            PadRowLayout(
+                pad = { DirectionPad(onMove = {}, onUndo = {}, canUndo = false, enabled = false) },
+                newGame = { form -> ProbeControls(form) },
             )
         }
+
+    override fun rails(rail: Float): Float {
+        val status = reservedStatus(rail)
+        return measure(ProbeTerm.RAILS, rail) {
+            TallestOf(
+                { ProbeHeader(HeaderForm.RAIL, showTitle = false) },
+                { ProbeActionsRail(status) },
+            )
+        }
+    }
 
     /** The stats rail with its title, at [rail]: the title stays while this fits `availH`. */
     fun statsRailWithTitle(rail: Float): Float =
         measure(ProbeTerm.STATS_RAIL_TITLED, rail) { ProbeHeader(HeaderForm.RAIL) }
 
-    override fun panel(panel: Float): Float =
-        measure(ProbeTerm.PANEL, panel) {
+    override fun panel(panel: Float): Float {
+        val status = reservedStatus(panel)
+        return measure(ProbeTerm.PANEL, panel) {
             Column(verticalArrangement = Arrangement.spacedBy(GameDimens.Space8)) {
                 ProbeHeader(HeaderForm.PANEL)
                 if (window.hint) ProbeHint()
                 ProbeControls(ControlsForm.PANEL_ROW)
                 if (window.talkBack) {
-                    StatusLine(null, null, null, text = "")
+                    ProbeStatus(status)
                     DirectionPad(onMove = {}, onUndo = {}, canUndo = false, enabled = false)
                 }
             }
         }
+    }
+
+    /** The status line's reservation at [width] while the pad is shown, else 0. */
+    private fun reservedStatus(width: Float): Float = if (window.talkBack) status(width) else 0f
 
     private fun measure(
         term: ProbeTerm,
@@ -1181,13 +1248,22 @@ private class ProbeChrome(
         )
     }
 
+    /**
+     * The status line inside a rail or the panel, as the arrangement draws it: blank, at its
+     * reserved height [status] in dp (D-265).
+     */
+    @Composable
+    private fun ProbeStatus(status: Float) {
+        StatusLine(null, null, null, Modifier.heightIn(min = status.dp), text = "")
+    }
+
     /** The actions rail's content (DESIGN_SYSTEM.md §5.4): what the arrangement composes there. */
     @Composable
-    private fun ProbeActionsRail() {
+    private fun ProbeActionsRail(status: Float) {
         Column(verticalArrangement = Arrangement.spacedBy(GameDimens.Space8)) {
             if (window.hint) ProbeHint()
             if (window.talkBack) {
-                StatusLine(null, null, null, text = "")
+                ProbeStatus(status)
                 DirectionPad(onMove = {}, onUndo = {}, canUndo = false, enabled = false)
             }
             if (!window.hint) ProbeControls(ControlsForm.RAIL)

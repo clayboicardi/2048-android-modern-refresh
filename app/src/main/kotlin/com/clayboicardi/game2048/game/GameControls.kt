@@ -48,6 +48,12 @@ enum class ControlsForm {
     /** Beside the TalkBack pad in STACKED and SCROLL: New game only, text only, 104 dp wide. */
     PAD_COLUMN,
 
+    /**
+     * Below the TalkBack pad in STACKED and SCROLL when New game's label does not fit the
+     * [PAD_COLUMN] on two lines: New game only, text only, the full width (D-266).
+     */
+    BELOW_PAD,
+
     /** The THREE_COLUMN actions rail: Undo and New game stacked, each the full rail width. */
     RAIL,
 
@@ -60,12 +66,12 @@ enum class ControlsForm {
  * (`FilledTonalButton`, `ic_undo`), enabled while the game is ready and can undo, and New game
  * (`OutlinedButton`, `ic_restart`), enabled once ready, 8 dp apart, labels on at most two lines.
  * [form] places them: the [ControlsForm.BAR] at weights 1 : 1, the [ControlsForm.PAD_COLUMN] beside
- * the pad (New game only, no icon), the rail's stacked buttons or the panel's row. While the
- * TalkBack pad is shown ([padShown]) Undo is left out: the pad has it, so TalkBack meets no
- * duplicate (DESIGN_SYSTEM.md §6.6). Both stay enabled while a card is shown. [onNewGame] is the
- * screen's request (it confirms while the game is in progress, D-007). More is not here: the
- * arrangements place `GameMoreButton` (D-249). Under `LocalChromeProbe` the buttons are disabled
- * and observe nothing.
+ * the pad or [ControlsForm.BELOW_PAD] below it (New game only, no icon), the rail's stacked buttons
+ * or the panel's row. While the TalkBack pad is shown ([padShown]) Undo is left out: the pad has
+ * it, so TalkBack meets no duplicate (DESIGN_SYSTEM.md §6.6). Both stay enabled while a card is
+ * shown. [onNewGame] is the screen's request (it confirms while the game is in progress, D-007).
+ * More is not here: the arrangements place `GameMoreButton` (D-249). Under `LocalChromeProbe` the
+ * buttons are disabled and observe nothing.
  *
  * The Undo icon turns −360° with `plan.undoIconSpin` (Full only) for every undo of [board], the
  * arrangement's presented board, cumulatively, so a key-repeat undo keeps spinning with no jump;
@@ -112,7 +118,7 @@ fun GameControls(
             icon = if (icon) ({ GameButtonIcon(R.drawable.ic_restart) }) else null,
         )
     }
-    val showUndo = !padShown && form != ControlsForm.PAD_COLUMN
+    val showUndo = !padShown && form != ControlsForm.PAD_COLUMN && form != ControlsForm.BELOW_PAD
     when (form) {
         ControlsForm.BAR,
         ControlsForm.PANEL_ROW ->
@@ -134,9 +140,19 @@ fun GameControls(
                 if (showUndo) undo(Modifier.weight(1f))
                 newGame(Modifier.weight(1f), true)
             }
-        ControlsForm.PAD_COLUMN ->
+        ControlsForm.PAD_COLUMN,
+        ControlsForm.BELOW_PAD ->
             Column(
-                modifier = modifier.testTag(CONTROLS_TAG).width(GameDimens.PadControlsWidth),
+                modifier =
+                    modifier
+                        .testTag(CONTROLS_TAG)
+                        .then(
+                            if (form == ControlsForm.PAD_COLUMN) {
+                                Modifier.width(GameDimens.PadControlsWidth)
+                            } else {
+                                Modifier.fillMaxWidth()
+                            },
+                        ),
                 verticalArrangement = Arrangement.spacedBy(GameDimens.Space8),
             ) {
                 newGame(Modifier.fillMaxWidth(), false)

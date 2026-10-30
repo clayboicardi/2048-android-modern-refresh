@@ -24,7 +24,8 @@ import com.clayboicardi.game2048.ui.theme.GameTextStyles
 /*
  * The Settings rows (DESIGN_SYSTEM.md §6.8; D-006, D-246): the M3 1.5 `ListItem` overloads with the
  * headline as the trailing lambda, M3's default colours, shape and padding. Every row has a
- * supporting line, so each is a two-line `ListItem`, at least 72 dp tall.
+ * supporting line, so each is a two-line `ListItem`, at least 72 dp tall. Each interactive row
+ * draws the focus ring of its resting shape (`ListItemDefaults.shapes().shape`, §7.7; D-267).
  */
 
 /**
@@ -74,7 +75,8 @@ fun SettingsSwitchRow(
     ListItem(
         checked = checked,
         onCheckedChange = onCheckedChange,
-        modifier = modifier.semantics { role = Role.Switch },
+        modifier =
+            modifier.semantics { role = Role.Switch }.focusRing(ListItemDefaults.shapes().shape),
         enabled = enabled,
         trailingContent = { Switch(checked = checked, onCheckedChange = null, enabled = enabled) },
         supportingContent = { Text(summary) },
@@ -115,12 +117,14 @@ fun SettingsChoiceRow(
 ) {
     ListItem(
         modifier =
-            modifier.clickable(
-                enabled = enabled,
-                onClickLabel = stringResource(R.string.a11y_action_change),
-                role = Role.Button,
-                onClick = onClick,
-            ),
+            modifier
+                .focusRing(ListItemDefaults.shapes().shape)
+                .clickable(
+                    enabled = enabled,
+                    onClickLabel = stringResource(R.string.a11y_action_change),
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
         enabled = enabled,
         trailingContent = trailingContent,
         supportingContent = { Text(summary) },
@@ -143,11 +147,13 @@ fun SettingsLinkRow(
 ) {
     ListItem(
         modifier =
-            modifier.clickable(
-                onClickLabel = stringResource(R.string.a11y_action_open),
-                role = Role.Button,
-                onClick = onClick,
-            ),
+            modifier
+                .focusRing(ListItemDefaults.shapes().shape)
+                .clickable(
+                    onClickLabel = stringResource(R.string.a11y_action_open),
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
         trailingContent = {
             Icon(painter = painterResource(R.drawable.ic_open_in_new), contentDescription = null)
         },

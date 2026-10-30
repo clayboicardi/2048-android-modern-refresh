@@ -83,9 +83,9 @@ fun ConfirmDialog(
  * with `Role.RadioButton` and as selected when its value is [selected]), at least 56 dp tall, with
  * a leading `RadioButton(selected, onClick = null)`, the label in `bodyLarge` and, below it, the
  * option's supporting line in `bodyMedium` and then [optionExtra] of the value when given (the
- * Palette dialog's `PaletteSwatch`). The rows keep the dialog's container colour (they are
- * transparent, with M3's selected container on the selected one) and scroll when the dialog is
- * taller than the window.
+ * Palette dialog's `PaletteSwatch`), and the focus ring of its resting shape (§7.7; D-267). The
+ * rows keep the dialog's container colour (they are transparent, with M3's selected container on
+ * the selected one) and scroll when the dialog is taller than the window.
  *
  * Tapping a row calls [onSelect] with its value, then [onDismiss]: the choice applies at once and
  * the dialog closes; there is no OK button. The one button is the `cancel` `TextButton`
@@ -148,7 +148,7 @@ private fun <T> ChoiceRow(
     ListItem(
         selected = selected,
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.focusRing(ListItemDefaults.shapes().shape),
         leadingContent = { RadioButton(selected = selected, onClick = null) },
         supportingContent =
             if (supporting != null || extra != null) {

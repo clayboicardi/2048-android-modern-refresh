@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
@@ -24,7 +25,9 @@ import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import com.clayboicardi.game2048.R
+import com.clayboicardi.game2048.engine.BoardSize
 import com.clayboicardi.game2048.engine.Direction
+import com.clayboicardi.game2048.engine.Game
 import com.clayboicardi.game2048.game.board.BoardEvent
 import com.clayboicardi.game2048.game.board.BoardUi
 import com.clayboicardi.game2048.game.board.TileLabels
@@ -52,7 +55,9 @@ const val STATUS_LINE_TAG = "game:statusLine"
  * the text shown (a second blocked move in the same direction, two undos to the same score) blanks
  * the line for one frame and then shows the text again, so the live region's text changes and the
  * repeat is read (D-252). Without the three states it observes nothing; the chrome probe
- * (DESIGN_SYSTEM.md §5.3) passes none, with [text] to show.
+ * (DESIGN_SYSTEM.md §5.3) passes none, with [text] to show. The arrangements give it the probe's
+ * reservation ([ReservedStatusLine]) as its minimum height in [modifier], so a longer announcement
+ * moves neither the board nor the pad (D-265).
  */
 @Composable
 fun StatusLine(
@@ -146,7 +151,10 @@ private class StatusState {
 
     fun post(event: StatusEvent, resources: Resources, locale: Locale) {
         val shownEvent = repeated ?: latest
-        if (shownEvent != null && sameText(event, shownEvent, resources, locale)) {
+        val same =
+            shownEvent != null &&
+                describe(event, resources, locale) == describe(shownEvent, resources, locale)
+        if (same) {
             repeated = event
         } else {
             repeated = null
@@ -178,14 +186,6 @@ private sealed interface StatusEvent {
 
     data class Blocked(val direction: Direction, val nudgeId: Long) : StatusEvent
 }
-
-/** Whether [a] and [b] read the same in [resources]' locale. */
-private fun sameText(
-    a: StatusEvent,
-    b: StatusEvent,
-    resources: Resources,
-    locale: Locale,
-): Boolean = describe(a, resources, locale) == describe(b, resources, locale)
 
 /** The sentences of [event] in [resources]' locale, joined by one space. */
 private fun describe(event: StatusEvent, resources: Resources, locale: Locale): String =
@@ -279,6 +279,92 @@ private fun blockedText(direction: Direction): Int =
         Direction.RIGHT -> R.string.a11y_blocked_right
     }
 
+/**
+ * The status line at its reservation (DESIGN_SYSTEM.md §5.3, §6.6; D-265): as tall as the tallest
+ * [StatusLine] showing one of [longestStatusTexts] for [digits] at the width it is given, so at
+ * least two lines. It draws nothing; the chrome probe measures it.
+ */
+@Composable
+internal fun ReservedStatusLine(digits: Int, modifier: Modifier = Modifier) {
+    val resources = LocalResources.current
+    val locale = LocalConfiguration.current.locales[0]
+    val texts =
+        remember(resources, locale, digits) { longestStatusTexts(resources, locale, digits) }
+    Layout(content = { texts.forEach { StatusLine(null, null, null, text = it) } }, modifier) {
+        measurables,
+        constraints ->
+        val height = measurables.maxOf { it.measure(constraints).height }
+        layout(constraints.minWidth, height) {}
+    }
+}
+
+/**
+ * The status texts that need the most room (DESIGN_SYSTEM.md §5.3, §6.6; D-265), built from
+ * [resources]' strings for [locale] with the widest values a game whose larger of Score and Best
+ * has [digits] digits can announce:
+ * - every score, and every merged value (a created tile, so never above the score after its move),
+ *   as the largest number of [digits] digits in prose format;
+ * - a spawned 4 at row 8, column 8, and Board 8×8: the largest of every size, so a size switch
+ *   keeps the reservation;
+ * - after each of the four moved sentences, each merged sentence: `a11y_merged_1` to `_3` and
+ *   `a11y_merged_more` in every plural form that 1 to 29 further merges select (an 8×8 move merges
+ *   at most 32 pairs), each with the count 29;
+ * - Move undone, New game with its two start tiles, the size switch and the four blocked moves.
+ *
+ * Digits are Latin and of one width in the status font, so no status of such a game wraps to more
+ * lines than the tallest of these at the same width.
+ */
+internal fun longestStatusTexts(resources: Resources, locale: Locale, digits: Int): List<String> {
+    // The largest number of `digits` digits, at most Long.MAX_VALUE.
+    val count = digits.coerceAtLeast(1)
+    val largest =
+        if (count >= Long.MAX_VALUE.toString().length) Long.MAX_VALUE
+        else (1..count).fold(0L) { number, _ -> number * DECIMAL + DIGIT_NINE }
+    val value = formatCount(largest, locale)
+    val side = BoardSize.MAX_N
+    val row = side.toString()
+    val spawned =
+        resources.getString(
+            R.string.a11y_spawned,
+            TileLabels.fullDecimal(WIDEST_SPAWN_EXP),
+            row,
+            row,
+        )
+    val score = resources.getString(R.string.a11y_score, value)
+    val furthest = side * (side / 2) - MERGES_NAMED
+    val more =
+        (1..furthest).map { quantity ->
+            resources.getQuantityString(
+                R.plurals.a11y_merged_more,
+                quantity,
+                value,
+                value,
+                value,
+                formatCount(furthest.toLong(), locale),
+            )
+        }
+    val merged =
+        listOf(
+            resources.getString(R.string.a11y_merged_1, value),
+            resources.getString(R.string.a11y_merged_2, value, value),
+            resources.getString(R.string.a11y_merged_3, value, value, value),
+        ) + more.distinct()
+    val moved =
+        Direction.entries.flatMap { direction ->
+            val sentence = resources.getString(movedText(direction))
+            merged.map { listOf(sentence, it, spawned, score).joinToString(SENTENCE_GAP) }
+        }
+    val others =
+        listOf(
+            resources.getString(R.string.a11y_undone, value),
+            (listOf(resources.getString(R.string.a11y_new_game)) +
+                    List(Game.START_TILES) { spawned })
+                .joinToString(SENTENCE_GAP),
+            resources.getString(R.string.a11y_size_switched, "$side×$side", value),
+        ) + Direction.entries.map { resources.getString(blockedText(it)) }
+    return (moved + others).distinct()
+}
+
 /** The one join between whole sentences (L10N_STORE_LEGAL.md §1.3 rule 3). */
 private const val SENTENCE_GAP = " "
 
@@ -287,3 +373,9 @@ private const val MERGES_NAMED = 3
 
 /** The reserved two lines (DESIGN_SYSTEM.md §5.3, §6.6). */
 private const val STATUS_MIN_LINES = 2
+
+/** A spawned 4: as wide as a 2 in the status font. */
+private const val WIDEST_SPAWN_EXP = 2
+
+private const val DECIMAL = 10L
+private const val DIGIT_NINE = 9L

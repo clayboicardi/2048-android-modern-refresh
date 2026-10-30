@@ -1,6 +1,7 @@
 package com.clayboicardi.game2048.ui.components
 
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
@@ -8,7 +9,8 @@ import androidx.compose.ui.Modifier
  * The list rows of the sheets and sub-screens (DESIGN_SYSTEM.md §7.1, §7.9; D-026, D-246). In
  * material3 1.5 every `ListItem` overload that is not deprecated takes `ListItemShapes` and
  * `ListItemElevation`, which 1.4.0 does not have (its one `ListItem` takes the headline first and
- * is deprecated in 1.5), so `ListItem` is called only in `ui/components`.
+ * is deprecated in 1.5), so `ListItem` is called only in `ui/components`. The interactive rows draw
+ * the focus ring of their resting shape (`ListItemDefaults.shapes().shape`, §7.7; D-267).
  */
 
 /**
@@ -29,7 +31,7 @@ fun SelectableRow(
     ListItem(
         selected = selected,
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.focusRing(ListItemDefaults.shapes().shape),
         leadingContent = leadingContent,
         trailingContent = trailingContent,
         supportingContent = supportingContent,
@@ -53,7 +55,7 @@ fun LinkRow(
 ) {
     ListItem(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.focusRing(ListItemDefaults.shapes().shape),
         trailingContent = trailingContent,
         supportingContent = supportingContent,
     ) {

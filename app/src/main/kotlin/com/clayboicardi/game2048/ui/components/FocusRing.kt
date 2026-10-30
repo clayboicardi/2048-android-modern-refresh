@@ -13,13 +13,19 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.LayoutModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.node.invalidatePlacement
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
 import com.clayboicardi.game2048.ui.theme.GameDimens
 
@@ -33,9 +39,11 @@ import com.clayboicardi.game2048.ui.theme.GameDimens
  *
  * The ring shows only in keyboard input mode (`LocalInputModeManager`), like a `:focus-visible`
  * indicator: the board takes focus whenever Game appears (D-053), and a touch player sees no ring.
- * Its colour is the theme's `primary`, read as `LocalTextSelectionColors.handleColor`, which
- * `MaterialTheme` sets to `colorScheme.primary` (material3 1.5.0-beta02, verified from the class
- * files): a modifier node cannot read `MaterialTheme.colorScheme` itself.
+ * While it shows, the element is drawn above its later siblings, so a list row's ring is not
+ * covered by the next row's container (D-267). Its colour is the theme's `primary`, read as
+ * `LocalTextSelectionColors.handleColor`, which `MaterialTheme` sets to `colorScheme.primary`
+ * (material3 1.5.0-beta02, verified from the class files): a modifier node cannot read
+ * `MaterialTheme.colorScheme` itself.
  */
 fun Modifier.focusRing(shape: Shape): Modifier = this then FocusRingElement(shape)
 
@@ -52,9 +60,13 @@ private data class FocusRingElement(val shape: Shape) : ModifierNodeElement<Focu
     }
 }
 
-/** Observes the next focus target and draws the ring after the content while it is focused. */
+/**
+ * Observes the next focus target and draws the ring after the content while it is focused, placing
+ * the element above its later siblings meanwhile.
+ */
 private class FocusRingNode(private var shape: Shape) :
     Modifier.Node(),
+    LayoutModifierNode,
     DrawModifierNode,
     FocusEventModifierNode,
     CompositionLocalConsumerModifierNode {
@@ -72,17 +84,33 @@ private class FocusRingNode(private var shape: Shape) :
         }
     }
 
+    /**
+     * The ring shows: focused, in keyboard input mode (a snapshot read, observed by the caller).
+     */
+    private val shown: Boolean
+        get() = focused && currentValueOf(LocalInputModeManager).inputMode == InputMode.Keyboard
+
     override fun onFocusEvent(focusState: FocusState) {
         if (focusState.isFocused != focused) {
             focused = focusState.isFocused
             invalidateDraw()
+            invalidatePlacement()
+        }
+    }
+
+    override fun MeasureScope.measure(
+        measurable: Measurable,
+        constraints: Constraints,
+    ): MeasureResult {
+        val placeable = measurable.measure(constraints)
+        return layout(placeable.width, placeable.height) {
+            placeable.place(0, 0, zIndex = if (shown) RING_Z_INDEX else 0f)
         }
     }
 
     override fun ContentDrawScope.draw() {
         drawContent()
-        if (!focused) return
-        if (currentValueOf(LocalInputModeManager).inputMode != InputMode.Keyboard) return
+        if (!shown) return
         val key = RingKey(size, layoutDirection, density, shape)
         if (key != ringKey) {
             ringKey = key
@@ -128,3 +156,6 @@ private fun outsetRect(outline: Outline, inset: Float): RoundRect =
     }
 
 private fun CornerRadius.grow(by: Float): CornerRadius = CornerRadius(x + by, y + by)
+
+/** Above every sibling at the default z-index 0, so the shown ring is drawn over them. */
+private const val RING_Z_INDEX = 1f
