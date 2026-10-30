@@ -11,6 +11,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -24,6 +25,7 @@ import com.clayboicardi.game2048.StatsKey
 import com.clayboicardi.game2048.menuItemTag
 import com.clayboicardi.game2048.ui.components.GameIconButton
 import com.clayboicardi.game2048.ui.components.GameIconButtonStyle
+import com.clayboicardi.game2048.ui.components.focusRing
 
 /** The More button that opens the game menu (M3-D3). */
 const val MORE_TAG = "game:more"
@@ -86,10 +88,10 @@ fun GameMoreButton(
  * The game menu that the More button opens (DESIGN_SYSTEM.md §6.1; FEATURES.md F21 item 2; D-023):
  * a `DropdownMenu` with the classic `DropdownMenuItem(text, onClick, leadingIcon)` items Statistics
  * (`ic_bar_chart`), Settings (`ic_settings`, the migrated legacy key, D-101), How to play
- * (`ic_help`) and About (`ic_info`), each tagged `menuItemTag(key)`. There is no Share item
- * (F10-AC7). [menuOpen] is the screen's saveable menu state (ARCHITECTURE.md §7.2); the menu's own
- * dismissal (Back, a tap outside) closes it through [onMenuOpenChange], and an item closes it and
- * then pushes its destination with [onNavigate].
+ * (`ic_help`) and About (`ic_info`), each tagged `menuItemTag(key)` and drawing the focus ring
+ * (D-269). There is no Share item (F10-AC7). [menuOpen] is the screen's saveable menu state
+ * (ARCHITECTURE.md §7.2); the menu's own dismissal (Back, a tap outside) closes it through
+ * [onMenuOpenChange], and an item closes it and then pushes its destination with [onNavigate].
  */
 @Composable
 fun GameMoreMenu(
@@ -110,7 +112,8 @@ fun GameMoreMenu(
                     onMenuOpenChange(false)
                     onNavigate(item.key)
                 },
-                modifier = Modifier.testTag(menuItemTag(item.key)),
+                // The M3 focused state layer alone is below 3:1 (DESIGN_SYSTEM.md §7.7, D-269).
+                modifier = Modifier.focusRing(RectangleShape).testTag(menuItemTag(item.key)),
                 leadingIcon = { Icon(painterResource(item.icon), contentDescription = null) },
             )
         }

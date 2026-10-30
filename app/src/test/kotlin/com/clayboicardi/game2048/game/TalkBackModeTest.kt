@@ -1,7 +1,6 @@
 package com.clayboicardi.game2048.game
 
 import android.content.Context
-import android.content.res.Configuration
 import android.content.res.Resources
 import android.view.View
 import android.view.accessibility.AccessibilityManager
@@ -10,19 +9,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -76,12 +69,15 @@ import com.clayboicardi.game2048.game.overlay.CARD_NEW_GAME_TAG
 import com.clayboicardi.game2048.game.overlay.GAME_OVER_CARD_TAG
 import com.clayboicardi.game2048.game.overlay.KEEP_GOING_TAG
 import com.clayboicardi.game2048.game.overlay.WIN_CARD_TAG
+import com.clayboicardi.game2048.testing.APP_LOCALES
 import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
 import com.clayboicardi.game2048.testing.FakeClock
 import com.clayboicardi.game2048.testing.FixedSeedSource
+import com.clayboicardi.game2048.testing.Localized
 import com.clayboicardi.game2048.testing.TEST_VERSION_CODE
 import com.clayboicardi.game2048.testing.TestApp
 import com.clayboicardi.game2048.testing.assertTouchTargets
+import com.clayboicardi.game2048.testing.localizedContext
 import com.clayboicardi.game2048.testing.seedGame
 import com.clayboicardi.game2048.testing.seedRecords
 import com.clayboicardi.game2048.testing.seedSettings
@@ -423,11 +419,11 @@ class TalkBackModeTest {
             }
         }
         val width = with(compose.density) { STATUS_WIDTH.roundToPx() }
-        for (tag in LOCALES) {
+        for (tag in APP_LOCALES) {
             reserved.clear()
             shown = tag
             compose.waitForIdle()
-            val resources = localized(app, tag).resources
+            val resources = localizedContext(app, tag).resources
             val locale = Locale.forLanguageTag(tag)
             val rtl = resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
             val direction = if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr
@@ -598,29 +594,6 @@ class TalkBackModeTest {
         }
     }
 
-    /** [content] in the resources, configuration and layout direction of the locale [tag]. */
-    @Composable
-    private fun Localized(app: Context, tag: String, content: @Composable () -> Unit) {
-        val context = remember(tag) { localized(app, tag) }
-        val configuration = context.resources.configuration
-        val rtl = configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
-        CompositionLocalProvider(
-            LocalContext provides context,
-            LocalConfiguration provides configuration,
-            LocalResources provides context.resources,
-            LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
-            content = content,
-        )
-    }
-
-    private fun localized(app: Context, tag: String): Context {
-        val configuration =
-            Configuration(app.resources.configuration).apply {
-                setLocale(Locale.forLanguageTag(tag))
-            }
-        return app.createConfigurationContext(configuration)
-    }
-
     /** [node]'s text laid out again in the box it is drawn in (as `GameScreenTest` does). */
     private fun drawnLayout(node: SemanticsNode): TextLayoutResult {
         val input = checkNotNull(textLayout(node)) { "no text layout" }.layoutInput
@@ -787,32 +760,6 @@ private const val LONG_STATUS_LINES = 3
 
 /** Half a pixel: the rounding allowed between two placed bounds. */
 private const val PX = 0.5f
-
-/** en (the default resources) and the 20 translations (D-100). */
-private val LOCALES =
-    listOf(
-        "en",
-        "cs",
-        "da",
-        "de",
-        "el",
-        "eo",
-        "es",
-        "fa",
-        "fr",
-        "hu",
-        "it",
-        "ko",
-        "lt",
-        "nl",
-        "pl",
-        "pt",
-        "ru",
-        "sl",
-        "sr",
-        "tr",
-        "uk",
-    )
 
 /** F17-AC26's digit counts of the larger of Score and Best: a mid game and a record game. */
 private val RESERVED_DIGITS = listOf(5, 10)

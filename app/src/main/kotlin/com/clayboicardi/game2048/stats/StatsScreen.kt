@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -40,6 +41,7 @@ import com.clayboicardi.game2048.ui.components.MiniBoardGlyph
 import com.clayboicardi.game2048.ui.components.MiniTile
 import com.clayboicardi.game2048.ui.components.PlainRow
 import com.clayboicardi.game2048.ui.components.SubScreenScaffold
+import com.clayboicardi.game2048.ui.components.focusRing
 import com.clayboicardi.game2048.ui.components.showGameSnackbar
 import com.clayboicardi.game2048.ui.theme.GameDimens
 import kotlinx.coroutines.launch
@@ -123,7 +125,8 @@ private fun ColumnScope.StatsContent(ui: StatsUi) {
             Tab(
                 selected = index == selected,
                 onClick = { selected = index },
-                modifier = Modifier.testTag(statsTabTag(index)),
+                // The M3 focused state layer alone is below 3:1 (DESIGN_SYSTEM.md §7.7, D-269).
+                modifier = Modifier.focusRing(RectangleShape).testTag(statsTabTag(index)),
                 text = { Text(size?.let(::sizeLabel) ?: stringResource(R.string.stats_all_sizes)) },
             )
         }

@@ -16,8 +16,11 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
@@ -51,6 +54,7 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
@@ -496,11 +500,13 @@ private fun ScoreRow(
     val onSurfaceVariant = colors.onSurfaceVariant
     // Moves and undos roll the digits; new game, size switch and restore swap them (§4.2).
     val roll = header.event == BoardEventKind.Moved || header.event == BoardEventKind.Undo
+    // Side by side, both chips take the row's height, the taller chip's (D-268).
     val chipWidth =
         when (fit.layout) {
             ChipLayout.INLINE ->
                 Modifier.widthIn(min = GameDimens.ScoreChipMinWidth, max = fit.chipSlot.dp)
-            ChipLayout.OWN_ROW -> Modifier.width(fit.chipSlot.dp)
+                    .fillMaxHeight()
+            ChipLayout.OWN_ROW -> Modifier.width(fit.chipSlot.dp).fillMaxHeight()
             ChipLayout.STACKED -> Modifier.fillMaxWidth()
         }
     val score: @Composable () -> Unit = {
@@ -537,6 +543,12 @@ private fun ScoreRow(
             label = { BestLabel(view, motion, plan, labelInk) },
             modifier = chipWidth.testTag(BEST_TAG).onPlaced { motion.bestCoordinates = it },
             container = container,
+            // Both styles' labels: the chip has the larger form's size in either (D-268).
+            reserved = {
+                for (id in listOf(R.string.best_label, R.string.new_best_label)) {
+                    ScoreChipLabel(stringResource(id), labelInk, Modifier.clearAndSetSemantics {})
+                }
+            },
         ) {
             ScoreOdometer(
                 view.best,
@@ -559,7 +571,7 @@ private fun ScoreRow(
         }
     } else {
         Row(
-            modifier = Modifier.testTag(SCORES_TAG),
+            modifier = Modifier.testTag(SCORES_TAG).height(IntrinsicSize.Max),
             horizontalArrangement = Arrangement.spacedBy(GameDimens.Space8),
             verticalAlignment = Alignment.CenterVertically,
         ) {

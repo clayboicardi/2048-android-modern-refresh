@@ -8,15 +8,21 @@ import androidx.activity.ComponentDialog
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -73,6 +79,7 @@ import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.IntentCompat
@@ -113,18 +120,26 @@ import com.clayboicardi.game2048.fixtures.MotionFixtures
 import com.clayboicardi.game2048.fixtures.fixtureGame
 import com.clayboicardi.game2048.game.board.BoardEvent
 import com.clayboicardi.game2048.game.board.BoardEventKind
+import com.clayboicardi.game2048.game.board.BoardPresenter
+import com.clayboicardi.game2048.game.board.BoardUi
+import com.clayboicardi.game2048.game.board.ContentEffects
 import com.clayboicardi.game2048.game.board.GameLayoutSpec
 import com.clayboicardi.game2048.game.board.TileKind
 import com.clayboicardi.game2048.game.header.BEST_STAR_TAG
 import com.clayboicardi.game2048.game.header.BEST_TAG
+import com.clayboicardi.game2048.game.header.GameHeader
 import com.clayboicardi.game2048.game.header.HEADER_TAG
+import com.clayboicardi.game2048.game.header.HeaderForm
 import com.clayboicardi.game2048.game.header.SCORE_TAG
 import com.clayboicardi.game2048.game.header.SIZE_CHIP_TAG
 import com.clayboicardi.game2048.game.header.TITLE_TAG
+import com.clayboicardi.game2048.game.input.PAD_TAG
 import com.clayboicardi.game2048.game.input.padButtonTag
 import com.clayboicardi.game2048.game.motion.LocalMotionProbe
+import com.clayboicardi.game2048.game.motion.LocalMoveTimeline
 import com.clayboicardi.game2048.game.motion.MotionProbe
 import com.clayboicardi.game2048.game.motion.MotionSnapshot
+import com.clayboicardi.game2048.game.motion.MoveTimeline
 import com.clayboicardi.game2048.game.overlay.CARD_NEW_GAME_TAG
 import com.clayboicardi.game2048.game.overlay.CARD_SHARE_TAG
 import com.clayboicardi.game2048.game.overlay.CARD_UNDO_TAG
@@ -139,10 +154,12 @@ import com.clayboicardi.game2048.game.overlay.sizeRowTag
 import com.clayboicardi.game2048.menuItemTag
 import com.clayboicardi.game2048.screenTag
 import com.clayboicardi.game2048.stats.STATS_RESET_TAG
+import com.clayboicardi.game2048.testing.APP_LOCALES
 import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
 import com.clayboicardi.game2048.testing.FakeClock
 import com.clayboicardi.game2048.testing.FakeHapticFeedback
 import com.clayboicardi.game2048.testing.FixedSeedSource
+import com.clayboicardi.game2048.testing.Localized
 import com.clayboicardi.game2048.testing.TEST_VERSION_CODE
 import com.clayboicardi.game2048.testing.TestApp
 import com.clayboicardi.game2048.testing.seedGame
@@ -153,6 +170,7 @@ import com.clayboicardi.game2048.ui.components.DIALOG_DISMISS_TAG
 import com.clayboicardi.game2048.ui.components.HINT_GOT_IT_TAG
 import com.clayboicardi.game2048.ui.components.LayoutMode
 import com.clayboicardi.game2048.ui.components.SNACKBAR_TAG
+import com.clayboicardi.game2048.ui.theme.GameDimens
 import com.clayboicardi.game2048.ui.theme.GameTheme
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.google.common.truth.Truth.assertThat
@@ -552,6 +570,225 @@ class GameScreenTest {
             assertThat(haptics.events).isEmpty()
         }
     }
+
+    /** F09-AC7 */
+    @Test
+    @Config(qualifiers = "de-w360dp-h640dp-xxhdpi")
+    fun newBestMomentKeepsBoardInPlace() {
+        // FIX_MID_4 with its own score as the best at the start: its first scoring move is the
+        // game's first new best, and the BEST chip turns to "NEUER REKORD" (D-268).
+        val game = GoldenFixtures.FIX_MID_4.copy(bestAtStart = GoldenFixtures.FIX_MID_4.state.score)
+        val direction = checkNotNull(mergingMoves(game.state, 1)).single()
+        val settings = SETTINGS.copy(motion = MotionPreference.FULL, lastBoardSize = 4)
+        val rigs = listOf(false, true).associateWith { ScreenRig(tmp.newFolder(), game, settings) }
+        var shown: Boolean? by mutableStateOf(null)
+        compose.setContent {
+            shown?.let { talkBack -> key(talkBack) { RigContent(rigs.getValue(talkBack)) } }
+        }
+        try {
+            for ((talkBack, rig) in rigs) {
+                compose.mainClock.autoAdvance = true
+                shown = null
+                compose.waitForIdle()
+                setTouchExploration(talkBack)
+                shown = talkBack
+                rig.awaitReady(compose)
+                compose.waitForIdle()
+                val label = "TalkBack $talkBack"
+                val bottom =
+                    if (talkBack) listOf(STATUS_LINE_TAG, PAD_TAG, NEW_GAME_TAG)
+                    else listOf(CONTROLS_TAG)
+                val before = boundsOf(BOARD_TAG)
+                compose.mainClock.autoAdvance = false
+
+                rig.vm.onMove(direction)
+                assertWithMessage("$label: the move is the new best")
+                    .that(rig.vm.header.value.newBestMoveId)
+                    .isEqualTo(rig.vm.board.value.moveId)
+                repeat(MOMENT_FRAMES) { frame ->
+                    compose.mainClock.advanceTimeByFrame()
+                    val board = boundsOf(BOARD_TAG)
+                    assertWithMessage("$label, frame $frame: the board")
+                        .that(board)
+                        .isEqualTo(before)
+                    for (tag in bottom) {
+                        assertApart(
+                            "$label, frame $frame: $tag and the board",
+                            boundsOf(tag),
+                            board,
+                        )
+                    }
+                }
+                assertWithMessage("$label: the BEST chip's label after the moment")
+                    .that(checkNotNull(probe.snapshot().header).bestChip.labelKey)
+                    .isEqualTo("new_best_label")
+            }
+        } finally {
+            compose.mainClock.autoAdvance = true
+            setTouchExploration(false)
+            rigs.values.forEach { it.close() }
+        }
+    }
+
+    /** F09-AC8 */
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-xxhdpi")
+    fun bestChipFormsMeasureAlikeInEveryLocale() {
+        val app = ApplicationProvider.getApplicationContext<Context>()
+        val board =
+            mutableStateOf(
+                BoardPresenter().reset(GoldenFixtures.FIX_MID_4.state, BoardEvent.Restored),
+            )
+        val ui = mutableStateOf(GameUiState(ready = true))
+        var shown: String? by mutableStateOf(null)
+        compose.setContent {
+            GameTheme(darkTheme = false, motion = MotionPreference.OFF) {
+                shown?.let { tag ->
+                    key(tag) {
+                        Localized(app, tag) {
+                            val timeline = remember { MoveTimeline() }
+                            CompositionLocalProvider(LocalMoveTimeline provides timeline) {
+                                Column(Modifier.verticalScroll(rememberScrollState())) {
+                                    for (case in HEADER_CASES) CaseHeader(case, board, ui)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (tag in APP_LOCALES) {
+            shown = tag
+            compose.waitForIdle()
+            for (case in HEADER_CASES.filter { it.newBest }) {
+                val plain = case.copy(newBest = false)
+                for (part in listOf(HEADER_PART, BEST_TAG)) {
+                    assertWithMessage("$tag, ${plain.tag} → ${case.tag}: the $part's size")
+                        .that(caseSize(case, part))
+                        .isEqualTo(caseSize(plain, part))
+                }
+                assertChipsLevel("$tag, ${plain.tag}", plain)
+            }
+        }
+    }
+
+    /**
+     * In [case]'s header, Score and Best side by side (INLINE or OWN_ROW) are equally tall, and
+     * each chip's label and value are one unit centred in it: the gap from the label's bottom to
+     * the value's top is the same in both chips, so the BEST chip's reserved room is never between
+     * them, and the two units' centres are level. With labels of one height (both on one line), the
+     * labels' tops are level too (D-268).
+     */
+    private fun assertChipsLevel(label: String, case: HeaderCase) {
+        val score = chipNode(case, SCORE_TAG)
+        val best = chipNode(case, BEST_TAG)
+        if (abs(score.positionInRoot.y - best.positionInRoot.y) > 1f) return // STACKED
+        assertWithMessage("$label: Score and Best heights")
+            .that(best.size.height)
+            .isEqualTo(score.size.height)
+        val scoreLabel = chipLabel(case, SCORE_TAG)
+        val bestLabel = chipLabel(case, BEST_TAG)
+        val scoreGap = valueTop(case, SCORE_TAG) - labelBottom(scoreLabel)
+        val bestGap = valueTop(case, BEST_TAG) - labelBottom(bestLabel)
+        assertWithMessage("$label: label to value in Best against Score")
+            .that(bestGap)
+            .isWithin(1f)
+            .of(scoreGap)
+        assertWithMessage("$label: the label-and-value units' centres")
+            .that(unitCentre(case, BEST_TAG, bestLabel))
+            .isWithin(1f)
+            .of(unitCentre(case, SCORE_TAG, scoreLabel))
+        if (bestLabel.size.height == scoreLabel.size.height) {
+            assertWithMessage("$label: the labels' tops")
+                .that(bestLabel.positionInRoot.y)
+                .isWithin(1f)
+                .of(scoreLabel.positionInRoot.y)
+        }
+    }
+
+    /** The vertical centre in root px of [chip]'s label ([label]) and value together. */
+    private fun unitCentre(case: HeaderCase, chip: String, label: SemanticsNode): Float =
+        (label.positionInRoot.y + valueBottom(case, chip)) / 2
+
+    /** The bottom in root px of the lowest numeral node of [case]'s [chip]. */
+    private fun valueBottom(case: HeaderCase, chip: String): Float =
+        numerals(case, chip).maxOf { it.positionInRoot.y + it.size.height }
+
+    private fun chipNode(case: HeaderCase, chip: String): SemanticsNode =
+        compose
+            .onNode(hasTestTag(chip) and hasAnyAncestor(hasTestTag(case.tag)))
+            .fetchSemanticsNode()
+
+    /** The label text node of [case]'s [chip]: its one text node that is not a numeral. */
+    private fun chipLabel(case: HeaderCase, chip: String): SemanticsNode =
+        compose
+            .onAllNodes(
+                hasAnyAncestor(hasTestTag(chip)) and
+                    hasAnyAncestor(hasTestTag(case.tag)) and
+                    SemanticsMatcher.keyIsDefined(SemanticsProperties.Text) and
+                    !NUMERAL,
+                useUnmergedTree = true,
+            )
+            .fetchSemanticsNodes()
+            .single()
+
+    /** The top in root px of the highest numeral node of [case]'s [chip]. */
+    private fun valueTop(case: HeaderCase, chip: String): Float =
+        numerals(case, chip).minOf { it.positionInRoot.y }
+
+    /** The numeral (digit) nodes of [case]'s [chip]. */
+    private fun numerals(case: HeaderCase, chip: String): List<SemanticsNode> =
+        compose
+            .onAllNodes(
+                hasAnyAncestor(hasTestTag(chip)) and
+                    hasAnyAncestor(hasTestTag(case.tag)) and
+                    NUMERAL,
+                useUnmergedTree = true,
+            )
+            .fetchSemanticsNodes()
+
+    private fun labelBottom(node: SemanticsNode): Float = node.positionInRoot.y + node.size.height
+
+    /** The header of [case] at [HEADER_WIDTH], tagged with the case. */
+    @Composable
+    private fun CaseHeader(case: HeaderCase, board: State<BoardUi>, ui: State<GameUiState>) {
+        val value = HEADER_VALUE_BASE.pow(case.digits - 1)
+        val header = remember {
+            mutableStateOf(HeaderUi(value, value, newBestAnnounced = case.newBest))
+        }
+        Box(Modifier.width(HEADER_WIDTH).testTag(case.tag)) {
+            GameHeader(
+                header = header,
+                board = board,
+                ui = ui,
+                loadingSize = BoardSize.DEFAULT.n,
+                form = case.form,
+                titleMax = GameDimens.TitleMax,
+                effects = remember { ContentEffects() },
+                onHeaderPresented = {},
+                onSizeChipClick = {},
+                more = {
+                    GameMoreButton(
+                        menuOpen = false,
+                        onMenuOpenChange = {},
+                        onNavigate = {},
+                        containerSize = GameDimens.HeaderMoreSize,
+                    )
+                },
+            )
+        }
+    }
+
+    /** The laid-out size of [case]'s header ([HEADER_PART]) or of its node tagged [part]. */
+    private fun caseSize(case: HeaderCase, part: String): IntSize =
+        if (part == HEADER_PART) {
+            compose.onNodeWithTag(case.tag).fetchSemanticsNode().size
+        } else {
+            compose
+                .onNode(hasTestTag(part) and hasAnyAncestor(hasTestTag(case.tag)))
+                .fetchSemanticsNode()
+                .size
+        }
 
     /** F09-AC6 */
     @Test
@@ -2623,6 +2860,25 @@ class GameScreenTest {
         const val CANCEL = "Cancel"
         const val NEW_BEST_UPPER = "NEW BEST"
 
+        /** The new-best moment's frames: past its label flip, star, sparkles and crossfade. */
+        const val MOMENT_FRAMES = 150
+
+        /** The content width of a 360 dp window: the STACKED header's (FULL and COMPACT). */
+        val HEADER_WIDTH = 328.dp
+
+        const val HEADER_VALUE_BASE = 10L
+
+        /** [caseSize]'s name for the whole header of a case. */
+        const val HEADER_PART = "header"
+
+        /** F09-AC8: both STACKED header forms, a mid and a record digit count, both BEST styles. */
+        val HEADER_CASES =
+            listOf(HeaderForm.FULL, HeaderForm.COMPACT).flatMap { form ->
+                listOf(5, 9).flatMap { digits ->
+                    listOf(false, true).map { newBest -> HeaderCase(form, digits, newBest) }
+                }
+            }
+
         /** Long enough for a snackbar to fade in, well inside its 4 s `Short` duration. */
         const val SNACKBAR_SETTLE_MS = 500L
 
@@ -2975,3 +3231,17 @@ private const val UNDOABLE_MOVES = 416
 
 /** DESIGN_SYSTEM.md §10.4 row 44: a version seen before this one, so What's new shows. */
 private const val SEEN_BEFORE_UPDATE = 20000
+
+/**
+ * One header of F09-AC8: [form], Score and Best of [digits] digits, in the NEW BEST style or not.
+ */
+private data class HeaderCase(val form: HeaderForm, val digits: Int, val newBest: Boolean) {
+    val tag: String
+        get() = "header:${form.name}:$digits:${if (newBest) "newBest" else "best"}"
+}
+
+private fun Long.pow(exponent: Int): Long {
+    var result = 1L
+    repeat(exponent) { result *= this }
+    return result
+}

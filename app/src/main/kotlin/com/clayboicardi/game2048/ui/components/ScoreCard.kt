@@ -1,8 +1,6 @@
 package com.clayboicardi.game2048.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -18,7 +16,13 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.IntrinsicMeasurable
+import androidx.compose.ui.layout.IntrinsicMeasureScope
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.layout.MultiContentMeasurePolicy
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -38,6 +42,7 @@ import com.clayboicardi.game2048.ui.theme.GameFonts
 import com.clayboicardi.game2048.ui.theme.LocalTileSkin
 import java.text.Normalizer
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * A Score or Best chip (DESIGN_SYSTEM.md §7.2; D-064, D-084): the `surfaceContainerHigh` container
@@ -51,6 +56,11 @@ import java.util.Locale
  * `tertiaryContainer` (MOTION_SPEC.md §3.6) recomposes nothing. [overlay] (the "+N" floats of the
  * Score chip) is drawn above the value, centred on it, with its first baseline on the value's, and
  * is not clipped by the chip.
+ *
+ * [reserved] holds labels the chip also makes room for (the BEST chip's labels of both styles,
+ * D-268): each is measured at the chip's width and never placed, and the chip is at least as wide
+ * as the widest and as tall as the tallest of them above the value. The label shown and the value
+ * stay one unit, centred in the chip, with no reserved space between them.
  */
 @Composable
 fun ScoreChip(
@@ -60,13 +70,15 @@ fun ScoreChip(
     modifier: Modifier = Modifier,
     container: ColorProducer? = null,
     overlay: @Composable () -> Unit = {},
+    reserved: @Composable () -> Unit = {},
     value: @Composable () -> Unit,
 ) {
     val description = stringResource(R.string.a11y_chip_value, spokenLabel, spokenValue)
     val shape = MaterialTheme.shapes.large
     val fallback = MaterialTheme.colorScheme.surfaceContainerHigh
     val fill = container ?: ColorProducer { fallback }
-    Column(
+    Layout(
+        contents = listOf(label, { BaselineOverlay(value = value, overlay = overlay) }, reserved),
         modifier =
             modifier
                 .widthIn(min = GameDimens.ScoreChipMinWidth)
@@ -74,11 +86,26 @@ fun ScoreChip(
                 .containerBehind(shape, fill)
                 .semantics(mergeDescendants = true) { contentDescription = description }
                 .padding(horizontal = GameDimens.Space12, vertical = GameDimens.Space8),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        label()
-        BaselineOverlay(value = value, overlay = overlay)
+    ) { (labels, values, reserves), constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val shown = labels.map { it.measure(loose) }
+        val valueP = values.single().measure(loose)
+        val others = reserves.map { it.measure(loose) }
+        val labelH = shown.sumOf { it.height }
+        val unit = labelH + valueP.height
+        val roomH = maxOf(labelH, others.maxOfOrNull { it.height } ?: 0) + valueP.height
+        val widest = (shown + others + valueP).maxOf { it.width }
+        val width = widest.coerceIn(constraints.minWidth, constraints.maxWidth)
+        val height = roomH.coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(width, height) {
+            // As a centred `Column`: the label, then the value, centred together.
+            var y = ((height - unit) / 2f).roundToInt()
+            for (placeable in shown + valueP) {
+                val x = Alignment.CenterHorizontally.align(placeable.width, width, layoutDirection)
+                placeable.place(x, y)
+                y += placeable.height
+            }
+        }
     }
 }
 
@@ -251,16 +278,31 @@ private fun Modifier.containerBehind(shape: Shape, color: ColorProducer): Modifi
 @Composable
 private fun BaselineOverlay(value: @Composable () -> Unit, overlay: @Composable () -> Unit) {
     val lineHeight = rememberScoreLineHeight()
+    val policy = remember(lineHeight) { BaselineOverlayPolicy(lineHeight) }
     Layout(
         contents = listOf({ Box(contentAlignment = Alignment.Center) { value() } }, overlay),
-    ) { (valueMeasurables, overlayMeasurables), constraints ->
+        measurePolicy = policy,
+    )
+}
+
+/**
+ * [BaselineOverlay]'s layout, whose intrinsic sizes are the value's with the one-line minimum and
+ * leave out the overlay, so a row that sizes its chips by their intrinsic height (the INLINE and
+ * OWN_ROW Score and Best, D-268) gets the height they are measured at.
+ */
+private class BaselineOverlayPolicy(private val lineHeight: Int) : MultiContentMeasurePolicy {
+    override fun MeasureScope.measure(
+        measurables: List<List<Measurable>>,
+        constraints: Constraints,
+    ): MeasureResult {
+        val (valueMeasurables, overlayMeasurables) = measurables
         val minHeight = lineHeight.coerceAtMost(constraints.maxHeight)
         val valueBox =
             valueMeasurables.first().measure(constraints.copy(minWidth = 0, minHeight = minHeight))
         val overlays = overlayMeasurables.map { it.measure(Constraints()) }
         val width = valueBox.width.coerceAtLeast(constraints.minWidth)
         val height = valueBox.height.coerceAtLeast(constraints.minHeight)
-        layout(width, height) {
+        return layout(width, height) {
             valueBox.place((width - valueBox.width) / 2, 0)
             val valueBaseline = valueBox[FirstBaseline]
             for (o in overlays) {
@@ -278,6 +320,26 @@ private fun BaselineOverlay(value: @Composable () -> Unit, overlay: @Composable 
             }
         }
     }
+
+    override fun IntrinsicMeasureScope.minIntrinsicHeight(
+        measurables: List<List<IntrinsicMeasurable>>,
+        width: Int,
+    ): Int = maxOf(lineHeight, measurables.first().first().minIntrinsicHeight(width))
+
+    override fun IntrinsicMeasureScope.maxIntrinsicHeight(
+        measurables: List<List<IntrinsicMeasurable>>,
+        width: Int,
+    ): Int = maxOf(lineHeight, measurables.first().first().maxIntrinsicHeight(width))
+
+    override fun IntrinsicMeasureScope.minIntrinsicWidth(
+        measurables: List<List<IntrinsicMeasurable>>,
+        height: Int,
+    ): Int = measurables.first().first().minIntrinsicWidth(height)
+
+    override fun IntrinsicMeasureScope.maxIntrinsicWidth(
+        measurables: List<List<IntrinsicMeasurable>>,
+        height: Int,
+    ): Int = measurables.first().first().maxIntrinsicWidth(height)
 }
 
 /** The height in px of one line of the score numerals at `ScoreValueMax`. */
