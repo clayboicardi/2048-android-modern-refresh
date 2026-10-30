@@ -1,6 +1,9 @@
 package com.clayboicardi.game2048.game
 
 import app.cash.turbine.test
+import com.clayboicardi.game2048.data.DataStoreFiles
+import com.clayboicardi.game2048.data.decodeGame
+import com.clayboicardi.game2048.data.encodeGame
 import com.clayboicardi.game2048.data.game.GameDocumentMapper
 import com.clayboicardi.game2048.data.game.GameRepository
 import com.clayboicardi.game2048.data.game.SavedGame
@@ -715,6 +718,8 @@ class GameViewModelTest {
     /** F07-AC32 */
     @Test
     fun engineCheckFailureIsCorruption() = runTest {
+        // The decoder accepts this history; only the undo's replay finds it inconsistent.
+        assertThat(decodeGame(encodeGame(INCONSISTENT_HISTORY))).isEqualTo(INCONSISTENT_HISTORY)
         val undoCase =
             rig(tmp.newFolder()) {
                 seedRecords(GoldenFixtures.FIX_RECORDS)
@@ -722,12 +727,47 @@ class GameViewModelTest {
             }
         undoCase.assertReplacedLikeCorruptFile { onUndo() }
 
+        // D-270: two exponent-127 tiles are far above 4×4's reachable maximum (17), so the file is
+        // corrupt at load and no move reaches the engine's merge check: the game loads fresh.
+        val folder = tmp.newFolder()
+        File(folder, DataStoreFiles.game(FOUR)).writeText(encodeGame(MAX_EXP_PAIR))
+        val loadCase = rig(folder) { seedRecords(GoldenFixtures.FIX_RECORDS) }
+        val vm = loadCase.loadedViewModel()
+        testScheduler.runCurrent()
+        loadCase.awaitIdle()
+        assertThat(vm.board.value.event).isEqualTo(BoardEvent.Restored)
+        assertThat(vm.overlay.value).isEqualTo(OverlayUi.None)
+        val fresh = loadCase.latest(FOUR)
+        assertThat(fresh.state).isEqualTo(Game.newGame(FOUR, 0x2048))
+        assertThat(fresh.pendingFinalizations).isEmpty()
+        assertThat(loadCase.fileGame(FOUR)).isEqualTo(fresh)
+        assertThat(loadCase.records.state.value).isEqualTo(GoldenFixtures.FIX_RECORDS)
+        assertThat(loadCase.saveCounts().records).isEqualTo(0)
+    }
+
+    /** F07-AC37 */
+    @Test
+    fun unreachableEngineResultIsCorruption() = runTest {
+        // Both games pass the decoder: every exponent is at most 4×4's maximum, 17 (D-270).
+        assertThat(decodeGame(encodeGame(REACHABLE_MAX_PAIR))).isEqualTo(REACHABLE_MAX_PAIR)
+        assertThat(decodeGame(encodeGame(REACHABLE_MAX_UNDO_BASE)))
+            .isEqualTo(REACHABLE_MAX_UNDO_BASE)
+
+        // LEFT merges the two 17s into 18, which no 4×4 game can make.
         val moveCase =
             rig(tmp.newFolder()) {
                 seedRecords(GoldenFixtures.FIX_RECORDS)
-                seedGame(MAX_EXP_PAIR)
+                seedGame(REACHABLE_MAX_PAIR)
             }
         moveCase.assertReplacedLikeCorruptFile { onMove(Direction.LEFT) }
+
+        // The undo replays the logged LEFT from snapshots[1], whose two 17s merge into 18.
+        val undoCase =
+            rig(tmp.newFolder()) {
+                seedRecords(GoldenFixtures.FIX_RECORDS)
+                seedGame(REACHABLE_MAX_UNDO_BASE)
+            }
+        undoCase.assertReplacedLikeCorruptFile { onUndo() }
     }
 
     /** F07-AC33 */
@@ -1151,6 +1191,32 @@ private val LONE_TILE = moveZero(listOf(1))
 /** D-214: two exponent-127 tiles that LEFT would merge past `Board.MAX_EXP`. */
 private val MAX_EXP_PAIR = savedAt(moveZero(listOf(Board.MAX_EXP, Board.MAX_EXP)))
 
+/** 4×4's reachable maximum, N² + 1 (D-270). */
+private const val MAX_4 = 17
+
+/** D-270: two adjacent exponent-17 tiles, which a decoded 4×4 game may hold; LEFT makes 18. */
+private val REACHABLE_MAX_PAIR = savedAt(moveZero(listOf(MAX_4, MAX_4)))
+
+/**
+ * D-270: the 34-move DLRU game of 0x2048 with `snapshots[1].board` replaced by two adjacent
+ * exponent-17 tiles; its undo replays the logged move 32, LEFT, which merges them into 18.
+ */
+private val REACHABLE_MAX_UNDO_BASE: SavedGame = run {
+    var state = Game.newGame(FOUR, 0x2048)
+    while (state.moveCount < 34) state = DLRU.firstNotNullOf { accepted(state, it) }.state
+    check(state.moveLog[32] == Direction.LEFT) { "move 32 is ${state.moveLog[32]}" }
+    val pair =
+        Board.of(
+            FOUR,
+            ByteArray(16).also {
+                it[0] = MAX_4.toByte()
+                it[1] = MAX_4.toByte()
+            },
+        )
+    val snapshots = listOf(state.snapshots[0], state.snapshots[1].copy(board = pair))
+    savedAt(state.copy(snapshots = snapshots)).copy(gameId = 3)
+}
+
 /**
  * D-214 / `UndoTest.undoOfInconsistentHistoryThrows`: the 40-move DLRU game of 0x2048 with
  * `snapshots[1].board` replaced by a lone tile, so the undo's replay of move 32 (LEFT) fails.
@@ -1322,8 +1388,9 @@ private class Rig(
             .associate { it.relativeTo(folder).path to it.readBytes().toList() }
 
     /**
-     * D-214: [action] meets an engine check failure; the game is replaced like a corrupt file: a
-     * fresh game saved once, presented as `NewGame` with no card, and nothing finalized.
+     * D-214, D-270: [action] meets an engine check failure or a result above the reachable maximum;
+     * the game is replaced like a corrupt file: a fresh game saved once, presented as `NewGame`
+     * with no card, and nothing finalized.
      */
     suspend fun assertReplacedLikeCorruptFile(action: GameViewModel.() -> Unit) {
         val vm = loadedViewModel()

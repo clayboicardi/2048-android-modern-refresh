@@ -1373,7 +1373,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
   1. **Hero card** (`surfaceContainerHigh`, `shapes.large`, 16 dp padding):
      - label `stats_best_score` = "Best score" (`labelLarge`, `onSurfaceVariant`);
      - value (`headlineLarge`, `"tnum"`, `formatCount(bestScore, locale)`);
-     - at the end, a `MiniTile(bestTileExp, 56.dp)` labeled `stats_best_tile` = "Best tile". Its a11y text is `a11y_best_tile` = "Best tile, %1$s" with the full decimal value.
+     - at the end, a `MiniTile(bestTileExp, 56.dp)` labeled `stats_best_tile` = "Best tile". Its a11y text is `a11y_best_tile` = "Best tile, %1$s" with the full decimal value. The tile and its label are drawn only when `bestTileExp ≥ 1`: a record with games but no best tile (a hand-written file, or a `bestTileExp` outside 0..N² + 1 that reads as 0) shows the best score alone (D-270).
   2. **Rows:** the plain row of `ui/components/ListRows.kt`, `ListItem(trailingContent = { value }) { headline }` (§7.9, D-246), headline `bodyLarge`, trailing value `titleMedium` `"tnum"`:
 
 | Key | Headline | Value |

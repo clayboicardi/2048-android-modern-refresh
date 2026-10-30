@@ -7,6 +7,7 @@ import com.clayboicardi.game2048.data.records.Records
 import com.clayboicardi.game2048.data.records.RecordsMath
 import com.clayboicardi.game2048.data.settings.Settings
 import com.clayboicardi.game2048.di.AppContainer
+import com.clayboicardi.game2048.engine.Board
 import com.clayboicardi.game2048.engine.BoardSize
 import com.clayboicardi.game2048.engine.Direction
 import com.clayboicardi.game2048.engine.Game
@@ -174,6 +175,44 @@ class PersistenceCorruptionTest {
                         )
                         .withKeys("gameId" to JsonPrimitive(18)),
             )
+        for ((label, doc) in cases) assertFallsBack(DataStoreFiles.game(S4), doc.bytes(), label)
+    }
+
+    /** F07-AC34 */
+    @Test
+    fun unreachableExponentIsCorruption() = runTest {
+        // The fixture's last cell is empty; 17 there is the 4×4 maximum (N² + 1) and still loads.
+        val fixture = fixtureGame4()
+        assertLoads(fixture.withCell(LAST_CELL_4, 17))
+        val entry = fixture.getValue("pendingFinalizations").jsonArray[0].jsonObject
+        val eight = AppJson.parseToJsonElement(validGameJson(S8)).jsonObject
+        assertLoads(eight.withCell(0, 65), S8)
+
+        val cases =
+            listOf(18, 70, 100, Board.MAX_EXP).map { exp ->
+                "cells: exponent $exp" to fixture.withCell(LAST_CELL_4, exp)
+            } +
+                listOf(
+                    "entry maxExp 18" to
+                        fixture.withEntries(entry.withKeys("maxExp" to JsonPrimitive(18))),
+                    "entry maxExp 70" to
+                        fixture.withEntries(entry.withKeys("maxExp" to JsonPrimitive(70))),
+                )
+        for ((label, doc) in cases) assertFallsBack(DataStoreFiles.game(S4), doc.bytes(), label)
+        // 8×8's maximum is 65: 66 is past it, though a tile label could still draw it.
+        assertFallsBack(DataStoreFiles.game(S8), eight.withCell(0, 66).bytes(), "8x8: exponent 66")
+    }
+
+    /** F07-AC35 */
+    @Test
+    fun unreachableSnapshotExponentIsCorruption() = runTest {
+        // snapshots[1] is the base every undo of moves 33..40 replays from; the board stays valid.
+        val game = fortyMoveGame()
+        assertLoads(game.withSnapshotCell(1, LAST_CELL_4, 17))
+        val cases =
+            listOf(18, 70, 100, Board.MAX_EXP).map { exp ->
+                "snapshots[1]: exponent $exp" to game.withSnapshotCell(1, LAST_CELL_4, exp)
+            }
         for ((label, doc) in cases) assertFallsBack(DataStoreFiles.game(S4), doc.bytes(), label)
     }
 
@@ -345,13 +384,13 @@ class PersistenceCorruptionTest {
         return fresh
     }
 
-    /** Control case: the unmodified fixture loads as the game it encodes. */
-    private suspend fun TestScope.assertLoads(doc: JsonObject) {
+    /** Control case: [doc] in the file of [size] loads as the game it encodes. */
+    private suspend fun TestScope.assertLoads(doc: JsonObject, size: BoardSize = S4) {
         val folder = tmp.newFolder()
         writeValidInstall(folder)
-        File(folder, DataStoreFiles.game(S4)).writeBytes(doc.bytes())
+        File(folder, DataStoreFiles.game(size)).writeBytes(doc.bytes())
         val c = testAppContainer(folder)
-        assertThat(c.gameRepository.load(S4)).isEqualTo(decodeGame(doc.toString()))
+        assertThat(c.gameRepository.load(size)).isEqualTo(decodeGame(doc.toString()))
         kill(c)
     }
 
@@ -383,6 +422,13 @@ class PersistenceCorruptionTest {
 
     private companion object {
         val S4 = BoardSize.of(4)
+        val S8 = BoardSize.of(8)
+
+        /** The bottom-right cell of a 4×4 board, empty in the v1 fixture. */
+        const val LAST_CELL_4 = 15
+
+        /** Snapshot bytes before the N² cells (ARCHITECTURE.md §3.4). */
+        const val SNAPSHOT_CELLS_OFFSET = 21
         val GARBAGE = ByteArray(64) { 0xFF.toByte() }
 
         val ALL_FILES: List<String> =
@@ -461,6 +507,17 @@ class PersistenceCorruptionTest {
          * (D-214, I12): the game went on to move 40, and that board can still move.
          */
         fun overSnapshotAt32(): JsonObject {
+            val json = fortyMoveGame()
+            val snapshots = json.getValue("snapshots").jsonArray
+            val over = snapshotWithStatus(snapshots[1], GameStatus.OVER.ordinal)
+            return json.withKeys("snapshots" to JsonArray(listOf(snapshots[0], over)))
+        }
+
+        /**
+         * The document of a valid 40-move 4×4 game: each move the first accepted of DOWN, LEFT,
+         * RIGHT, UP from seed 0x2048, so `snapshots[1]` (move 32) can still move.
+         */
+        fun fortyMoveGame(): JsonObject {
             val order = listOf(Direction.DOWN, Direction.LEFT, Direction.RIGHT, Direction.UP)
             var s = Game.newGame(S4, 0x2048)
             repeat(40) {
@@ -473,10 +530,23 @@ class PersistenceCorruptionTest {
             )
             check(s.snapshots[1].status == GameStatus.PLAYING && Game.canMove(s.snapshots[1].board))
             val doc = GameDocumentMapper.toDocument(SavedGame(s, 0, 0, false, 1, emptyList()))
-            val json = AppJson.encodeToJsonElement(GameDocument.serializer(), doc).jsonObject
-            val snapshots = json.getValue("snapshots").jsonArray
-            val over = snapshotWithStatus(snapshots[1], GameStatus.OVER.ordinal)
-            return json.withKeys("snapshots" to JsonArray(listOf(snapshots[0], over)))
+            return AppJson.encodeToJsonElement(GameDocument.serializer(), doc).jsonObject
+        }
+
+        /** This document with cell [index] of the current board set to exponent [exp]. */
+        fun JsonObject.withCell(index: Int, exp: Int): JsonObject {
+            val cells = bytesOf(getValue("cells").jsonPrimitive.content)
+            cells[index] = exp.toByte()
+            return withKeys("cells" to JsonPrimitive(Base64.Default.encode(cells)))
+        }
+
+        /** This document with cell [index] of `snapshots[k]` set to exponent [exp]. */
+        fun JsonObject.withSnapshotCell(k: Int, index: Int, exp: Int): JsonObject {
+            val snapshots = getValue("snapshots").jsonArray.toMutableList()
+            val bytes = bytesOf(snapshots[k].jsonPrimitive.content)
+            bytes[SNAPSHOT_CELLS_OFFSET + index] = exp.toByte()
+            snapshots[k] = JsonPrimitive(Base64.Default.encode(bytes))
+            return withKeys("snapshots" to JsonArray(snapshots))
         }
 
         const val SNAPSHOT_STATUS_OFFSET = 20

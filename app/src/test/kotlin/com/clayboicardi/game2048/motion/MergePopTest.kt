@@ -125,9 +125,10 @@ class MergePopTest {
     fun popOfAWideTileStaysWithinTheGap() {
         val engine =
             Game.move(MotionFixtures.FIX_POP_CAP_3.state, Direction.LEFT) as MoveOutcome.Moved
+        // The strongest pop 3×3 play makes: the 1024 tier (D-183) of the largest 3×3 tile (D-270).
         assertWithMessage("ENGINE_SPAWN_CHECK FIX_POP_CAP_3 LEFT")
             .that(engine.maxMergedExp)
-            .isEqualTo(11)
+            .isEqualTo(10)
         val h = MotionHarness.launch(rule, GameFixture(MotionFixtures.FIX_POP_CAP_3), FULL)
         val geometry = h.boardGeometry()
         assertWithMessage("the 3×3 board is 720 dp at w800dp-h1280dp")

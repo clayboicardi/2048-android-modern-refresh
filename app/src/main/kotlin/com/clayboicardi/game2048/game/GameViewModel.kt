@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 
 /**
  * The state holder of the Game screen (ARCHITECTURE.md §4.7–§4.11; D-024, D-043, D-044, D-047,
- * D-052, D-054, D-185, D-201, D-214). Activity-scoped, so the splash gate can read [ready].
+ * D-052, D-054, D-185, D-201, D-214, D-270). Activity-scoped, so the splash gate can read [ready].
  *
  * Every command runs on the main thread, synchronously and without suspension (D-024, D-052): the
  * engine call, the new `BoardUi`, header, overlay and `uiState`, and the fire-and-forget saves.
@@ -126,7 +126,13 @@ class GameViewModel(
      */
     fun onMove(direction: Direction) {
         val game = current?.takeIf { acceptsInput() && _overlay.value == OverlayUi.None } ?: return
-        when (val outcome = engineOrCorrupt(game) { Game.move(game.state, direction) }) {
+        val outcome =
+            engineOrCorrupt(game) {
+                Game.move(game.state, direction).also {
+                    if (it is MoveOutcome.Moved) checkReachable(it.state)
+                }
+            }
+        when (outcome) {
             null,
             is MoveOutcome.Blocked -> Unit
             is MoveOutcome.Invalid -> _nudge.value = Nudge(++nudgeId, direction)
@@ -148,7 +154,8 @@ class GameViewModel(
 
     /** §4.9 Undo of [game], which has at least one move. */
     private fun undo(game: SavedGame) {
-        val undone = engineOrCorrupt(game) { Game.undo(game.state) } ?: return
+        val undone =
+            engineOrCorrupt(game) { Game.undo(game.state)?.let(::checkReachable) } ?: return
         val next = commitState(game, undone)
         emitEpoch(next, BoardEvent.Undo)
         _overlay.value = OverlayUi.None
@@ -455,8 +462,9 @@ class GameViewModel(
 
     /**
      * Runs an engine [call] on [game]. D-214: an `IllegalStateException` means a restored game the
-     * engine cannot play; it is replaced like a corrupt file, with nothing finalized, carried,
-     * shown or logged, and the call yields `null`.
+     * engine cannot play (D-270: or a result above the reachable maximum, [checkReachable]); it is
+     * replaced like a corrupt file, with nothing finalized, carried, shown or logged, and the call
+     * yields `null`.
      */
     private inline fun <T : Any> engineOrCorrupt(game: SavedGame, call: () -> T?): T? =
         try {
@@ -469,6 +477,23 @@ class GameViewModel(
             )
             null
         }
+
+    /**
+     * D-270: [state], a result of `Game.move` or `Game.undo`, when its board holds no exponent
+     * above `size.maxReachableExp` (N² + 1). Play never makes one, so a result above it comes from
+     * a corrupt game that the decoder could not tell from a played one (two adjacent N² + 1 tiles,
+     * or a snapshot the undo's replay grows past it): it throws `IllegalStateException`, which
+     * [engineOrCorrupt] handles like the engine's own checks, before anything is shown, saved or
+     * counted. The board is the only new part: a move's snapshot is its board, and an undo keeps a
+     * prefix of the snapshots the decoder checked.
+     */
+    private fun checkReachable(state: GameState): GameState {
+        val highest = state.board.maxExp()
+        check(highest <= state.size.maxReachableExp) {
+            "Exponent $highest is above ${state.size.maxReachableExp} on ${state.size}"
+        }
+        return state
+    }
 
     private fun acceptsInput(): Boolean = _ready.value && !busy
 

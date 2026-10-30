@@ -205,14 +205,16 @@ object MotionFixtures {
         )
 
     /**
-     * The pop cap on a large 3×3 board (AC-MOVE-12; not in the §8.6 table): `KEEP_PLAYING`
-     * (`keepGoingAtMove` 10, as 1024 is past the 3×3 target), two 1024s at indices 0 and 1, score
-     * 50000, best 100000, 32 moves, `rngState` 0x2048. LEFT merges them into a 2048.
+     * The pop on a large 3×3 board (AC-MOVE-12; not in the §8.6 table): `KEEP_PLAYING`
+     * (`keepGoingAtMove` 10, as 512 is past the 3×3 target), two 512s at indices 0 and 1, score
+     * 50000, best 100000, 32 moves, `rngState` 0x2048. LEFT merges them into a 1024, the largest
+     * 3×3 tile (N² + 1 = 10, D-270): two 1024s would merge into a 2048 no 3×3 game makes, which the
+     * ViewModel replaces as a corrupt game.
      */
     val FIX_POP_CAP_3: SavedGame =
         fixtureGame(
             n = 3,
-            cells = listOf(10, 10, 0, 0, 0, 0, 0, 0, 0),
+            cells = listOf(9, 9, 0, 0, 0, 0, 0, 0, 0),
             score = 50_000,
             best = 100_000,
             moves = 32,

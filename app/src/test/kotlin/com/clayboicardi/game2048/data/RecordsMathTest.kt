@@ -173,6 +173,54 @@ class RecordsMathTest {
         assertThat(after.sizes.getValue("4").bestScoreNoUndo).isEqualTo(2000L)
     }
 
+    /** F08-AC26 */
+    @Test
+    fun coerceBestTilesDropsOnlyUnreachableBests() {
+        // N² + 1 per size, written out (D-270): 10, 17, 26, 37, 50, 65.
+        val bound = mapOf(3 to 10, 4 to 17, 5 to 26, 6 to 37, 7 to 50, 8 to 65)
+        for ((n, max) in bound) {
+            val size = BoardSize.of(n)
+            val kept = Records(sizes = mapOf("$n" to SizeRecord(bestScore = 50, bestTileExp = max)))
+            assertWithMessage("$size at $max")
+                .that(RecordsMath.coerceBestTiles(kept))
+                .isSameInstanceAs(kept)
+            for (bad in listOf(max + 1, 70, Board.MAX_EXP, -1)) {
+                val record =
+                    SizeRecord(
+                        bestScore = 50,
+                        bestTileExp = bad,
+                        gamesPlayed = 2,
+                        tileReach = listOf(2, 2),
+                    )
+                val read = RecordsMath.coerceBestTiles(Records(sizes = mapOf("$n" to record)))
+                assertWithMessage("$size at $bad")
+                    .that(read.sizes.getValue("$n"))
+                    .isEqualTo(record.copy(bestTileExp = 0))
+            }
+        }
+
+        // Valid records, the other sizes, other keys and the identity are kept as they are.
+        assertThat(RecordsMath.coerceBestTiles(GoldenFixtures.FIX_RECORDS))
+            .isSameInstanceAs(GoldenFixtures.FIX_RECORDS)
+        val other = SizeRecord(bestTileExp = Board.MAX_EXP)
+        val mixed =
+            GoldenFixtures.FIX_RECORDS.copy(
+                sizes =
+                    GoldenFixtures.FIX_RECORDS.sizes +
+                        mapOf("8" to SizeRecord(bestTileExp = 66), "daily:4" to other),
+                lastFinalizedGameId = mapOf("4" to 6L),
+            )
+        val read = RecordsMath.coerceBestTiles(mixed)
+        assertThat(read.sizes - "8").isEqualTo(mixed.sizes - "8")
+        assertThat(read.sizes.getValue("8")).isEqualTo(SizeRecord())
+        assertThat(read.lastFinalizedGameId).isEqualTo(mixed.lastFinalizedGameId)
+
+        // The next accepted move raises the dropped best tile again.
+        val raised =
+            RecordsMath.progress(read, game(BoardSize.of(8), score = 0, undoCount = 0, maxExp = 12))
+        assertThat(raised.sizes.getValue("8").bestTileExp).isEqualTo(12)
+    }
+
     /** F08-AC7 */
     @Test
     fun aggregateAllSizes() {

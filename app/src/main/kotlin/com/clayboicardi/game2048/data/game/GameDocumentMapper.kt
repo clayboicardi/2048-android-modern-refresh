@@ -49,7 +49,7 @@ object GameDocumentMapper {
     fun toSavedGame(doc: GameDocument): SavedGame {
         require(doc.size != 0) { "The size-0 document means \"no saved game\"" }
         val size = BoardSize.of(doc.size)
-        requireIdentity(doc)
+        requireIdentity(doc, size)
         val state =
             GameState(
                 size = size,
@@ -80,9 +80,10 @@ object GameDocumentMapper {
      * The D-044 identity checks of ARCHITECTURE.md §4.4: `gameId >= 1` (a missing key decodes to 0,
      * so it fails here); at most `MAX_PENDING_FINALIZATIONS` entries, with strictly increasing ids,
      * each in `1 until gameId` (recovery R1 depends on that order); no negative counter; `maxExp`
-     * in `1..Board.MAX_EXP`, which also bounds the `tileReach` growth of a finalization.
+     * in `1..size.maxReachableExp` (N² + 1, D-270), so a finalization never takes a best tile the
+     * Statistics hero cannot draw into the records, and its `tileReach` growth stays bounded.
      */
-    private fun requireIdentity(doc: GameDocument) {
+    private fun requireIdentity(doc: GameDocument, size: BoardSize) {
         require(doc.gameId >= 1) { "gameId must be at least 1, is ${doc.gameId}" }
         val entries = doc.pendingFinalizations
         require(entries.size <= MAX_PENDING_FINALIZATIONS) {
@@ -97,8 +98,9 @@ object GameDocumentMapper {
             require(minOf(e.score, e.elapsedMs, minOf(e.moveCount, e.undoCount).toLong()) >= 0) {
                 "Recovery entry ${e.gameId} has a negative counter"
             }
-            require(e.maxExp in 1..Board.MAX_EXP) {
-                "Recovery entry ${e.gameId} has maxExp ${e.maxExp}, outside 1..${Board.MAX_EXP}"
+            require(e.maxExp in 1..size.maxReachableExp) {
+                "Recovery entry ${e.gameId} has maxExp ${e.maxExp}, outside " +
+                    "1..${size.maxReachableExp}"
             }
             previous = e.gameId
         }

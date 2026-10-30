@@ -10,6 +10,15 @@ value class BoardSize private constructor(val n: Int) {
     val targetExp: Int
         get() = if (n == MIN_N) TARGET_EXP_3X3 else TARGET_EXP_DEFAULT
 
+    /**
+     * N² + 1, the largest exponent play can make on this size (D-030, D-270): 10 on 3×3, 17 on 4×4,
+     * 65 on 8×8. A tile of exponent k needs k − 1 tiles on the board at once (a spawn is at most a
+     * 4, and the first of the two k − 1 tiles waits while the second is built), and the board has
+     * N² cells. An exponent above it is never played, only stored by a damaged or edited file.
+     */
+    val maxReachableExp: Int
+        get() = cellCount + 1
+
     override fun toString(): String = "${n}x$n"
 
     companion object {

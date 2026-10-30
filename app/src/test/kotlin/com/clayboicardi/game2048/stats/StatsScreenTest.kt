@@ -3,12 +3,15 @@ package com.clayboicardi.game2048.stats
 import androidx.activity.ComponentDialog
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -19,9 +22,11 @@ import com.clayboicardi.game2048.data.AppJson
 import com.clayboicardi.game2048.data.DataStoreFiles
 import com.clayboicardi.game2048.data.game.SavedGame
 import com.clayboicardi.game2048.data.records.Records
+import com.clayboicardi.game2048.data.records.SizeRecord
 import com.clayboicardi.game2048.data.settings.Settings
 import com.clayboicardi.game2048.di.AppContainer
 import com.clayboicardi.game2048.di.statsViewModelFactory
+import com.clayboicardi.game2048.engine.Board
 import com.clayboicardi.game2048.engine.BoardSize
 import com.clayboicardi.game2048.fixtures.GoldenFixtures
 import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
@@ -37,6 +42,7 @@ import com.clayboicardi.game2048.ui.theme.GameTheme
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
+import java.math.BigInteger
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -164,6 +170,73 @@ class StatsScreenTest {
             compose.waitForIdle()
             backOnDialogWindow()
             assertUnchanged(rig, before, "Back at step 2")
+        }
+    }
+
+    /** F08-AC25 */
+    @Test
+    fun unreachableBestTilesShowNoTile() {
+        val four = GoldenFixtures.FIX_RECORDS.sizes.getValue("4")
+        val three = GoldenFixtures.FIX_RECORDS.sizes.getValue("3")
+        val damaged =
+            GoldenFixtures.FIX_RECORDS.copy(
+                sizes =
+                    mapOf(
+                        "3" to three,
+                        "4" to four.copy(bestTileExp = 100),
+                        // Played, but no best tile: a hand-written record.
+                        "5" to SizeRecord(bestScore = 900, gamesPlayed = 1),
+                        // 6×6's reachable maximum, N² + 1 = 37 (D-270).
+                        "6" to SizeRecord(bestScore = 5_000, bestTileExp = 37, gamesPlayed = 2),
+                        // One above 7×7's 50: a label could draw it, but no game makes it.
+                        "7" to SizeRecord(bestScore = 7_000, bestTileExp = 51, gamesPlayed = 1),
+                        "8" to SizeRecord(bestScore = 8_000, bestTileExp = 70, gamesPlayed = 1),
+                        "daily:4" to SizeRecord(bestTileExp = Board.MAX_EXP),
+                    ),
+            )
+        rig(records = damaged).use { rig ->
+            val bytes = rig.recordsBytes()
+            show(rig)
+
+            // Out-of-range best tiles read as 0; every other value and key is kept.
+            val read = rig.container.recordsRepository.state.value
+            val bests = read.sizes.mapValues { it.value.bestTileExp }
+            assertThat(bests)
+                .containsExactly("3", 8, "4", 0, "5", 0, "6", 37, "7", 0, "8", 0, "daily:4", 127)
+            assertThat(read.sizes.getValue("4")).isEqualTo(four.copy(bestTileExp = 0))
+            assertThat(read.lastFinalizedGameId)
+                .isEqualTo(GoldenFixtures.FIX_RECORDS.lastFinalizedGameId)
+
+            // Every tab composes; a tab without a valid best tile shows its best score alone.
+            val tabs =
+                listOf(
+                    Triple("All sizes", "24,680", 37),
+                    Triple("3×3", "2,100", 8),
+                    Triple("4×4", "24,680", null),
+                    Triple("5×5", "900", null),
+                    Triple("6×6", "5,000", 37),
+                    Triple("7×7", "7,000", null),
+                    Triple("8×8", "8,000", null),
+                )
+            for ((index, tab) in tabs.withIndex()) {
+                val (label, score, exp) = tab
+                compose.onNodeWithTag(statsTabTag(index)).performClick()
+                compose.waitForIdle()
+                compose.onNodeWithTag(STATS_HERO_TAG).assert(hasAnyDescendant(hasText(score)))
+                val bestTile =
+                    compose.onAllNodes(hasContentDescription("Best tile, ", substring = true))
+                if (exp == null) {
+                    assertWithMessage(label).that(bestTile.fetchSemanticsNodes()).isEmpty()
+                } else {
+                    bestTile.assertCountEquals(1)
+                    val value = BigInteger.ONE.shiftLeft(exp)
+                    compose.onNodeWithContentDescription("Best tile, $value").assertExists()
+                }
+            }
+            // Reading changes nothing on disk.
+            rig.flush()
+            assertThat(rig.container.recordsRepository.submissions).isEqualTo(0)
+            assertThat(rig.recordsBytes()).isEqualTo(bytes)
         }
     }
 

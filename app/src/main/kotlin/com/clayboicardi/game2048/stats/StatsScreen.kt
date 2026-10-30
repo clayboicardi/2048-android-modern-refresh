@@ -174,14 +174,19 @@ private fun HeroCard(tab: StatsTabUi, modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.headlineLarge.copy(fontFeatureSettings = TNUM),
                 )
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                MiniTile(tab.bestTileExp, GameDimens.MiniTileHero)
-                Text(
-                    text = stringResource(R.string.stats_best_tile),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = GameDimens.Space4).clearAndSetSemantics {},
-                )
+            // D-270: a record without a best tile (0), which only a damaged or edited file holds,
+            // shows the best score alone; MiniTile draws exponents 1 and up.
+            if (tab.bestTileExp > 0) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    MiniTile(tab.bestTileExp, GameDimens.MiniTileHero)
+                    Text(
+                        text = stringResource(R.string.stats_best_tile),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier =
+                            Modifier.padding(top = GameDimens.Space4).clearAndSetSemantics {},
+                    )
+                }
             }
         }
     }

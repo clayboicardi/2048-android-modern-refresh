@@ -6,20 +6,27 @@ import com.clayboicardi.game2048.data.game.SavedGame
 import com.clayboicardi.game2048.engine.BoardSize
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 
 /**
  * `records.json` behind a `DocumentHolder` (ARCHITECTURE.md §4.5–§4.6, §4.9). All arithmetic is in
  * the pure `RecordsMath`. Every mutator is main-thread only and applies in memory at once; a write
  * is submitted only when the document changed (D-043, D-044), so a finalization that is already
  * recorded submits no write.
+ *
+ * Coercion on read (D-270): the holder reads the file through [CoercingStore], so the loaded value
+ * already has `RecordsMath.coerceBestTiles` applied, and no best tile that play cannot reach is
+ * ever in [state]. The file keeps its raw value until the next update writes the whole document
+ * (FEATURES.md §2.4 rule 5, as `SettingsRepository` does for `lastBoardSize`).
  */
 class RecordsRepository(
     store: DataStore<Records>,
     scope: CoroutineScope,
     main: CoroutineDispatcher,
 ) {
-    private val holder = DocumentHolder(store, Records(), scope, main)
+    private val holder = DocumentHolder(CoercingStore(store), Records(), scope, main)
 
     /** `Records()` until loaded, then the in-memory document. */
     val state: StateFlow<Records> = holder.state
@@ -86,4 +93,14 @@ class RecordsRepository(
     /** Saves submitted so far, conflated ones included: a test hook (D-221). */
     val submissions: Long
         get() = holder.submissions
+
+    /** A view of [store] whose every read is coerced; writes go to the file unchanged. */
+    private class CoercingStore(private val store: DataStore<Records>) : DataStore<Records> {
+        override val data: Flow<Records> = store.data.map(RecordsMath::coerceBestTiles)
+
+        override suspend fun updateData(transform: suspend (t: Records) -> Records): Records =
+            store.updateData {
+                transform(RecordsMath.coerceBestTiles(it))
+            }
+    }
 }

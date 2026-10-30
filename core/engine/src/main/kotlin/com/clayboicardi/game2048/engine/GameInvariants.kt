@@ -1,10 +1,33 @@
 package com.clayboicardi.game2048.engine
 
 /**
- * Full structural check (I1–I8 and I10–I12 of ARCHITECTURE.md §3.5, D-214). Used by tests and by
- * the :app decoder (ARCHITECTURE.md §4.4). No check replays the move log.
+ * Full structural check (I1–I8 and I10–I12 of ARCHITECTURE.md §3.5, D-214), and the separate
+ * reachability bound of D-270. Used by tests and by the :app decoder (ARCHITECTURE.md §4.4). No
+ * check replays the move log.
  */
 object GameInvariants {
+    /**
+     * D-270: null when no exponent of the board or of any snapshot exceeds `size.maxReachableExp`
+     * (N² + 1), the largest one play makes; otherwise a human-readable message naming the first one
+     * that does. It is not one of [violations]: a move keeps the invariants of any consistent
+     * state, but not this bound (two adjacent N² + 1 tiles merge into N² + 2), and the hand-made
+     * boards of the engine properties hold exponents up to 17 on every size (D-145). :app applies
+     * it to every decoded game, and the same bound to the board of every Game.move and Game.undo
+     * result. O(N²) per snapshot.
+     */
+    fun reachability(state: GameState): String? {
+        val bound = state.size.maxReachableExp
+        val k = state.snapshots.indexOfFirst { it.board.maxExp() > bound }
+        val (where, highest) =
+            when {
+                state.board.maxExp() > bound -> "the board" to state.board.maxExp()
+                k >= 0 -> "snapshots[$k]" to state.snapshots[k].board.maxExp()
+                else -> return null
+            }
+        return "Reachability: every exponent on ${state.size} must be at most $bound, but " +
+            "$where holds $highest"
+    }
+
     /** Empty when the state is consistent; otherwise one human-readable message per violation. */
     fun violations(state: GameState): List<String> =
         listOfNotNull(

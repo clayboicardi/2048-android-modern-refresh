@@ -6,7 +6,8 @@ import com.clayboicardi.game2048.engine.GameStatus.OVER
 
 /**
  * All record arithmetic, pure (ARCHITECTURE.md §4.9; D-044, D-198; FEATURES.md §3). No function
- * lowers a best except [reset], and none lowers `lastFinalizedGameId`.
+ * lowers a best except [reset], and none lowers `lastFinalizedGameId`; [coerceBestTiles] drops only
+ * a best tile that play cannot reach (D-270).
  */
 object RecordsMath {
     /**
@@ -80,6 +81,27 @@ object RecordsMath {
         } else {
             entries
         }
+    }
+
+    /**
+     * The records as read (D-270; FEATURES.md §3.1): a size's `bestTileExp` outside
+     * `0..size.maxReachableExp` (N² + 1), which no play stores and only a damaged or edited file
+     * holds, reads as 0, its default, so Statistics never asks `MiniTile` for a tile it cannot
+     * draw; the next `progress` or `finalize` on that size raises it again. Every other field, and
+     * every key other than `"3"` … `"8"`, is kept. Returns [records] itself when nothing is out of
+     * range.
+     */
+    fun coerceBestTiles(records: Records): Records {
+        val sizes =
+            records.sizes.mapValues { (k, record) ->
+                val size = BoardSize.ALL.firstOrNull { key(it) == k }
+                if (size == null || record.bestTileExp in 0..size.maxReachableExp) {
+                    record
+                } else {
+                    record.copy(bestTileExp = 0)
+                }
+            }
+        return if (sizes == records.sizes) records else records.copy(sizes = sizes)
     }
 
     /** Reset statistics: `Records(lastFinalizedGameId = records.lastFinalizedGameId)` (D-044). */

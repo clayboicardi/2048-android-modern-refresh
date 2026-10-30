@@ -3,6 +3,8 @@ package com.clayboicardi.game2048.engine
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -163,6 +165,59 @@ class EngineGoldenTest {
         assertThrows<IllegalStateException> { Game.move(overflow, Direction.LEFT) }
         // A move that leaves the pair unmerged is still accepted.
         assertNoViolations(accepted(Game.move(overflow, Direction.DOWN)).state)
+        // Consistent, but above the 4×4 reachable maximum: :app rejects it at decode (D-270).
+        assertNotNull(GameInvariants.reachability(overflow))
+    }
+
+    /** D-030, D-270: the reachable maximum N² + 1 and GameInvariants.reachability */
+    @Test
+    fun reachableMaximum() {
+        // N² + 1 written out: 2^10 = 1024 on 3×3, 2^17 = 131072 on 4×4, 2^65 on 8×8.
+        assertEquals(listOf(10, 17, 26, 37, 50, 65), BoardSize.ALL.map { it.maxReachableExp })
+        for (size in BoardSize.ALL) {
+            val bound = size.maxReachableExp
+            val atBound = playing(cornerTile(size, bound))
+            assertNoViolations(atBound)
+            assertNull(GameInvariants.reachability(atBound), "$size at $bound")
+            // One above it is still consistent: the bound is not one of the invariants.
+            val above = playing(cornerTile(size, bound + 1))
+            assertNoViolations(above)
+            assertEquals(
+                "Reachability: every exponent on $size must be at most $bound, but the board " +
+                    "holds ${bound + 1}",
+                GameInvariants.reachability(above),
+            )
+        }
+
+        // Only in a snapshot: snapshots[1] of a 32-move 4×4 game, the base of its next undo.
+        var game = Game.newGame(FOUR, SEED)
+        while (game.moveCount < Game.SNAPSHOT_INTERVAL) {
+            game =
+                Direction.entries.firstNotNullOf { Game.move(game, it) as? MoveOutcome.Moved }.state
+        }
+        assertNull(GameInvariants.reachability(game))
+        val base = game.snapshots[1].copy(board = cornerTile(FOUR, FOUR.maxReachableExp + 1))
+        val inSnapshot = game.copy(snapshots = listOf(game.snapshots[0], base))
+        assertNoViolations(inSnapshot)
+        assertEquals(
+            "Reachability: every exponent on 4x4 must be at most 17, but snapshots[1] holds 18",
+            GameInvariants.reachability(inSnapshot),
+        )
+
+        // Moves do not keep the bound: two adjacent 17s, which a decoded 4×4 game may hold, merge
+        // into 18, so :app checks the state of every move and undo too (D-270).
+        val pair = playing(exponentRow(FOUR.maxReachableExp, FOUR.maxReachableExp))
+        assertNull(GameInvariants.reachability(pair))
+        val merged = accepted(Game.move(pair, Direction.LEFT)).state
+        assertNoViolations(merged)
+        assertEquals(FOUR.maxReachableExp + 1, merged.board.maxExp())
+        assertNotNull(GameInvariants.reachability(merged))
+
+        // Play from a new game stays within it: a 3×3 game cycling the four directions to OVER.
+        val three = BoardSize.of(3)
+        val over = Arbs.play(three, SEED, List(OVER_GAME_MOVES) { Direction.entries[it % 4] })
+        assertEquals(GameStatus.OVER, over.status)
+        assertNull(GameInvariants.reachability(over))
     }
 
     /** D-030: Board construction, queries, equality and text form */
@@ -248,6 +303,9 @@ class EngineGoldenTest {
         private const val MIN_SPAWN_DRAWS = 2L
         private const val MAX_SPAWN_DRAWS = 8L
         private const val EMPTY_AROUND_FULL_ROW = 12
+
+        /** Directions [reachableMaximum] cycles through, more than a 3×3 game lasts. */
+        private const val OVER_GAME_MOVES = 2_000
         private val FOUR = BoardSize.of(4)
         private val FULL_ROW = listOf(2, 4, 8, 16)
 
@@ -353,6 +411,10 @@ class EngineGoldenTest {
             line: Int,
             values: List<Int>,
         ): Board = Board.of(size, lineCells(size, direction, line, values))
+
+        /** A [size] board with one tile of exponent [exp] in the top-left corner. */
+        private fun cornerTile(size: BoardSize, exp: Int): Board =
+            Board.of(size, ByteArray(size.cellCount).also { it[0] = exp.toByte() })
 
         /** 4×4 board whose row 0 starts with the exponents [first] and [second]. */
         private fun exponentRow(first: Int, second: Int): Board =

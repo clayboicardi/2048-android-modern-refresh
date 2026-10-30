@@ -49,7 +49,8 @@ data class StatsUi(val initialTab: Int, val tabs: ImmutableList<SizeRecord>) {
 
 /**
  * One Statistics tab as shown (DESIGN_SYSTEM.md §6.9): [empty] when every field of its record is 0,
- * and otherwise the hero (best score, best tile exponent) and the rows' values, each already
+ * and otherwise the hero (best score, best tile exponent: 0 when the record holds none, D-270, and
+ * at most N² + 1 once `RecordsRepository` has read it) and the rows' values, each already
  * formatted: prose counts with `formatCount`, the win rate with `formatPercent`, the play time with
  * `formatElapsed`, all in Latin digits (D-103). The Wins row joins [wins] and [winRate] with
  * `stats_wins_value`; [averageScore] is "–" before any finalized game.
