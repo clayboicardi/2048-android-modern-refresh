@@ -1,6 +1,10 @@
 package com.clayboicardi.game2048.data
 
 import androidx.datastore.core.Serializer
+import androidx.lifecycle.ViewModelStore
+import com.clayboicardi.game2048.BuildConfig
+import com.clayboicardi.game2048.about.CHANGELOG
+import com.clayboicardi.game2048.about.decideWhatsNew
 import com.clayboicardi.game2048.data.game.GameDocument
 import com.clayboicardi.game2048.data.game.GameDocumentMapper
 import com.clayboicardi.game2048.data.game.GameDocumentSerializer
@@ -15,6 +19,7 @@ import com.clayboicardi.game2048.data.settings.PaletteId
 import com.clayboicardi.game2048.data.settings.Settings
 import com.clayboicardi.game2048.data.settings.SwipeSensitivity
 import com.clayboicardi.game2048.data.settings.ThemeMode
+import com.clayboicardi.game2048.di.AppContainer
 import com.clayboicardi.game2048.engine.BoardSize
 import com.clayboicardi.game2048.engine.Direction
 import com.clayboicardi.game2048.engine.Direction.DOWN
@@ -30,10 +35,12 @@ import com.clayboicardi.game2048.testing.LongGameGenerator
 import com.clayboicardi.game2048.testing.MainDispatcherRule
 import com.clayboicardi.game2048.testing.kill
 import com.clayboicardi.game2048.testing.testAppContainer
+import com.clayboicardi.game2048.testing.testAppViewModel
 import com.google.common.truth.Truth.assertThat
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -109,6 +116,7 @@ class PersistenceFixturesTest {
         val loaded = container.recordsRepository.state.value
         container.recordsRepository.recover(game4)
         assertThat(container.recordsRepository.state.value).isSameInstanceAs(loaded)
+        assertNoWhatsNew(container, settings)
         container.recordsRepository.awaitIdle()
         testScheduler.advanceUntilIdle()
         val after = folder.listFiles().orEmpty().associate { it.name to it.readBytes().toList() }
@@ -175,6 +183,28 @@ class PersistenceFixturesTest {
         assertThat(older).isEqualTo(game.copy(newBestAnnounced = false, elapsedMs = 0))
     }
 
+    /**
+     * The fixture's settings hold versionCode 30000, from before D-271 renumbered the first release
+     * to 10000, and D-009 shows What's new only when the last seen versionCode is below the current
+     * one: an `AppViewModel` over the fixture files shows no sheet and stores nothing.
+     */
+    private fun TestScope.assertNoWhatsNew(container: AppContainer, settings: Settings) {
+        assertThat(settings.lastSeenVersionCode).isGreaterThan(BuildConfig.VERSION_CODE)
+        val decision =
+            decideWhatsNew(settings.lastSeenVersionCode, BuildConfig.VERSION_CODE, CHANGELOG)
+        assertThat(decision.entries).isEmpty()
+        assertThat(decision.storeVersionCode).isNull()
+        val store = ViewModelStore()
+        try {
+            val appViewModel = testAppViewModel(container, store)
+            testScheduler.runCurrent()
+            assertThat(appViewModel.whatsNew.value).isNull()
+            assertThat(container.settingsRepository.submissions).isEqualTo(0L)
+        } finally {
+            store.clear()
+        }
+    }
+
     private fun assertSettingsFixture(s: Settings) {
         assertThat(s.schemaVersion).isEqualTo(1)
         assertThat(s.themeMode).isEqualTo(ThemeMode.DARK)
@@ -188,6 +218,7 @@ class PersistenceFixturesTest {
         assertThat(s.immersive).isTrue()
         assertThat(s.keepScreenOn).isTrue()
         assertThat(s.lastBoardSize).isEqualTo(6)
+        // Written before D-271 renumbered the first release; the fixture is write-once (D-041).
         assertThat(s.lastSeenVersionCode).isEqualTo(30000)
         assertThat(s.onboardingDone).isTrue()
     }
@@ -324,6 +355,7 @@ internal object V1Fixtures {
             immersive = true,
             keepScreenOn = true,
             lastBoardSize = 6,
+            // The versionCode before D-271; the committed fixture keeps it (write-once, D-041).
             lastSeenVersionCode = 30000,
             onboardingDone = true,
         )

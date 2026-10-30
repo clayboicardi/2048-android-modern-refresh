@@ -67,8 +67,8 @@ fun aboutReleaseTag(index: Int): String = "about:release:$index"
  * D-134): `SubScreenScaffold` titled `about`, whose back arrow calls [onBack], over a `LazyColumn`
  * (at most `ContentMaxWidth` wide, the scaffold's column):
  * - the header: the app icon composed from its two adaptive layers at `AboutIcon`, "2048" in the
- *   title numerals at `AboutTitle` in `skin.titleColor`, and `about_version` "Version 3.0.0
- *   (30000)" from `BuildConfig.VERSION_NAME` and `VERSION_CODE` (not the package manager, D-134);
+ *   title numerals at `AboutTitle` in `skin.titleColor`, and `about_version` "Version 1.0.0
+ *   (10000)" from `BuildConfig.VERSION_NAME` and `VERSION_CODE` (not the package manager, D-134);
  * - What's new: every [CHANGELOG] entry, newest first, titled with its versionName, then bullets;
  * - Source code: a link row to the repository through `rememberIntentLauncher`, which shows
  *   `link_open_failed` in this screen's snackbar host when no app can open it (F25-AC4);
@@ -223,7 +223,7 @@ private fun AboutHeader(modifier: Modifier = Modifier) {
     }
 }
 
-/** A version title ("3.0.0", "2.2 (25)"): `titleSmall`, 16 dp from the edges. */
+/** A version title ("1.0.0", "2.2 (25)"): `titleSmall`, 16 dp from the edges. */
 @Composable
 private fun ReleaseTitle(text: String, modifier: Modifier = Modifier) {
     Text(

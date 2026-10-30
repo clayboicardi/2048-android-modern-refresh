@@ -25,6 +25,12 @@ The app requests no runtime permissions and never shows a permission prompt. Its
 
 Exported components: `MainActivity` (the launcher entry) and AndroidX `ProfileInstallReceiver`, which only the system shell can call (it requires `android.permission.DUMP`) and which installs ahead-of-time performance profiles. The app itself requests no such permission.
 
+## Releases
+
+Each version is published on [GitHub Releases](https://github.com/clayboicardi/2048-android-modern-refresh/releases) as `2048-<version>.apk`: the release build of the tagged commit, after the full gate. Downloading it needs no GitHub account. The release notes list the changes, the APK's SHA-256 and the signer certificate's SHA-256 digest, which equals the content of `signing/ci-sideload.sha256`: releases are signed with the same public key as the CI builds (see `signing/README.md`), so a release and a CI release build install over each other and keep their data. Install it as in step 4 below.
+
+CI builds made before 1.0.0 carry versionCode 30000; uninstall such a build once before installing 1.0.0 (versionCode 10000), because Android does not install a lower versionCode over a higher one.
+
 ## Install a CI build
 
 The app is not in any app store yet; an F-Droid submission is planned.

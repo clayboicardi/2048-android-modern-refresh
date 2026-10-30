@@ -181,10 +181,10 @@
     <string name="license_hide_text">Skrij besedilo licence</string>
     <string name="whats_new_title">Novosti</string>
     <string name="whats_new_version">Različica %1$s</string>
-    <string name="whatsnew_30000_1">Povsem na novo izdelana kot hitra izvorna aplikacija</string>
-    <string name="whatsnew_30000_2">Velikosti plošče od 3×3 do 8×8, vsaka s svojim najboljšim rezultatom</string>
-    <string name="whatsnew_30000_3">Neomejena razveljavitev, tudi po koncu igre</string>
-    <string name="whatsnew_30000_4">Teme: svetla, temna, Neon Arcade in visokokontrastna</string>
-    <string name="whatsnew_30000_5">Statistika, upravljanje s tipkovnico in podpora za TalkBack</string>
+    <string name="whatsnew_10000_1">Povsem na novo izdelana kot hitra izvorna aplikacija</string>
+    <string name="whatsnew_10000_2">Velikosti plošče od 3×3 do 8×8, vsaka s svojim najboljšim rezultatom</string>
+    <string name="whatsnew_10000_3">Neomejena razveljavitev, tudi po koncu igre</string>
+    <string name="whatsnew_10000_4">Teme: svetla, temna, Neon Arcade in visokokontrastna</string>
+    <string name="whatsnew_10000_5">Statistika, upravljanje s tipkovnico in podpora za TalkBack</string>
 
 </resources>

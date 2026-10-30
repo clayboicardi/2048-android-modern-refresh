@@ -181,10 +181,10 @@
     <string name="license_hide_text">Skrýt text licence</string>
     <string name="whats_new_title">Co je nového</string>
     <string name="whats_new_version">Verze %1$s</string>
-    <string name="whatsnew_30000_1">Od základu přepracováno jako rychlá nativní aplikace</string>
-    <string name="whatsnew_30000_2">Velikosti plochy od 3×3 do 8×8, každá s vlastním nejlepším skóre</string>
-    <string name="whatsnew_30000_3">Neomezené vracení tahů, i po konci hry</string>
-    <string name="whatsnew_30000_4">Motivy: světlý, tmavý, Neon Arcade a vysoce kontrastní</string>
-    <string name="whatsnew_30000_5">Statistiky, ovládání klávesnicí a podpora TalkBack</string>
+    <string name="whatsnew_10000_1">Od základu přepracováno jako rychlá nativní aplikace</string>
+    <string name="whatsnew_10000_2">Velikosti plochy od 3×3 do 8×8, každá s vlastním nejlepším skóre</string>
+    <string name="whatsnew_10000_3">Neomezené vracení tahů, i po konci hry</string>
+    <string name="whatsnew_10000_4">Motivy: světlý, tmavý, Neon Arcade a vysoce kontrastní</string>
+    <string name="whatsnew_10000_5">Statistiky, ovládání klávesnicí a podpora TalkBack</string>
 
 </resources>

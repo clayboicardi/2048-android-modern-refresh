@@ -1,4 +1,4 @@
-3.0.0, yeni paket adına sahip yerel bir uygulama olarak tamamen yeniden yazıldı. Orijinal 2048 uygulamasının yanına ayrıca yüklenir; orijinal uygulamadaki puanlar aktarılmaz.
+1.0.0, yeni paket adına sahip yerel bir uygulama olarak tamamen yeniden yazıldı. Orijinal 2048 uygulamasının yanına ayrıca yüklenir; orijinal uygulamadaki puanlar aktarılmaz.
 • 3×3'ten 8×8'e tahta boyutları
 • Oyun bittikten sonra bile sınırsız geri alma
 • Neon Arcade, koyu ve yüksek kontrastlı temalar

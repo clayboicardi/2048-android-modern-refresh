@@ -119,7 +119,7 @@ import os, re, sys
 root = "fastlane/metadata/android"
 LOCALES = sorted("en-US cs da de el eo es fa fr hu it ko lt nl pl pt-BR pt-PT ru sl sr tr uk".split())
 TEXTS = {"title.txt": 30, "short_description.txt": 80, "full_description.txt": 4000,
-         "changelogs/30000.txt": 500}  # Google Play limits; the title limit is 30
+         "changelogs/10000.txt": 500}  # Google Play limits; the title limit is 30
 SCRIPT = {"ru": "Ѐ-ӿ", "uk": "Ѐ-ӿ", "sr": "Ѐ-ӿ",
           "el": "Ͱ-Ͽ", "fa": "؀-ۿ", "ko": "가-힣"}
 NEEDLES = ("com.clayboicardi.game2048", "https://github.com/clayboicardi/2048-android-modern-refresh")

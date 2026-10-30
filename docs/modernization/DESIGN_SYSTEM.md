@@ -1417,10 +1417,10 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 ### 6.11 About (`AboutKey`, `about/AboutScreen.kt`)
 
 - A `TopAppBar` titled `about` = "About". The body is a `LazyColumn` of at most 640 dp.
-- **Header:** the app icon at 72 dp, then `app_name` (GSF title instance at 40 sp, `titleColor`), then `about_version` = "Version %1$s (%2$s)" → "Version 3.0.0 (30000)" (`bodyMedium`).
+- **Header:** the app icon at 72 dp, then `app_name` (GSF title instance at 40 sp, `titleColor`), then `about_version` = "Version %1$s (%2$s)" → "Version 1.0.0 (10000)" (`bodyMedium`).
   - Compose's `painterResource` cannot load an `<adaptive-icon>` XML, so the icon is composed from its layers: `Box(Modifier.size(72.dp).clip(CircleShape).background(GameColors.IconBackground /* #E6A11A */)) { Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize()) }`.
   - The foreground's 108-unit viewport puts the glyph band (56/108 of the side) in the centre, so it is 37 dp wide at 72 dp.
-- **Section `about_whats_new` "What's new":** for each versionCode in `Changelog` (descending), a `titleSmall` "3.0.0", then the entries as bullet rows (`bodyMedium`, "•" + 8 dp).
+- **Section `about_whats_new` "What's new":** for each versionCode in `Changelog` (descending), a `titleSmall` "1.0.0", then the entries as bullet rows (`bodyMedium`, "•" + 8 dp).
 - **Row `about_source_code` "Source code":** a link row as in §6.8 (`ListItem(…) { headline }` through a `ui/components` wrapper such as `LinkRow`, D-246, with `onClickLabel` = `a11y_action_open`):
   - supporting text `about_source_code_url` = "github.com/clayboicardi/2048-android-modern-refresh" (`translatable="false"`); trailing `ic_open_in_new`;
   - it opens `ACTION_VIEW`. If `ActivityNotFoundException` is thrown, it shows the snackbar `link_open_failed` = "No app can open this link" (D-009).
@@ -1450,13 +1450,13 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
   - the bullet rows ("•" + 8 dp, `bodyMedium`) of every versionCode > `lastSeenVersionCode`, oldest version first, without per-version headings (D-254);
   - a full-width `FilledTonalButton(got_it)` at the bottom, with 24 dp margins.
 - It never blocks the game: dismissible by drag, Back, scrim tap or "Got it".
-- **v1.0 entries** (`Changelog.kt`, versionCode 30000):
-  - `whatsnew_30000_1` "Rebuilt from scratch as a fast native app";
-  - `whatsnew_30000_2` "Board sizes from 3×3 to 8×8, each with its own best score";
-  - `whatsnew_30000_3` "Unlimited undo, even after game over";
-  - `whatsnew_30000_4` "Light, dark, Neon Arcade and high-contrast themes";
-  - `whatsnew_30000_5` "Statistics, keyboard controls and TalkBack support".
-- The sheet cannot appear in v1.0, because versionCode 30000 is the first for this appId (D-009 note). It is verified by `WhatsNewTest` and the Required golden 44 (`sheet_whatsnew_classic-light`, §10.4, D-204).
+- **v1.0 entries** (`Changelog.kt`, versionCode 10000, D-271):
+  - `whatsnew_10000_1` "Rebuilt from scratch as a fast native app";
+  - `whatsnew_10000_2` "Board sizes from 3×3 to 8×8, each with its own best score";
+  - `whatsnew_10000_3` "Unlimited undo, even after game over";
+  - `whatsnew_10000_4` "Light, dark, Neon Arcade and high-contrast themes";
+  - `whatsnew_10000_5` "Statistics, keyboard controls and TalkBack support".
+- The sheet cannot appear in v1.0, because versionCode 10000 is the first for this appId (D-009 note, D-271). It is verified by `WhatsNewTest` and the Required golden 44 (`sheet_whatsnew_classic-light`, §10.4, D-204).
 
 ### 6.14 Empty and loading states
 
@@ -1467,7 +1467,7 @@ Used when the Regular layout does not fit the board − 16 dp budget (§6.4). He
 | Game, fresh | Two tiles, Undo disabled |
 | Board-size sheet | "No best score yet" on sizes with best 0 |
 | Statistics | Empty state per tab (§6.9) |
-| About → What's new | Always has the 30000 entry |
+| About → What's new | Always has the 10000 entry |
 | Licenses | Always populated; `LicensesCoverageTest` guards it (D-122) |
 | Corrupt data | Defaults are shown silently (D-045). No error UI exists |
 
@@ -1879,7 +1879,7 @@ Format: `<screen>[_<state>[-<N>x<N>]]_<palette>-<mode>[-hc][_<variant>]`. Layout
   - every golden except the filmstrip uses settings `motion = OFF`, so end states render deterministically (win badge fully morphed at 60°, no confetti);
   - the filmstrip uses `FULL` with `mainClock.autoAdvance = false`, advancing to each frame time measured from the move's origin on the 16 ms test-frame grid (`MOTION_SPEC.md` §0.1, §8.3).
 - **Dark goldens** set `themeMode = DARK` **and** the qualifier `+night`, so platform-drawn surfaces match.
-- `onboardingDone = true` everywhere except `game_hint-4x4_classic-light`. `lastSeenVersionCode = 30000` everywhere except the What's new golden.
+- `onboardingDone = true` everywhere except `game_hint-4x4_classic-light`. `lastSeenVersionCode = 10000` (the current version, D-271) everywhere except the What's new golden.
 - **Capture API:** in-window content is captured with `onRoot().captureRoboImage(...)`. Dialog and sheet windows are captured by node: `onNode(isDialog()).captureRoboImage(...)`, or by the sheet content test tag `"sheet:boardSize"` / `"sheet:whatsNew"`. **Never** use `captureScreenRoboImage`; it is `@ExperimentalRoborazziApi` (verified 2026-10-28) and would need an opt-in outside `testing/Accessibility.kt` (D-143, D-174).
 - **ATF** (D-085) runs on every `game_*`, `layout_*`, `settings_*`, `stats_*`, `howtoplay_*`, `about_*`, `licenses_*`, `sheet_*` and `dialog_*` golden. Only `motion_*` is exempt (D-204).
 - **Touch targets:** every screen-level screenshot test also runs `assertTouchTargets()` (`QUALITY.md` §1.12, D-205).
@@ -1955,7 +1955,7 @@ The golden matrix is 45 PNGs (D-204): D-147's set plus four rows for the board-s
 | 41 | `motion_merge-spawn-4x4_classic-light_t400` | Filmstrip, settled (400 ms) | classic-light | same | `FIX_FILM` | Required |
 | 42 | `sheet_boardsize_classic-light` | Board-size sheet over `FIX_MID_4`, 3×3 "In progress" | classic-light | Pixel7 | `FIX_MID_4` + `FIX_MID_3` + `FIX_RECORDS` | Required |
 | 43 | `dialog_newgame_classic-light` | New-game confirmation | classic-light | Pixel7 | `FIX_MID_4` | Required |
-| 44 | `sheet_whatsnew_classic-light` | What's new sheet | classic-light | Pixel7, `lastSeenVersionCode = 20000` | `FIX_MID_4` | Required |
+| 44 | `sheet_whatsnew_classic-light` | What's new sheet | classic-light | Pixel7, `lastSeenVersionCode = 9999` (below the current 10000, D-271) | `FIX_MID_4` | Required |
 | 45 | `game_hint-4x4_classic-light` | First-launch hint | classic-light | Pixel7, `onboardingDone = false` | `FIX_FRESH_4` | Required |
 
 Size budget (D-147, ≤ 10 MiB): flat UI at 1080×2400 px compresses to roughly 60–200 KB, so 45 PNGs fit. `QUALITY.md` owns the size check.

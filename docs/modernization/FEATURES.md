@@ -15,7 +15,7 @@ What this file owns:
 
 What it does not restate: build files, module layout and class APIs (`ARCHITECTURE.md`), colors, type, geometry and screen layouts (`DESIGN_SYSTEM.md`). It points to them by section.
 
-"v1.0" in this file means the scope delivered by the execution PR: app version `3.0.0` / versionCode `30000` (D-130).
+"v1.0" in this file means the scope delivered by the execution PR, first released as app version `1.0.0` / versionCode `10000` (D-130, D-271; the execution PR itself built 3.0.0 / 30000).
 
 ---
 
@@ -498,7 +498,7 @@ The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
 | F07-AC11 | The `game-4.json` fixture | The app launches | The first `BoardUi` composed after `ready` equals the fixture's board and contains no `Spawned` tile | `SplashGateTest.firstBoardEqualsPersistedFixture` |
 | F07-AC12 | `SplashGate(timeoutMs = 1000)` with a fake uptime | `keep(ready = false)` at 999 and 1,000 ms; `keep(ready = true)` at 10 ms | `true`, `false`, `false` | `SplashGateTest.gateReleasesAtCapOrWhenReady` |
 | F07-AC13 | A game store whose first read is delayed 1,500 ms | The app launches | Until 1,500 ms: empty-cell frame, "–" chips, Undo and New game disabled; afterwards the fixture board with only `Static` tiles | `SplashGateTest.lateLoadRendersStaticTiles` |
-| F07-AC14 | The committed `fixtures/v1/` files | Decoded with the current serializers | They decode, and their key fields equal the literals written in the test (`game-8-long.json` matches ARCHITECTURE.md §9.4) | `PersistenceFixturesTest.v1FixturesDecode` |
+| F07-AC14 | The committed `fixtures/v1/` files | Decoded with the current serializers | They decode, and their key fields equal the literals written in the test (`game-8-long.json` matches ARCHITECTURE.md §9.4); the settings fixture's `lastSeenVersionCode` 30000, above the current 10000, shows no What's new and stores nothing (D-271) | `PersistenceFixturesTest.v1FixturesDecode` |
 | F07-AC15 | Documents with an unknown key `"futureField"`, `palette = "SEPIA"` and `motion = "SUPER"`; the `settings.json` fixture without `keepScreenOn`; the `game-4.json` fixture without `newBestAnnounced` and `elapsedMs` (fields whose defaults are valid values, QUALITY.md §1.5) | Decoded | They decode, none as corruption; the unknown key is ignored; `palette == CLASSIC`, `motion == FULL`; `keepScreenOn == false` with every other settings value as in the fixture; `newBestAnnounced == false` and `elapsedMs == 0` with `gameId == 7`, the cells, history and `pendingFinalizations` as in the fixture | `PersistenceFixturesTest.newerDocumentsDecodeWithDefaults` |
 | F07-AC16 | Garbage bytes in `records.json`, then separately in `settings.json` | The app starts | The store's first value is `Records()` (respectively `Settings()`), before any D-044 recovery: a surviving game file's recovery entries are counted afterwards by design; every other file is byte-identical | `PersistenceCorruptionTest.recordsAndSettingsFallBackIndependently` |
 | F07-AC17 | Valid JSON game documents with: bad Base64; wrong snapshot count; `keepGoingAtMove > moveCount`; snapshot status ordinal 9; `snapshots[1]` with status `OVER` on a board that can still move (I12, D-214) | Loaded | Each counts as corrupt: a fresh game of that size; `records.json` untouched | `PersistenceCorruptionTest.invariantViolationIsCorruption` |
@@ -1277,9 +1277,9 @@ The absence of `VIBRATE` is F27-AC1.
    - `lastSeen < current`: show the entries for every versionCode in `(lastSeen, current]`, oldest first, and store the current code **immediately**, before the sheet is visible;
    - `lastSeen ≥ current`: show nothing and write nothing, so a downgrade keeps the higher value.
 2. The sheet is a `GameModalSheet` over the Game root (DESIGN_SYSTEM.md §6.13; its opt-in is isolated by D-181): "What's new", "Version %1$s", bullet rows and a "Got it" button. Drag, Back, a scrim tap or "Got it" dismiss it. It is modal (F15, F16).
-3. `about/Changelog.kt` maps versionCode → `List<@StringRes Int>`. v1.0 ships 30000 with `whatsnew_30000_1` … `_5`.
+3. `about/Changelog.kt` maps versionCode → `List<@StringRes Int>`. v1.0 ships 10000 with `whatsnew_10000_1` … `_5` (D-271).
 4. About always shows the full history (F25).
-5. The sheet cannot appear in a v1.0 build, because 30000 is the first versionCode of this app (D-009 note); `WhatsNewTest` verifies the mechanism.
+5. The sheet cannot appear in a v1.0 build, because 10000 is the first versionCode of this app (D-009 note, D-271); `WhatsNewTest` verifies the mechanism. A settings file from a build before D-271 holds 30000, above 10000, and shows nothing until a later version exceeds it.
 
 **Edge cases.**
 - A corrupt `settings.json` resets `lastSeenVersionCode` to 0, which reads as a fresh install: no sheet.
@@ -1292,12 +1292,12 @@ The absence of `VIBRATE` is F27-AC1.
 
 | AC | Given | When | Then | Test |
 |---|---|---|---|---|
-| F24-AC1 | `lastSeen 0`, current 30000 | `decideWhatsNew` | No entries; `storeVersionCode == 30000` | `WhatsNewTest.freshInstallStoresVersionAndShowsNothing` |
-| F24-AC2 | `lastSeen 29999`, current 30000, the real `CHANGELOG` | Decided | The 5 entries of 30000; store 30000 | `WhatsNewTest.updateShowsEntriesNewerThanLastSeen` |
-| F24-AC3 | A test changelog `{20100: [a], 30000: [b]}` | `lastSeen` 20000, then 20100 | `[a, b]`, then `[b]` | `WhatsNewTest.entriesCoverExactlyTheSkippedRange` |
-| F24-AC4 | `lastSeen 30000`, current 30000 | Decided | Nothing shown; nothing stored | `WhatsNewTest.sameVersionShowsNothing` |
-| F24-AC5 | `lastSeen 40000`, current 30000 | Decided | Nothing shown; `lastSeen` stays 40000 | `WhatsNewTest.downgradeShowsNothingAndKeepsLastSeen` |
-| F24-AC6 | An `AppViewModel` with `lastSeen 29999` | It evaluates | The settings write with 30000 is submitted before `whatsNew` emits a non-null list | `WhatsNewTest.versionStoredBeforeSheetIsShown` |
+| F24-AC1 | `lastSeen 0`, current 10000 | `decideWhatsNew` | No entries; `storeVersionCode == 10000` | `WhatsNewTest.freshInstallStoresVersionAndShowsNothing` |
+| F24-AC2 | `lastSeen 9999`, current 10000, the real `CHANGELOG` | Decided | The 5 entries of 10000; store 10000 | `WhatsNewTest.updateShowsEntriesNewerThanLastSeen` |
+| F24-AC3 | A test changelog `{10000: [a], 10100: [b]}`, current 10100 | `lastSeen` 9999, then 10000; then current 10000 | `[a, b]`, then `[b]`; then `[a]` | `WhatsNewTest.entriesCoverExactlyTheSkippedRange` |
+| F24-AC4 | `lastSeen 10000`, current 10000 | Decided | Nothing shown; nothing stored | `WhatsNewTest.sameVersionShowsNothing` |
+| F24-AC5 | `lastSeen 30000` (a file from before D-271), current 10000 | Decided | Nothing shown; `lastSeen` stays 30000 | `WhatsNewTest.downgradeShowsNothingAndKeepsLastSeen` |
+| F24-AC6 | An `AppViewModel` with `lastSeen 9999` | It evaluates | The settings write with 10000 is submitted before `whatsNew` emits a non-null list | `WhatsNewTest.versionStoredBeforeSheetIsShown` |
 | F24-AC7 | The sheet visible over `FIX_MID_4` | A swipe; then "Got it" | The swipe does nothing; "Got it" closes the sheet | `GameScreenTest.whatsNewSheetIsModalAndDismissible` |
 | F24-AC8 | Each of the 21 locales | Resolve every `CHANGELOG` string id | Each resolves to a non-blank string | `LocalizationTest.changelogStringsResolveInEveryLocale` |
 | F24-AC9 | `lastSeenVersionCode = 20000` | Golden 44 | It matches | `ScreensScreenshotTest.whatsNewSheetGolden` |
@@ -1307,7 +1307,7 @@ The absence of `VIBRATE` is F27-AC1.
 **User story.** As a curious player, I want to see the version, what changed, where the source lives, who built the game before me, and how my data is handled.
 
 **Behavior** (DESIGN_SYSTEM.md §6.11).
-1. Header: the app icon composed from its layers at 72 dp, "2048", and "Version 3.0.0 (30000)", formatted from the compile-time `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE` (no `PackageManager`, no I/O in composition; D-134).
+1. Header: the app icon composed from its layers at 72 dp, "2048", and "Version 1.0.0 (10000)", formatted from the compile-time `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE` (no `PackageManager`, no I/O in composition; D-134).
 2. What's new: every `CHANGELOG` entry, newest version first.
 3. Source code row: the supporting text "github.com/clayboicardi/2048-android-modern-refresh" opens `ACTION_VIEW` on `https://github.com/clayboicardi/2048-android-modern-refresh`. On `ActivityNotFoundException` the snackbar "No app can open this link" shows (D-009).
 4. Privacy: the D-123 text (F27).
@@ -1326,8 +1326,8 @@ The absence of `VIBRATE` is F27-AC1.
 
 | AC | Given | When | Then | Test |
 |---|---|---|---|---|
-| F25-AC1 | The debug build | About opens | The text "Version 3.0.0 (30000)" is shown | `AboutScreenTest.versionLine` |
-| F25-AC2 | `lastSeenVersionCode = 30000` | About opens | The What's new section shows "3.0.0" with its 5 bullets | `AboutScreenTest.whatsNewHistoryAlwaysShown` |
+| F25-AC1 | The debug build | About opens | The text "Version 1.0.0 (10000)" is shown | `AboutScreenTest.versionLine` |
+| F25-AC2 | `lastSeenVersionCode = 10000` | About opens | The What's new section shows "1.0.0" with its 5 bullets | `AboutScreenTest.whatsNewHistoryAlwaysShown` |
 | F25-AC3 | A browser activity is resolvable | Tap Source code | The started intent is `ACTION_VIEW` with data `https://github.com/clayboicardi/2048-android-modern-refresh` | `AboutScreenTest.sourceLinkOpensRepository` |
 | F25-AC4 | `checkActivities(true)` with no handler | Tap Source code | The snackbar "No app can open this link"; no exception | `AboutScreenTest.sourceLinkWithoutBrowserShowsSnackbar` |
 | F25-AC5 | About | Tap Open-source licenses | `LicensesKey` is on top of the stack | `AboutScreenTest.licensesRowOpensLicenses` |
@@ -1481,12 +1481,12 @@ The absence of `VIBRATE` is F27-AC1.
 
 **Behavior.**
 1. `applicationId` = `namespace` = `com.clayboicardi.game2048`; launcher label "2048", non-translatable. Debug uses the `.debug` suffix and the label "2048 Debug", so both install side by side (D-110).
-2. `versionName = "3.0.0"`, `versionCode = 30000`, both literals (D-130). The app reads them only as the generated `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE`, a class that holds AGP's standard fields and nothing else (no `buildConfigField`). No main source calls `PackageManager` for the version, so the startup path (`Application.onCreate` → `AppContainer.create`) makes no binder call for it (D-134, ARCHITECTURE.md §4.2).
+2. `versionName = "1.0.0"`, `versionCode = 10000`, both literals (D-130, D-271). The app reads them only as the generated `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE`, a class that holds AGP's standard fields and nothing else (no `buildConfigField`). No main source calls `PackageManager` for the version, so the startup path (`Application.onCreate` → `AppContainer.create`) makes no binder call for it (D-134, ARCHITECTURE.md §4.2).
 3. Adaptive icon (D-111): background `#E6A11A`; foreground = the 4 legacy glyph paths in `#3A2900` (6.33:1), scaled 1.411 and translated 16.667 in a 108-unit viewport; `<monochrome>` = the same paths; a vector fallback for API 24–25.
 4. Splash (D-112): `core-splashscreen` 1.2.0, theme `Theme.Game2048.Starting`: background `#FAF8EF` (`#1B1916` in `values-night`), animated icon `@drawable/ic_launcher_foreground`, icon background `#E6A11A`, post-splash theme `Theme.Game2048`. It is held until state loads, at most 1,000 ms (F07).
 5. Both build types are signed with the committed, intentionally public CI sideload key, so every CI APK updates the previous one in place. The key is never used for stores (D-131).
 6. Release is minified with R8 and `shrinkResources`; the APK is ≤ 3.0 MiB and 16 KB-aligned (D-132, D-148).
-7. Store listing (D-113–D-115, D-190): `fastlane/metadata/android/` with exactly 22 locale directories; `title.txt` = "2048" (≤ 30 characters); short description ≤ 80, full ≤ 4000, `changelogs/30000.txt` ≤ 500 characters. The full description states offline, no ads, no tracking, no runtime permissions, sizes 3×3–8×8, unlimited undo, themes and accessibility, MIT with the repository link, credits and the side-by-side note. Every full description contains `com.clayboicardi.game2048` and the repository URL. It never contains "port", "WebView", "long touch" or uberspot store links. Graphics under `en-US/images/` are rendered by `StoreAssetsTest` (opt-in, `-PrecordStoreAssets=true`): each frame is captured with `captureToImage()` and written by the test-only `store/OpaquePngWriter` as an 8-bit PNG, color type 2 for every screenshot and the feature graphic (D-190).
+7. Store listing (D-113–D-115, D-190): `fastlane/metadata/android/` with exactly 22 locale directories; `title.txt` = "2048" (≤ 30 characters); short description ≤ 80, full ≤ 4000, `changelogs/10000.txt` ≤ 500 characters. The full description states offline, no ads, no tracking, no runtime permissions, sizes 3×3–8×8, unlimited undo, themes and accessibility, MIT with the repository link, credits and the side-by-side note. Every full description contains `com.clayboicardi.game2048` and the repository URL. It never contains "port", "WebView", "long touch" or uberspot store links. Graphics under `en-US/images/` are rendered by `StoreAssetsTest` (opt-in, `-PrecordStoreAssets=true`): each frame is captured with `captureToImage()` and written by the test-only `store/OpaquePngWriter` as an 8-bit PNG, color type 2 for every screenshot and the feature graphic (D-190).
 8. The new package is not an update of `com.uberspot.a2048`: both install side by side, and no score is imported (D-005). README and the full description say so.
 
 **Edge cases.**
@@ -1499,17 +1499,17 @@ The absence of `VIBRATE` is F27-AC1.
 
 | AC | Given | When | Then | Test |
 |---|---|---|---|---|
-| F30-AC1 | Both APKs | `aapt2 dump badging` | Release: package `com.clayboicardi.game2048`, versionCode 30000, versionName 3.0.0, label 2048, min SDK 24, target SDK 37. Debug: package `…game2048.debug`, label "2048 Debug" | Gate: check-apk.sh step 1 |
+| F30-AC1 | Both APKs | `aapt2 dump badging` | Release: package `com.clayboicardi.game2048`, versionCode 10000, versionName 1.0.0, label 2048, min SDK 24, target SDK 37. Debug: package `…game2048.debug`, label "2048 Debug" | Gate: check-apk.sh step 1 |
 | F30-AC2 | Both APKs | `apksigner verify --print-certs` | The `certificate SHA-256 digest:` line(s) equal `signing/ci-sideload.sha256` (TC-2) | Gate: check-apk.sh step 6 |
 | F30-AC3 | `app-release.apk` | Size measured | ≤ 3,145,728 bytes | Gate: check-apk.sh step 4 |
 | F30-AC4 | Both APKs | `zipalign -c -P 16 -v 4` | Passes | Gate: check-apk.sh step 5 |
 | F30-AC5 | SDK 24 and 37 | `ActivityScenario.launch(MainActivity)` | The activity reaches `RESUMED` with the Game content composed | `LaunchSmokeTest.launchesOnMinAndTargetSdk` |
 | F30-AC6 | SDK 36 | `applicationInfo.loadIcon(packageManager)` | An `AdaptiveIconDrawable` whose `monochrome` is non-null | `ManifestPolicyTest.launcherIconIsAdaptiveWithMonochrome` |
 | F30-AC7 | `Theme.Game2048.Starting` under `notnight` and `night` | Its attributes are resolved | `windowSplashScreenBackground` `#FAF8EF` / `#1B1916`; `windowSplashScreenIconBackgroundColor` `#E6A11A` | `ManifestPolicyTest.splashThemeUsesIdentityColors` |
-| F30-AC8 | `fastlane/metadata/android/` | `scripts/check-metadata.sh` | The D-190 listing assertions pass: exactly D-113's 22 directories; `title.txt` equals `2048` (≤ 30 characters); short ≤ 80, full ≤ 4000, `changelogs/30000.txt` ≤ 500 characters; no BOM or CR and exactly one trailing newline; non-en-US texts differ from en-US; every full description contains `com.clayboicardi.game2048` and the repository URL; native-script letters for ru, uk, sr, el, fa and ko; no non-Latin digits; none of D-114's deny-words (`\bport\b`, `WebView`, `long touch`, case-insensitive); no listing file contains `com.uberspot.a2048` | Gate: check-metadata.sh `check_store_listing` |
+| F30-AC8 | `fastlane/metadata/android/` | `scripts/check-metadata.sh` | The D-190 listing assertions pass: exactly D-113's 22 directories; `title.txt` equals `2048` (≤ 30 characters); short ≤ 80, full ≤ 4000, `changelogs/10000.txt` ≤ 500 characters; no BOM or CR and exactly one trailing newline; non-en-US texts differ from en-US; every full description contains `com.clayboicardi.game2048` and the repository URL; native-script letters for ru, uk, sr, el, fa and ko; no non-Latin digits; none of D-114's deny-words (`\bport\b`, `WebView`, `long touch`, case-insensitive); no listing file contains `com.uberspot.a2048` | Gate: check-metadata.sh `check_store_listing` |
 | F30-AC9 | `en-US/images/` | `scripts/check-metadata.sh` | Exactly the D-115 image set at its exact pixel sizes; 8-bit PNGs; color type 2 for every screenshot and the feature graphic, 2 or 6 for `icon.png` (D-190) | Gate: check-metadata.sh `check_store_images` |
-| F30-AC10 | A `ContextWrapper` over the Robolectric application whose `getPackageManager()` throws `AssertionError` and whose `getApplicationContext()` returns the wrapper | `AppContainer.create(wrapper)` | It returns without throwing; `versionCode == 30000` | `AppContainerTest.createDoesNotTouchPackageManager` |
-| F30-AC11 | The debug unit-test classpath | Reflect the non-synthetic fields of `BuildConfig` | Exactly `DEBUG`, `APPLICATION_ID`, `BUILD_TYPE`, `VERSION_CODE`, `VERSION_NAME`; `VERSION_CODE == 30000`; `VERSION_NAME == "3.0.0"` | `AppContainerTest.versionComesFromBuildConfigStandardFields` |
+| F30-AC10 | A `ContextWrapper` over the Robolectric application whose `getPackageManager()` throws `AssertionError` and whose `getApplicationContext()` returns the wrapper | `AppContainer.create(wrapper)` | It returns without throwing; `versionCode == 10000` | `AppContainerTest.createDoesNotTouchPackageManager` |
+| F30-AC11 | The debug unit-test classpath | Reflect the non-synthetic fields of `BuildConfig` | Exactly `DEBUG`, `APPLICATION_ID`, `BUILD_TYPE`, `VERSION_CODE`, `VERSION_NAME`; `VERSION_CODE == 10000`; `VERSION_NAME == "1.0.0"` | `AppContainerTest.versionComesFromBuildConfigStandardFields` |
 
 ---
 
@@ -1810,7 +1810,7 @@ Each confirmed legacy defect, the v1.0 fix, and the acceptance criterion that pr
 | D25 | Eclipse source sets; missing ProGuard file; R8 off | Standard layout; R8 + `shrinkResources` in release (D-132) | `scripts/verify.sh` `:app:assembleRelease` produces `app/build/outputs/mapping/release/mapping.txt`; F30-AC3 |
 | D26 | Unused resources | Lint `UnusedResources` is fatal under `warningsAsErrors` | Gate: lintDebug UnusedResources |
 | D27 | BOM, typos, Persian-digit label | Strings migrated per D-101; `check_no_bom` keeps the BOM out (D-179) | F28-AC4, F28-AC2 |
-| D28 | Duplicate versionCode 18; English-only changelog | Legacy history shown as data; literal 3.0.0/30000 | F25-AC7, F30-AC1 |
+| D28 | Duplicate versionCode 18; English-only changelog | Legacy history shown as data; literal 1.0.0/10000 (D-271) | F25-AC7, F30-AC1 |
 | D29 | Machine-translated listing ("harbour", "robot") | 16 listing-only locales deleted; texts rewritten | F30-AC8 |
 | D30 | Listing says "3+ seconds" (code: 2 s) | "long touch" removed from the listing | F30-AC8 |
 | D31 | Submodule, foreign store badges, Eclipse docs | Submodule removed; README rewritten (D-116) | M0 exit check; Gate: check-metadata.sh `check_no_submodule` (`.gitmodules` absent) |

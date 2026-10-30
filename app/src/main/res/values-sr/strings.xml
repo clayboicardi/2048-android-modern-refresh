@@ -177,10 +177,10 @@
     <string name="license_hide_text">Сакриј текст лиценце</string>
     <string name="whats_new_title">Шта је ново</string>
     <string name="whats_new_version">Верзија %1$s</string>
-    <string name="whatsnew_30000_1">Изнова направљена као брза нативна апликација</string>
-    <string name="whatsnew_30000_2">Величине табле од 3×3 до 8×8, свака са својим најбољим резултатом</string>
-    <string name="whatsnew_30000_3">Неограничено опозивање, чак и после краја игре</string>
-    <string name="whatsnew_30000_4">Теме: светла, тамна, Neon Arcade и високи контраст</string>
-    <string name="whatsnew_30000_5">Статистика, контроле на тастатури и подршка за TalkBack</string>
+    <string name="whatsnew_10000_1">Изнова направљена као брза нативна апликација</string>
+    <string name="whatsnew_10000_2">Величине табле од 3×3 до 8×8, свака са својим најбољим резултатом</string>
+    <string name="whatsnew_10000_3">Неограничено опозивање, чак и после краја игре</string>
+    <string name="whatsnew_10000_4">Теме: светла, тамна, Neon Arcade и високи контраст</string>
+    <string name="whatsnew_10000_5">Статистика, контроле на тастатури и подршка за TalkBack</string>
 
 </resources>

@@ -8,7 +8,7 @@ Audience: the orchestrator and the implementer agents that execute M0–M6 (D-16
 - the test strategy and test inventory per layer (§1), with the generators, vectors, fixtures and budgets the tests use;
 - the static-analysis configuration and the Gradle test-task integrity rules (§2);
 - `scripts/verify.sh` and every `scripts/check-*.sh` (§1.13–§1.17, §3), as reference implementations;
-- coverage (§4), the CI workflow `.github/workflows/ci.yml` (§5), the Codex review protocol (§6) and the Definition of Done (§7).
+- coverage (§4), the CI workflow `.github/workflows/ci.yml` and the release workflow `.github/workflows/release.yml` (§5; §5.11, D-271), the Codex review protocol (§6) and the Definition of Done (§7).
 
 It does not restate feature acceptance criteria (`FEATURES.md` §1, test index §8), motion acceptance criteria (`MOTION_SPEC.md` §8–§9) or the golden list (`DESIGN_SYSTEM.md` §10). It points to them.
 
@@ -225,7 +225,7 @@ Committed, write-once fixtures (D-041), created in M2 and never edited afterward
 
 | File (under `app/src/test/resources/fixtures/v1/`) | Content | `PersistenceFixturesTest` asserts |
 |---|---|---|
-| `settings.json` | Every field set to a **non-default** value: `themeMode DARK`, `palette NEON`, `highContrast true`, `dynamicChrome true`, `motion REDUCED`, `haptics false`, `moveTiming ON_RELEASE`, `swipeSensitivity HIGH`, `immersive true`, `keepScreenOn true`, `lastBoardSize 6`, `lastSeenVersionCode 30000`, `onboardingDone true` | Decodes to exactly those values (a field that silently fell back to its default would fail) |
+| `settings.json` | Every field set to a **non-default** value: `themeMode DARK`, `palette NEON`, `highContrast true`, `dynamicChrome true`, `motion REDUCED`, `haptics false`, `moveTiming ON_RELEASE`, `swipeSensitivity HIGH`, `immersive true`, `keepScreenOn true`, `lastBoardSize 6`, `lastSeenVersionCode 30000` (written before D-271 made the first release 10000; kept, write-once), `onboardingDone true` | Decodes to exactly those values (a field that silently fell back to its default would fail) |
 | `records.json` | `FIX_RECORDS` of `DESIGN_SYSTEM.md` §10.3 for sizes "4" and "3", plus `tileReach` `[37,37,37,37,37,36,34,30,24,17,12,9]` for "4" and `[5,5,5,5,5,5,4,3,2]` for "3", plus `lastFinalizedGameId` `{"4": 6, "3": 5}` (D-044) | Every listed value; other sizes absent; `RecordsMath.aggregate` of it equals literals written in the test; together with `game-4.json`, `isFinalized(…, 4×4, 6)` and not `isFinalized(…, 4×4, 7)` (the consistency rule below) |
 | `game-4.json` | `Game.replay(BoardSize.of(4), 0x2048, the 8 moves of ARCHITECTURE.md §3.6)`, then `undo`, then `UP` again; `elapsedMs = 61000`, `bestAtStart = 0`, `newBestAnnounced = false`, `gameId = 7`, `pendingFinalizations` = `[{gameId 6, status OVER, score 3012, moveCount 302, elapsedMs 401000, undoCount 2, maxExp 7}]` (one entry; D-044) | Cells `1 3 1 1 / 2 1 1 0 / 0 0 0 0 / 0 0 0 0`, score 16, `rngState = 0x5C55827DF1D1D1EC`, `moveCount = 8`, `undoCount = 1`, status `PLAYING`, 1 snapshot, `gameId 7` and a one-element `pendingFinalizations` with every value above; decode → encode → decode yields an equal `SavedGame` (not a byte comparison with the file: a later defaulted field would change the bytes legitimately, D-041) |
 | `game-8-long.json` | `LongGameGenerator` output (§1.3; `gameId = 1`, empty `pendingFinalizations`) | The `LongGameGeneratorTest` literals; `gameId 1`; `GameInvariants.violations` empty |
@@ -287,7 +287,7 @@ Conventions (`ARCHITECTURE.md` §4.10): `runTest` with `StandardTestDispatcher`;
 | `PlayClockTest` | M2 | Time accrues only while resumed, in progress and after the first move; pause folds time into the save |
 | `BoardPresenterTest` | M2 | Epoch `BoardUi`s (`Restored`, `Undo`, `NewGame`, `SizeSwitched`) contain only `Static` tiles; `reset(state, Undo)` keeps the id of every cell whose exponent is unchanged, every other epoch assigns new ids (D-182; F05-AC9, F06-AC11). `settledKeepsIdentityAndIsStatic` (F07-AC25): `settled(b)` keeps `moveId`, `epoch`, `cells` and the non-`Ghost` tile ids, is all `Static` with event `Restored`, is idempotent, and leaves the presenter's next emission unchanged (D-047) |
 | `StatsViewModelTest` | M4 | Per-size and "All sizes" figures from `FIX_RECORDS`; reset clears `sizes`, keeps `lastFinalizedGameId` and leaves games untouched; a saved `OVER` game is shown through `RecordsMath.displayed` without being persisted (D-198, F08-AC18); an already finalized `gameId` is skipped and every uncounted recovery entry is shown once, oldest first (F08-AC21) |
-| `WhatsNewTest` | M4 | `lastSeen = 0` → nothing shown, 30000 stored; 29999 → the 30000 entries; equal → nothing (D-009) |
+| `WhatsNewTest` | M4 | `lastSeen = 0` → nothing shown, 10000 stored; 9999 → the 10000 entries; equal → nothing; 30000, a file from before D-271 → nothing, 30000 kept (D-009, D-271) |
 | `ProcessDeathRestoreTest` | M2 | §1.11 |
 | `FinalizationRecoveryTest` | M2 | §1.11: New game interrupted between its records and game writes counts the old game exactly once, and records writes that keep failing across later New games (also past the 16-entry cap) still count every game exactly once (D-043, D-044, D-046; F06-AC14–AC22, F08-AC22) |
 
@@ -307,7 +307,7 @@ Behaviour classes by milestone (D-211; the task tables of `PLAN.md` §5). Assert
 | `[M]` | Classes |
 |---|---|
 | M0 | `LaunchSmokeTest.launchesOnMinAndTargetSdk` (F30-AC5, placeholder form) |
-| M2 | `SplashGateTest` F07-AC11–AC12 (`firstBoardEqualsPersistedFixture`: the first composed `BoardUi` equals the persisted fixture, no `Spawned` tiles; `gateReleasesAtCapOrWhenReady`: release at 1,000 ms), `RecreateNoReplayTest` F07-AC7–AC8, `BackupRulesTest`, `HapticsMapTest.priorityResolution` (F14-AC1), `di/AppContainerTest` (`createDoesNotTouchPackageManager` F30-AC10: `AppContainer.create` over a context whose `getPackageManager()` throws returns with `versionCode` 30000; `versionComesFromBuildConfigStandardFields` F30-AC11: `BuildConfig` has only AGP's five standard fields, 30000 and "3.0.0"; D-134). JVM: `BoardPresenterTest` (incl. `settledKeepsIdentityAndIsStatic`, F07-AC25), `InputBurstOrderingTest`, the `GameViewModelTest` hint methods `hintShownWhileStartingGameHasNoMove` (F22-AC2) and `hintHiddenAfterAMove` (F22-AC10), `GameViewModelTest.presentationReportsSettleWithoutStateChange` (F07-AC24) |
+| M2 | `SplashGateTest` F07-AC11–AC12 (`firstBoardEqualsPersistedFixture`: the first composed `BoardUi` equals the persisted fixture, no `Spawned` tiles; `gateReleasesAtCapOrWhenReady`: release at 1,000 ms), `RecreateNoReplayTest` F07-AC7–AC8, `BackupRulesTest`, `HapticsMapTest.priorityResolution` (F14-AC1), `di/AppContainerTest` (`createDoesNotTouchPackageManager` F30-AC10: `AppContainer.create` over a context whose `getPackageManager()` throws returns with `versionCode` 10000; `versionComesFromBuildConfigStandardFields` F30-AC11: `BuildConfig` has only AGP's five standard fields, 10000 and "1.0.0"; D-134, D-271). JVM: `BoardPresenterTest` (incl. `settledKeepsIdentityAndIsStatic`, F07-AC25), `InputBurstOrderingTest`, the `GameViewModelTest` hint methods `hintShownWhileStartingGameHasNoMove` (F22-AC2) and `hintHiddenAfterAMove` (F22-AC10), `GameViewModelTest.presentationReportsSettleWithoutStateChange` (F07-AC24) |
 | M3 part 1 | `GameScreenTest` (part-1 ACs, incl. `undoUsedSnackbarUntilFirstFinalizedUndoGame`, `nothingToUndoSnackbarRateLimited`), `SwipeInputTest`, `KeyboardInputTest` (incl. `providesShortcutGroup`; `ignoredWhileModalOpen` for the new-game dialog), `TileRecompositionTest`, `BoardSemanticsTest` F17-AC1–AC6, `EffectiveMotionTest`, `MiniTileTest`, `HapticsMapTest` (move haptics, `invalidMoveSilentBelowApi30`), `SplashGateTest.lateLoadRendersStaticTiles` (F07-AC13), `LaunchSmokeTest` (+`launchesIntoGameWithoutTopBar`, +`noToastOnLaunchOrRecreate`); the board and score motion classes of `MOTION_SPEC.md` §8.5: `TimelineOriginTest`, `MoveTimelineTest`, `MergePopTest`, `SpawnDelayTest`, `ScoreMotionTest`, `NewBestTest`, `InvalidNudgeTest`, `NewGameCascadeTest`, `UndoCrossfadeTest`, `SizeSwitchTest`, `RestoreNoMotionTest`, `InterruptionTest`, `ConsistencyPropertyTest`, `FinalFrameEqualsStaticTest`, `BoardRecompositionBudgetTest`, and the board methods of `ReducedMotionTest`, `MotionOffTest` and `AnimatorScaleTest`. JVM: `BoardGeometryTest` (M3 methods), `TileLabelsTest`, `SwipeClassifierTest`, `MotionPlanTest`, `MotionTokensTest`, `ConfettiSystemTest`, `DelayedSpecTest`, `FormattingTest` (F28-AC7–AC9) |
 | M3 part 2 | `GameScreenTest` (overlay ACs, incl. `winCardFitsBoard`, `gameOverCardFitsBoard`, `cardButtonsNeverRenderDisabledColors`, `shareOnBothCardsNotInMenu`, `menuOpensEveryDestination`), `KeyboardInputTest` (+`cardKeysActLikeChrome`, F16-AC11; `ignoredWhileModalOpen` extended to the sheet), `RecreateNoReplayTest` (+`openSheetSurvivesRecreation`; under `MotionHarness.recreate()` +`recreateAfterMoveRendersFinalFrame`, +`recreateMidMoveSnapsToFinalFrame`, +`recreateDuringAndAfterWinShowsRestoredCard`, +`recreateDuringAndAfterGameOverShowsRestoredCard`, +`recreateAfterInvalidMoveDoesNotNudge`, F07-AC26–AC30), `BackOnRootTest`; the overlay and navigation motion classes `WinSequenceTest`, `CardExitTest`, `GameOverSequenceTest`, `NavTransitionsTest`, `PredictiveBackTest`, and the overlay methods of `ReducedMotionTest`, `MotionOffTest`, `AnimatorScaleTest` and `HapticsMapTest`, and the card cases of `RestoreNoMotionTest` (AC-RESTORE-1's card end state, AC-RESTORE-2's `FIX_WIN_PRE_4` case). JVM: `ShareTextTest` |
 | M4 | `ManifestPolicyTest` (incl. `legacyLauncherIconOnApi24`, L-AC12), `ImmersiveModeTest`, `KeepScreenOnTest`, `TalkBackModeTest`, `SettingsScreenTest` (incl. `switchesFireToggleHaptics` F14-AC8 and AC-HAP-4, `motionRowDisabledAtSystemScaleZero` AC-SCALE-4, `appLanguageSummaryDefaultsToSystem` L-AC6), `StatsScreenTest`, `AboutScreenTest`, `HowToPlayScreenTest`, `GameThemeTest`, `ThemeCrossfadeTest` (AC-THEME-1), `LayoutMotionTest` (AC-LAYOUT-1; `arrangementSwitchRendersSettledBoard` F18-AC13, AC-LAYOUT-2; `arrangementSwitchAfterPresentedMoveReplaysNothing` F18-AC14, AC-LAYOUT-3); the M4 methods of `GameScreenTest` (incl. the short-window layout checks `shortWindowsKeepBoardAndChromeOnScreen` F18-AC10 and `scrollModeCardBringsBoardIntoView` F18-AC12, and the long-score header check `longScoresFitHeaderWithoutTruncation` F17-AC23), `BoardSemanticsTest` (F17-AC7, incl. SCROLL), `RecreateNoReplayTest` (F18-AC5), `SwipeInputTest` (incl. `scrollModeMovesOnlyFromBoard` F18-AC11) and `KeyboardInputTest` (What's new sheet cases). JVM: `PaletteContrastTest`, `LayoutModeTest`, `BoardGeometryTest` (M4 methods: `boardSizePerMode`, `narrowWindowFloor`, and the D-188 resolution tables `resolvedLayoutTable` F18-AC8 and `boardNeverBelowFloorOrOffWindow` F18-AC9, whose window grid fails if any arrangement yields a board below 220 dp, a negative board or chrome off the window, and `growingHeaderKeepsBoardAndChromeInWindow` F18-AC15, the same grid with a header that grows in steps as it narrows), `ScoreFitTest` (F17-AC22), `StatsViewModelTest`, `WhatsNewTest`, `LicensesCoverageTest` |
@@ -629,9 +629,9 @@ check_apk() { # apk package label expected-exported-set
   if [[ ! -f "$apk" ]]; then err "$apk is missing"; return; fi
   badging="$("$BT/aapt2" dump badging "$apk")" || { err "aapt2 dump badging failed: $apk"; return; }
 
-  # 1. Badging.
-  grep -qF "package: name='$pkg' versionCode='30000' versionName='3.0.0'" <<< "$badging" ||
-    err "$apk: package line is not name='$pkg' versionCode='30000' versionName='3.0.0'"
+  # 1. Badging (D-130, D-271).
+  grep -qF "package: name='$pkg' versionCode='10000' versionName='1.0.0'" <<< "$badging" ||
+    err "$apk: package line is not name='$pkg' versionCode='10000' versionName='1.0.0'"
   grep -qxF "application-label:'$label'" <<< "$badging" || err "$apk: label is not '$label'"
   grep -qxF "minSdkVersion:'24'" <<< "$badging" || err "$apk: minSdkVersion is not 24"
   grep -qxF "targetSdkVersion:'37'" <<< "$badging" || err "$apk: targetSdkVersion is not 37"
@@ -998,7 +998,7 @@ import os, re, sys
 root = "fastlane/metadata/android"
 LOCALES = sorted("en-US cs da de el eo es fa fr hu it ko lt nl pl pt-BR pt-PT ru sl sr tr uk".split())
 TEXTS = {"title.txt": 30, "short_description.txt": 80, "full_description.txt": 4000,
-         "changelogs/30000.txt": 500}  # Google Play limits; the title limit is 30
+         "changelogs/10000.txt": 500}  # Google Play limits; the title limit is 30
 SCRIPT = {"ru": "Ѐ-ӿ", "uk": "Ѐ-ӿ", "sr": "Ѐ-ӿ",
           "el": "Ͱ-Ͽ", "fa": "؀-ۿ", "ko": "가-힣"}
 NEEDLES = ("com.clayboicardi.game2048", "https://github.com/clayboicardi/2048-android-modern-refresh")
@@ -1209,7 +1209,7 @@ exit "$fail"
 
 ### 1.17 Reproducibility probe (report-only)
 
-`scripts/repro-probe.sh` `[M6]` (D-191) builds the committed `HEAD` again in a fresh clone at another path and compares the release APKs. It never fails a gate (D-133 has no release workflow; F-Droid reproducibility is a goal, not a requirement, research/06 §4.3).
+`scripts/repro-probe.sh` `[M6]` (D-191) builds the committed `HEAD` again in a fresh clone at another path and compares the release APKs. It never fails a gate (D-133 had no release workflow, and D-271's `release.yml` does not run it; F-Droid reproducibility is a goal, not a requirement, research/06 §4.3).
 
 ```bash
 #!/usr/bin/env bash
@@ -1541,7 +1541,7 @@ Rules: thresholds are floors that may be raised (an execution-time D-173 entry) 
 
 ### 5.1 Overview
 
-`.github/workflows/ci.yml` is committed **in the plan PR** and is the only workflow (D-151 as refined by D-177); M0 keeps it unchanged. One job, `verify`, on `ubuntu-24.04`. Its first step after checkout decides what to run:
+`.github/workflows/ci.yml` is committed **in the plan PR** and is the only CI workflow (D-151 as refined by D-177); M0 keeps it unchanged. Since D-271 it has one sibling, `release.yml`, which runs only by hand and gates nothing (§5.11). One job, `verify`, on `ubuntu-24.04`. Its first step after checkout decides what to run:
 
 | Tree | Detect result | Job |
 |---|---|---|
@@ -1644,7 +1644,8 @@ The other actions in research/06 §3.1 (`download-artifact`, `android-emulator-r
 The committed `.github/workflows/ci.yml` is the source of truth; this is its content:
 
 ```yaml
-# The only workflow of this repository (D-151, as refined by D-177). Design and rationale:
+# The CI workflow of this repository (D-151, as refined by D-177); release.yml, run by hand,
+# publishes releases (D-271). Design and rationale:
 # docs/modernization/QUALITY.md §5; merge protocol: QUALITY.md §6.
 #
 # Bootstrap behaviour. Until execution milestone M0 lands, the tree holds the legacy Groovy build
@@ -1801,6 +1802,27 @@ No expression interpolates untrusted event text into a `run:` script; `HEAD_SHA`
 | Extra arguments | `VERIFY_GRADLE_ARGS` (mirror, sandbox only) | none |
 | Goldens | Recorded here | Verified only; never recorded or committed |
 
+
+### 5.11 Release workflow (D-271)
+
+`.github/workflows/release.yml` publishes one GitHub Release per version, after the execution PR (D-271 supersedes D-133's "no release workflow" rule). The committed file is the source of truth; it is small and commented. It is not a merge gate: it never runs on a pull request or a push, and `ci.yml` stays the only gate (§5.1).
+
+| # | Step | Notes |
+|---|---|---|
+| — | Trigger | `workflow_dispatch` only, with a required string input `version` (for example `1.0.0`). `permissions: contents: write`; `concurrency: release` (one release at a time); one job `release` on `ubuntu-24.04`, `timeout-minutes: 45` |
+| 1 | Refuse to run off `master` | Fails with an error annotation unless `GITHUB_REF` is `refs/heads/master` |
+| 2 | `actions/checkout` v7.0.1 | `persist-credentials: false`; gh uses `GH_TOKEN`, never git credentials |
+| 3 | Check the version | `version` matches `MAJOR.MINOR.PATCH` (MINOR and PATCH in 0..99, no leading zeros); `app/build.gradle.kts` has that `versionName` and the D-130 `versionCode`; `fastlane/metadata/android/en-US/changelogs/<code>.txt` exists; `gh api …/git/matching-refs/tags/v<version>` lists no such tag and `gh release list` no such release. Both lookups fail the step on an API error |
+| 4–7 | JDK 21, setup-gradle, Robolectric cache, SDK packages | Copied from `ci.yml` (§5.2 steps 3–6), with the same pins (§5.8) |
+| 8 | `./scripts/verify.sh` | The full gate, exactly as in CI and locally (D-140) |
+| 9 | Name the APK | `app/build/outputs/apk/release/app-release.apk` → `2048-<version>.apk`; `sha256sum` writes its SHA-256 |
+| 10 | Write the notes | `notes.md`: the en-US changelog (`• ` bullets as Markdown `- ` items), a Download line, the APK SHA-256, the signer certificate SHA-256 from `signing/ci-sideload.sha256` marked as the public CI sideload key (D-131), not a store identity, and "Updates signed with this key install over each other; the F-Droid build, when it comes, is signed by F-Droid and needs a fresh install." Also appended to the job summary |
+| 11 | Publish | `gh release create "v<version>" "2048-<version>.apk" --target "$GITHUB_SHA" --title "2048 <version>" --notes-file notes.md` with `GH_TOKEN: ${{ github.token }}` and `GH_REPO: ${{ github.repository }}`; gh creates the tag at the built commit |
+
+`version` reaches the scripts only as the environment variable `VERSION`, never spliced into script text, and step 3 validates it before any API path uses it. The owner dispatches the workflow after the version's `release:` commit has merged into `master` (D-164, D-271): from the Actions tab, or `gh workflow run release.yml -R clayboicardi/2048-android-modern-refresh --ref master -f version=<version>` (§6.8 "Dispatch `release.yml`"). A failed run creates no tag and no release, so it can be dispatched again after the fix.
+
+Validation: `python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' .github/workflows/release.yml` parses it, and `actionlint` reports nothing when it is available.
+
 ---
 
 ## 6. Codex review protocol
@@ -1940,6 +1962,7 @@ Every GitHub step of `PLAN.md` §6 and of this file is one of these operations (
 | Failed-job logs | `GET /repos/{R}/actions/jobs/{id}/logs` | `get_job_logs` (`run_id`, `failed_only`, `return_content`) | `gh run view -R … --log-failed` |
 | Re-run failed jobs | `POST /repos/{R}/actions/runs/{id}/rerun-failed-jobs` | `actions_run_trigger` `rerun_failed_jobs` | `gh run rerun -R … --failed` |
 | Dispatch `ci.yml` | `POST /repos/{R}/actions/workflows/ci.yml/dispatches` | `actions_run_trigger` `run_workflow` (`workflow_id: ci.yml`, `ref` = the branch) | `gh workflow run ci.yml -R … --ref …` |
+| Dispatch `release.yml` (the owner's decision, D-271) | `POST /repos/{R}/actions/workflows/release.yml/dispatches` with `ref: master` and `inputs.version` | `actions_run_trigger` `run_workflow` (`workflow_id: release.yml`, `ref: master`, `inputs: {version}`) | `gh workflow run release.yml -R … --ref master -f version=<version>` |
 | Artifacts | `GET /repos/{R}/actions/runs/{id}/artifacts`, then the artifact zip | `actions_list` `list_workflow_run_artifacts`; `actions_get` `download_workflow_run_artifact` (returns a URL to fetch) | `gh run download -R …` |
 | Merge | `PUT /repos/{R}/pulls/{n}/merge` (with `sha`) | `merge_pull_request` (`merge_method`, `expectedHeadSha`) | `gh pr merge -R … --merge` or `--squash`, with `--match-head-commit <sha>` |
 

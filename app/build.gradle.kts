@@ -24,8 +24,10 @@ android {
         applicationId = "com.clayboicardi.game2048"
         minSdk = 24
         targetSdk = 37
-        versionCode = 30000
-        versionName = "3.0.0"
+        // Literals (D-130): versionCode = MAJOR·10000 + MINOR·100 + PATCH. release.yml checks both
+        // against the version it publishes (D-271).
+        versionCode = 10000
+        versionName = "1.0.0"
     }
 
     signingConfigs {

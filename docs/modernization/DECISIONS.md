@@ -37,7 +37,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-100–D-106 | Localization & RTL | en + 20 locales complete; `MissingTranslation` = error; plurals; Latin digits; forced-LTR board; system per-app language page |
 | D-110–D-116 | Identity & store | `com.clayboicardi.game2048` "2048"; adaptive icon `#3A2900` on `#E6A11A`; splash gated on load; fastlane tree with 22 locales; store art rendered from code |
 | D-120–D-124 | Legal & privacy | MIT with 3 copyright lines; NOTICE; in-app licenses with a coverage check; PRIVACY.md; credits |
-| D-130–D-134 | Signing & versioning | 3.0.0 / 30000; committed public sideload keystore for debug and release; R8; no release workflow |
+| D-130–D-134 | Signing & versioning | 1.0.0 / 10000 (D-271); committed public sideload keystore for debug and release; R8; no store signing; a GitHub Release per version by hand (D-271) |
 | D-140–D-153 | Quality & CI | `verify.sh` = CI; Spotless + ktfmt 0.65; Lint warnings as errors; `allWarningsAsErrors`; detekt optional; Kover 90/85; Robolectric + Roborazzi goldens Read by the agent; APK gates; `ubuntu-24.04` with SHA-pinned actions |
 | D-160–D-173 | Process | Plan PR, then one execution PR on the re-cut branch; M0–M6 commits; `verify.sh` before every push; `@codex review` after M2 and at the end; merge on clean Codex + green CI, valve after 5 rounds; stop conditions |
 | D-174–D-211 | Planning additions | Opt-in isolation; test-task inputs; check-script additions; no model names in tracked files; epoch boards, motion timing (`MoveTimeline`, `delayedSpec`), level-dependent `MotionScheme`, haptic ownership; layout, theme, contrast and golden refinements; card fit, keys on cards, TalkBack completeness; store and legal checks with opaque PNGs; Codex heading, PR lifecycle, roles, GitHub API operations, review rounds and escalation; milestone refinements |
@@ -137,7 +137,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-111 | Identity | Adaptive + monochrome icon: legacy glyphs `#3A2900` on `#E6A11A` |
 | D-112 | Identity | core-splashscreen 1.2.0, held until persisted state loads (cap 1000 ms) |
 | D-113 | Identity | `fastlane/metadata/android/<22 locales>/`; delete 16 listing-only locales |
-| D-114 | Identity | Store text rules; `changelogs/30000.txt` |
+| D-114 | Identity | Store text rules; `changelogs/10000.txt` (D-271) |
 | D-115 | Identity | Store graphics rendered from code; opaque feature graphic; 1080×1920 phone shots |
 | D-116 | Identity | README rewritten (no foreign badges; side-by-side note; privacy link) |
 | D-120 | Legal | LICENSE (MIT): Sarbinowski 2014 + Cirulli 2014 + clayboicardi 2026 |
@@ -145,10 +145,10 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-122 | Legal | In-app licenses from a hand-curated JSON; CI checks coverage of the runtime classpath |
 | D-123 | Legal | `PRIVACY.md` + localized in-app privacy text: collects nothing, no network |
 | D-124 | Legal | About lists credits and the legacy release history (static English data) |
-| D-130 | Signing | versionName `3.0.0` / versionCode `30000`, both literals |
+| D-130 | Signing | versionName `1.0.0` / versionCode `10000` (D-271), both literals |
 | D-131 | Signing | Committed, intentionally public CI sideload keystore signs debug and release |
 | D-132 | Signing | debug: `.debug`, not minified. release: R8 + shrinkResources (smoke-verified DSL) |
-| D-133 | Signing | No release workflow, tags or store uploads in this overhaul; CI artifacts only |
+| D-133 | Signing | No release workflow, tags or store uploads in this overhaul; CI artifacts only. After it, `release.yml` publishes GitHub Releases (D-271) |
 | D-134 | Signing | Reproducibility: `dependenciesInfo` off, BuildConfig with standard fields only (no `buildConfigField`) as the only version source (no `PackageManager`), no named companions on `@Serializable` |
 | D-140 | Quality | `scripts/verify.sh` is the single gate; CI runs exactly it |
 | D-141 | Quality | Spotless 8.10.4 + ktfmt 0.65 kotlinlang style (fallback 0.64) |
@@ -168,7 +168,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-161 | Process | Execution branch `claude/2048-modernization-plan-8eneix`, re-cut from `master` after the plan merges |
 | D-162 | Process | Milestones M0–M6, one or more commits each |
 | D-163 | Process | `scripts/verify.sh` passes locally before every push |
-| D-164 | Process | Commit message format `M<n>: …` / `review(r<k>): …`; no history rewrite after the PR opens |
+| D-164 | Process | Commit message format `M<n>: …` / `review(r<k>): …` (and `release: …`, D-271); no history rewrite after the PR opens |
 | D-165 | Process | Fork-safe PRs (`clayboicardi/2048-android-modern-refresh`, base `master`) via the GitHub API; PR body contents |
 | D-166 | Process | `@codex review` after the M2 push, after the M6 push, and after every fix push |
 | D-167 | Process | Clean = 👍 from `chatgpt-codex-connector[bot]`, or a review or comment with no new findings, on the head SHA (D-196) |
@@ -275,6 +275,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-268 | Adaptive layout | The BEST chip reserves the larger of its two forms (`best_label`, `new_best_label`) at the chip level, its label and value a centred unit; side-by-side Score and Best share one height; the new-best moment changes no chip, header or board size |
 | D-269 | Accessibility | The Statistics tabs and the game menu's items draw the focus ring (`RectangleShape`); M3's 10 % focused state layer is below 3:1 |
 | D-270 | Data | A tile exponent above the size's reachable maximum N² + 1 (`BoardSize.maxReachableExp`; `GameInvariants.reachability`, beside the invariants) is corruption: the game decoder rejects it on the board, in a snapshot or as a recovery entry's `maxExp`, and `GameViewModel` handles a move or undo result above it like D-214's engine check failure; a `records.json` `bestTileExp` outside 0..N² + 1 reads as 0, and the Statistics hero draws the best tile only when ≥ 1 |
+| D-271 | Signing | The first release is 1.0.0 / versionCode 10000 (D-130's scheme; the owner's 30000 sideload is uninstalled once; the v1 fixture's 30000 shows no What's new); `release.yml`, dispatched on `master` with a version, runs `verify.sh` and publishes a GitHub Release tagged `v<version>` with the release APK; `release:` commit prefix |
 
 ---
 
@@ -490,7 +491,7 @@ Not in the research/05 roadmap but **In v1.0**:
 
 #### D-004 — Non-goals
 - **Decision.** The following are explicitly out of scope for the execution PR:
-  1. Play Store or other store uploads, real release signing, a release workflow, git tags and GitHub Releases (U5; D-133).
+  1. Play Store or other store uploads, real release signing, a release workflow, git tags and GitHub Releases (U5; D-133). After the execution PR, `release.yml` publishes GitHub Releases (D-271).
   2. Any network use: ads, analytics, crash reporting, cloud sync, online leaderboards, Play Games Services, remote config, downloadable fonts (U6).
   3. Notifications, reminders, exact alarms, `WorkManager`, Glance widgets, `VIBRATE`.
   4. Migration or import of `com.uberspot.a2048` data (D-005).
@@ -504,7 +505,7 @@ Not in the research/05 roadmap but **In v1.0**:
 - **Rationale:** U5 and U6 constraints; research/05-features.md §1 (permission traps), §5 (tiers); research/07-critique.md §4 D3.
 - **Rejected:** shipping any deferred item in the execution PR. It widens the single PR that U7 requires to land hands-off.
 - **Source:** [USER] U5, U6 · [ORCH] O2, O8 · [RESEARCH] research/05 §5, research/07 §4 D3.
-- **Note:** Clarified by D-257 (no Google Play listing; an F-Droid submission follows after the execution PR).
+- **Note:** Clarified by D-257 (no Google Play listing; an F-Droid submission follows after the execution PR); clarified by D-271 (item 1 bounds the execution PR; after it, a release workflow, `v<version>` tags and GitHub Releases exist).
 
 #### D-005 — No legacy data import; side-by-side install
 - **Decision:**
@@ -593,7 +594,7 @@ Not in the research/05 roadmap but **In v1.0**:
 - **First launch:** a dismissible hint card appears under the condition of D-201, in the place D-188 gives it.
   - Text: "Swipe to move all tiles. Equal tiles merge. Reach 2048." On 3×3 it says 256.
   - It disappears after the first accepted move or a tap on "Got it", then sets `onboardingDone = true`. It is never shown again.
-- **Note:** versionCode 30000 is the first for this appId, so the What's new sheet cannot appear in v1.0. `WhatsNewTest` covers the update path.
+- **Note:** versionCode 10000 (1.0.0, D-271) is the first for this appId, so the What's new sheet cannot appear in v1.0. `WhatsNewTest` covers the update path. A settings file from a build before D-271 holds 30000, above 10000, and shows nothing (D-271).
 - **How to play** (`HowToPlayKey`) covers:
   - the rules;
   - the 90/10 spawn;
@@ -605,9 +606,9 @@ Not in the research/05 roadmap but **In v1.0**:
     - if it is 0 (fresh install), store the current versionCode and show nothing;
     - if it is lower than the current versionCode, show a non-blocking `ModalBottomSheet` with the localized entries for versionCodes > `lastSeenVersionCode`, then store the current one.
   - Entries live in `app/src/main/kotlin/com/clayboicardi/game2048/about/Changelog.kt` as `versionCode → List<@StringRes Int>`.
-  - v1.0 ships the entry for 30000. A unit test covers the update path with a faked `lastSeenVersionCode`.
+  - v1.0 ships the entry for 10000 (amended by D-271; was 30000). A unit test covers the update path with a faked `lastSeenVersionCode`.
 - **About** (`AboutKey`) contains:
-  - version "3.0.0 (30000)", from `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE` (D-134);
+  - version "1.0.0 (10000)" (D-271), from `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE` (D-134);
   - What's new history;
   - source link `https://github.com/clayboicardi/2048-android-modern-refresh` via `ACTION_VIEW`. If no browser exists, show a snackbar; never crash;
   - privacy text (D-123);
@@ -621,6 +622,7 @@ Not in the research/05 roadmap but **In v1.0**:
 - **Source:** [ORCH] O11 · [RESEARCH] research/05 §4.12.
 - **Note:** Amended by D-201; clarified by D-188.
 - **Note:** Clarified in plan review (Codex r1): the current versionCode and the About version come from `BuildConfig`, not `PackageManager` (D-134).
+- **Note:** Amended by D-271 (the entry and the About version are 10000 / 1.0.0).
 
 ---
 
@@ -2148,7 +2150,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - `title.txt` = `2048`;
   - `short_description.txt` (≤ 80 characters). en-US: "Classic 2048 sliding-tile puzzle. Offline, no ads, no tracking.";
   - `full_description.txt` (≤ 4000);
-  - `changelogs/30000.txt` (≤ 500).
+  - `changelogs/10000.txt` (≤ 500; renamed from `30000.txt` by D-271).
 - The full description must state:
   - offline;
   - no ads;
@@ -2164,7 +2166,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/01 §6 (limits, obsolete copy).
 - **Rejected:** reusing the legacy texts ("port", "WebView", the 3-second long touch; research/01 §6).
 - **Source:** [ORCH] O13 · [RESEARCH].
-- **Note:** Extended by D-190; clarified by D-257 (no text implies a Google Play listing).
+- **Note:** Extended by D-190; clarified by D-257 (no text implies a Google Play listing); amended by D-271 (`changelogs/10000.txt`, "1.0.0" in its text).
 
 #### D-115 — Store graphics from code
 - **Decision.** `app/src/test/kotlin/com/clayboicardi/game2048/store/StoreAssetsTest.kt` (Robolectric, SDK 36) writes into `fastlane/metadata/android/en-US/images/`. It is excluded from normal test runs and included only when `-PrecordStoreAssets=true` is passed. It produces:
@@ -2265,13 +2267,14 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 
 #### D-130 — Version numbers
 - **Decision:**
-  - `versionName = "3.0.0"`, `versionCode = 30000`, written as **literals** in `app/build.gradle.kts`.
+  - `versionName = "1.0.0"`, `versionCode = 10000`, written as **literals** in `app/build.gradle.kts` (amended by D-271; was 3.0.0 / 30000).
   - Scheme: `MAJOR·10000 + MINOR·100 + PATCH`.
   - The app reads them only as the generated `BuildConfig.VERSION_CODE` and `BuildConfig.VERSION_NAME`, never through `PackageManager` (D-134).
 - **Rationale:** research/01 §8.3; research/06 §4.5; research/07 C9. This also fixes the smoke build's `versionCode = 1`.
 - **Rejected:** research/03's `versionCode = 1` snippet; git-count-derived codes (not reproducible from a tarball, research/06 §4.5).
 - **Source:** [ORCH] O14.
 - **Note:** Clarified in plan review (Codex r1): the app reads the version only through `BuildConfig` (D-134).
+- **Note:** Amended by D-271 (the first release is 1.0.0 / 10000; the scheme and the literals stay).
 
 #### D-131 — CI sideload keystore (intentionally public)
 - **Decision.**
@@ -2316,13 +2319,13 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 
 #### D-133 — No release workflow or store signing
 - **Decision:**
-  - No `release.yml`, no git tags, no GitHub Releases and no store uploads.
-  - The deliverables are the CI artifacts: debug APK, release APK and `mapping.txt` (D-151).
+  - No `release.yml`, no git tags, no GitHub Releases and no store uploads. (Superseded by D-271 for the release workflow, tags and GitHub Releases after the execution PR: `release.yml` publishes a GitHub Release, tagged `v<version>`, for each version. No store uploads stays.)
+  - The deliverables are the CI artifacts: debug APK, release APK and `mapping.txt` (D-151); since D-271 also each version's release APK on its GitHub Release.
   - Play or real release signing waits until the user adds secrets.
 - **Rationale:** U5; research/07 G18.
 - **Rejected:** research/06 §3.5's release workflow.
 - **Source:** [USER] U5.
-- **Note:** Clarified by D-257.
+- **Note:** Clarified by D-257; superseded by D-271 in its release-workflow, tag and GitHub Release rule (owner decision of 2026-10-30); no store uploads and no store signing stay.
 
 #### D-134 — Reproducibility hygiene and R8 rules
 - **Decision.** The build:
@@ -2488,7 +2491,7 @@ lint {
 
 #### D-148 — APK and manifest gates (`scripts/check-apk.sh`)
 - **Decision.** For `app-debug.apk` and `app-release.apk`, using build-tools 37.0.0, the script asserts:
-  1. **Badging.** Release: `package: name='com.clayboicardi.game2048' versionCode='30000' versionName='3.0.0'`, label `2048`, `minSdkVersion:'24'` (technical correction TC-2), `targetSdkVersion:'37'`. Debug: package `com.clayboicardi.game2048.debug`, label `2048 Debug`.
+  1. **Badging.** Release: `package: name='com.clayboicardi.game2048' versionCode='10000' versionName='1.0.0'` (D-271), label `2048`, `minSdkVersion:'24'` (technical correction TC-2), `targetSdkVersion:'37'`. Debug: package `com.clayboicardi.game2048.debug`, label `2048 Debug`.
   2. **Permissions.** `uses-permission` is exactly `<package>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, nothing else.
   3. **Exported components.** From `aapt2 dump xmltree`, the set with `exported=true` is exactly {`com.clayboicardi.game2048.MainActivity`, `androidx.profileinstaller.ProfileInstallReceiver`} for release. Debug additionally allows `androidx.activity.ComponentActivity`, which `ui-test-manifest` merges (verified 2026-10-28).
   4. **Size.** The release APK is ≤ **3,145,728 bytes** (3.0 MiB).
@@ -2498,7 +2501,7 @@ lint {
 - **Rationale:** research/06 §3.4; research/07 G12, G13; research/03 §5.
 - **Rejected:** a literal zero-permission manifest via `tools:node="remove"` (breaks API < 33, research/06 §3.4); checking the release APK only (debug APKs are distributed too).
 - **Source:** [USER] U6 · [ORCH] O16.
-- **Note:** Extended by D-179; technical correction TC-2.
+- **Note:** Extended by D-179; technical correction TC-2; amended by D-271 (badging versionCode 10000, versionName 1.0.0).
 
 #### D-149 — Test-count floor
 - **Decision:**
@@ -2528,7 +2531,7 @@ lint {
 - **Note:** Refined by D-210.
 
 #### D-151 — CI workflow
-- **Decision.** `.github/workflows/ci.yml` (the only workflow):
+- **Decision.** `.github/workflows/ci.yml` (the only workflow; since D-271 the only CI workflow, beside the hand-run `release.yml`):
 
 ```yaml
 name: CI
@@ -2599,13 +2602,13 @@ jobs:
   - Everything is preinstalled on the runner (research/06 §3.3).
 - **Rejected:** multiple jobs; the `enhanced` cache provider; a separate wrapper-validation job (setup-gradle already validates).
 - **Source:** [USER] U3 · [ORCH] O16.
-- **Note:** Refined by D-177.
+- **Note:** Refined by D-177; clarified by D-271 (`release.yml` copies its toolchain steps and pins; `ci.yml` stays the only merge gate).
 
 #### D-152 — Metadata, font and license checks
 - **Decision.**
 - **`scripts/check-metadata.sh`** asserts:
   - exactly the 22 locale directories of D-113;
-  - `title.txt == "2048"`, short description ≤ 80 characters, full ≤ 4000, `changelogs/30000.txt` ≤ 500;
+  - `title.txt == "2048"`, short description ≤ 80 characters, full ≤ 4000, `changelogs/10000.txt` ≤ 500 (D-271);
   - image dimensions and the feature graphic's PNG color type 2 (D-115);
   - `google_sans_flex_numerals.ttf` ≤ 32,768 bytes;
   - no tracked file outside `docs/` contains `storage-download.googleapis.com` (D-019);
@@ -2619,7 +2622,7 @@ jobs:
 - **Rationale:** research/01 §6 (listing limits and graphics rules); research/04 §9.1 (subset size); research/07 G6, G19 (the sandbox mirror must not leak).
 - **Rejected:** manual review of store assets only.
 - **Source:** [ORCH] O13, O15 · [RESEARCH].
-- **Note:** Extended by D-179, D-190.
+- **Note:** Extended by D-179, D-190; amended by D-271 (`changelogs/10000.txt`).
 
 #### D-153 — Not gated in v1.0
 - **Decision.** None of the following exist in v1.0:
@@ -2628,12 +2631,13 @@ jobs:
   - Gradle dependency verification metadata;
   - Dependabot;
   - the dependency-submission workflow;
-  - `release.yml`;
+  - `release.yml` (superseded by D-271: a hand-run release workflow exists after the execution PR; it is not a merge gate);
   - Compose Preview Screenshot Testing;
   - `ui-test-junit4-accessibility`.
 - **Rationale:** each needs a device, adds churn, or was rejected (research/06 §1.6–1.7, §3.6, §4.4).
 - **Rejected:** an emulator job on every PR (15–25 min per run, research/06 §1.6); Dependabot Gradle PRs (each one would trigger a CI and Codex loop in a hands-off repo).
 - **Source:** [RESEARCH].
+- **Note:** Amended by D-271 (`release.yml`).
 
 ---
 
@@ -2705,7 +2709,8 @@ jobs:
   - `M<n>: <summary>` for milestone work;
   - `review(r<k>): <summary>` for fixes in Codex round k;
   - `ci: <summary>` for CI-only fixes;
-  - `docs: <summary>` for plan or doc changes.
+  - `docs: <summary>` for plan or doc changes;
+  - `release: <summary>` for a commit that sets a release's version or changes the release workflow (D-271).
 - The body lists:
   - the D-IDs implemented;
   - `Gates: scripts/verify.sh passed (engine=<n> tests, app=<m> tests)`;
@@ -2715,7 +2720,7 @@ jobs:
 - **Rationale:** Milestone-traceable history in a merge-commit PR (D-170); screenshots must be inspected (O16).
 - **Rejected:** Conventional Commit types alone (they carry no milestone).
 - **Source:** [ORCH] O17.
-- **Note:** Clarified by D-180, D-194.
+- **Note:** Clarified by D-180, D-194; extended by D-271 (the `release:` prefix).
 
 #### D-165 — Fork-safe PR mechanics and PR body
 - **Decision.**
@@ -3161,7 +3166,7 @@ jobs:
     - `check_store_listing`:
       - exactly D-113's 22 directories;
       - `title.txt` equals `2048` and is ≤ 30 characters (Google Play's limit);
-      - short description ≤ 80 characters, full description ≤ 4000, `changelogs/30000.txt` ≤ 500;
+      - short description ≤ 80 characters, full description ≤ 4000, `changelogs/10000.txt` ≤ 500 (D-271);
       - no BOM or CR, and exactly one trailing newline;
       - non-en-US text is not identical to en-US;
       - every full description contains `com.clayboicardi.game2048` and the repository URL;
@@ -3188,6 +3193,7 @@ jobs:
   - a JPEG fallback (it fails `check_store_images`);
   - JVM tests that read repository-root files (those files are not declared task inputs).
 - **Source:** [ORCH] O13 · [RESEARCH] L10N_STORE_LEGAL.md §2.5, §2.6; FEATURES.md F26-AC5, F27-AC5, F30-AC8.
+- **Note:** Amended by D-271 (`changelogs/10000.txt`).
 
 #### D-191 — Reproducibility probe (extends D-140)
 - **Decision:**
@@ -4020,13 +4026,14 @@ jobs:
 
 #### D-254 — About, How to play, Licenses and What's new as built (amends L10N_STORE_LEGAL.md §1.3; DESIGN_SYSTEM.md §6.10, §6.12, §6.13; extends D-009, D-122)
 - **Decision:**
-  - **Visible text that is not a string resource** (L10N_STORE_LEGAL.md §1.3) adds About's and the What's new sheet's bullet glyph "•", the " — " between a credit's name and role, the legacy releases' "version (code)" titles from `legacy_history.json` (English static data, D-124) and the What's new history's titles from `versionNameOf(versionCode)` (D-130, "3.0.0" for 30000).
+  - **Visible text that is not a string resource** (L10N_STORE_LEGAL.md §1.3) adds About's and the What's new sheet's bullet glyph "•", the " — " between a credit's name and role, the legacy releases' "version (code)" titles from `legacy_history.json` (English static data, D-124) and the What's new history's titles from `versionNameOf(versionCode)` (D-130, "1.0.0" for 10000 since D-271).
   - **The What's new sheet** lists the bullet lines of every entry newer than the last seen version, oldest version first, under one "Version {versionName}" subtitle and without per-version headings.
   - **The merge illustration** of How to play shows "2 2 2 2" and "4 4 · ·" on `palette.board` side by side with `ic_pad_right` when the column is at least 400 dp wide, otherwise stacked with the same arrow turned to point down (so stacked at 360 dp and on the Pixel 7, golden 20); it is one node described by `htp_merging_illustration_cd`.
   - **The OFL group** of Licenses shows the font's license text (`ofl_google_sans_flex.txt`), as the MIT and Apache groups show theirs (D-122); a group without a text has no Show license text row.
 - **Rationale:** what M4-D built against D-248's contracts, recorded where the specification said less.
 - **Rejected:** translating the static history data (D-124).
 - **Source:** [ORCH] O17 (D-173 change control, M4 integration).
+- **Note:** Amended by D-271 (the `versionNameOf` example is "1.0.0" for 10000).
 
 #### D-255 — The restore gate waits for a composition of the loaded appearance (amends D-251; MOTION_SPEC.md §3.14, §3.15, §3.16; ARCHITECTURE.md §4.7, §10.3)
 - **Decision:**
@@ -4057,7 +4064,7 @@ jobs:
 - **Rationale:** the owner's distribution choice; D-113's tree is the metadata F-Droid reads from the repository, so keeping it store-neutral costs nothing and keeps the follow-up small.
 - **Rejected:** an AAB or Play upload path; Play Console or Data safety files; dropping the store graphics or the length limits (F-Droid shows the same graphics and texts).
 - **Source:** [USER] owner decision of 2026-10-29, relayed by the orchestrator · [ORCH] O17 (D-173 change control, M5 contracts).
-- **Note:** Clarified by D-260 (M6 adds no Play-only artifact and makes no store submission).
+- **Note:** Clarified by D-260 (M6 adds no Play-only artifact and makes no store submission); clarified by D-271 (GitHub Releases carry the sideload-signed release APK; F-Droid stays a follow-up and signs its own build).
 
 #### D-258 — Locale-file conventions: every `in_progress` overrides compose-ui's private string; no-break spaces are written `\u00A0` (amends D-239; L10N_STORE_LEGAL.md §1.3 rule 6, §1.7 rule 8 and the fr row, §1.8 step 3)
 - **Decision:**
@@ -4225,6 +4232,47 @@ jobs:
   - Replaying the whole move log at decode: D-214's cost.
 - **Source:** [ORCH] O17 (D-173 change control, Codex review r5 of the execution PR).
 
+#### D-271 — The first release is 1.0.0 (10000); a GitHub Release for each version (amends D-009, D-114, D-130, D-148, D-152, D-190, D-254; supersedes D-133 in its release-workflow, tag and GitHub Release rule, and D-153's `release.yml` item; clarifies D-004 item 1, D-151, D-257; extends D-164; amends PLAN.md §2.4, §2.7, §5.7 A9, §7; QUALITY.md §1.5, §1.7, §1.8, §1.13, §1.16, §1.17, §5.1, §5.9, §6.8, adds §5.11; L10N_STORE_LEGAL.md §1.3, §2.1–§2.3, §2.5–§2.7, §4.6, §4.9, §5.1, §5.4, §5.5, §5.7; FEATURES.md intro, F07-AC14, F24, F25, F30, §5.2; ARCHITECTURE.md §1.1, §2.6, §4.2, §4.13, §8.6, §10.3, §10.6; DESIGN_SYSTEM.md §6.11, §6.13, §6.14, §10.2, §10.4)
+- **Decision:**
+  - **Version.** The first public release is **1.0.0, versionCode 10000**, not 3.0.0 / 30000. D-130's scheme `MAJOR·10000 + MINOR·100 + PATCH` and its literals in `app/build.gradle.kts` stay, so 1.0.1 is 10001 and 1.1.0 is 10100. Everything that named 30000 or 3.0.0 for this app now names 10000 or 1.0.0:
+    - `app/build.gradle.kts` (`versionCode = 10000`, `versionName = "1.0.0"`) and `check-apk.sh` step 1 (D-148);
+    - `about/Changelog.kt` keys its entry 10000. The string keys are `whatsnew_10000_1` … `whatsnew_10000_5` in `values/strings.xml` and all 20 `values-<xx>/strings.xml`, with the same text; the `values/strings.xml` comments say "Version 1.0.0 (10000)", "1.0.0" and "the 1.0.0 change list";
+    - `fastlane/metadata/android/<locale>/changelogs/10000.txt` in all 22 locales (`git mv` from `30000.txt`; D-114, D-152, D-190), with "3.0.0" replaced by "1.0.0". Every changed sentence was re-read in every locale. Only hu changes beyond the number: "A 3.0.0 teljes újraírás" becomes "Az 1.0.0 teljes újraírás", because Hungarian writes "az" before a word read with an initial vowel (1 is "egy") and "a" before a consonant ("három"). The other 21 sentences put the number after their word for "version" or start with it, and none inflects the number or an article for it: fr "La version", es "La versión", it "La versione", pt-BR and pt-PT "A versão" agree with "version", not with the number; ko "1.0.0은" keeps 은, since "영" ends in a consonant as before; tr writes "1.0.0," with no suffix. No `title.txt`, `short_description.txt` or `full_description.txt` names a version;
+    - `PRIVACY.md` and its copy in L10N_STORE_LEGAL.md §4.6 say "version 1.0.0 and later", last updated 2026-10-30;
+    - the KDoc examples in `AppViewModel.kt`, `AboutScreen.kt` and `Changelog.kt` (About's legacy example "2.2 (25)" stays), and the tests below.
+  - **Why it is safe.** `com.clayboicardi.game2048` is a new application id (D-005, D-110). No store and no published build ever carried 30000, so there is no installed base to upgrade past it; the only 30000 installs are CI sideloads of the execution PR. Android refuses an APK whose versionCode is below the installed one (`INSTALL_FAILED_VERSION_DOWNGRADE`; `adb install -r -d` works only for the debuggable debug build), so **the owner uninstalls their own 30000 sideload once** before installing 1.0.0. That deletes its local data unless Android backup restores it (D-048). The legacy 2.2 (25) belongs to the old package `com.uberspot.a2048` and appears only in About's legacy history (`legacy_history.json`, D-124), which stays as it is.
+  - **A settings file from a 30000 build.** The write-once fixture `app/src/test/resources/fixtures/v1/settings.json` holds `lastSeenVersionCode` 30000 and keeps it (D-041). D-009 shows What's new only when the stored versionCode is below the current one, so 30000 against 10000 is the downgrade case: no sheet and nothing stored, and the higher value stays until a version above 30000 ships, which then shows its own entries. A backup of a 30000 install restored into 1.0.0 behaves the same, and its records and games load unchanged. `PersistenceFixturesTest.v1FixturesDecode` (F07-AC14) asserts this on the fixture through `decideWhatsNew` and through an `AppViewModel` over the fixture files (no sheet, no settings submission, the files byte-identical afterwards). `WhatsNewTest.downgradeShowsNothingAndKeepsLastSeen` (F24-AC5) uses 30000 as its higher last-seen value (was 40000).
+  - **Tests.** `TEST_VERSION_CODE` is 10000. The "seen before this update" values of `GameScreenTest` and `ScreensScreenshotTest` (`SEEN_BEFORE_UPDATE`, golden 44), `SwipeInputTest` (`SEEN_BEFORE`, which `KeyboardInputTest` imports) and `WhatsNewTest` become 9999: the old 20000 and 29999 are above 10000 and would read as a downgrade. F24-AC3's test changelog is {10000, 10100} with current 10100. F25-AC1, F25-AC2, F30-AC10 and F30-AC11 assert 1.0.0 and 10000, and `WhatsNewTest.versionNameFollowsTheVersionScheme` checks 10000 → "1.0.0", 10001 → "1.0.1" and 10100 → "1.1.0".
+  - **GitHub Releases.** `.github/workflows/release.yml` publishes one GitHub Release for each version (QUALITY.md §5.11). This supersedes D-133's "no `release.yml`, no git tags, no GitHub Releases" from now on; D-004 item 1 kept them out of the execution PR, and that stays true of that PR. The workflow:
+    - runs only on `workflow_dispatch`, with a required input `version` (for example `1.0.0`), and its first step fails unless `github.ref` is `refs/heads/master`;
+    - has `permissions: contents: write`, one job on `ubuntu-24.04`, and `ci.yml`'s JDK, Gradle, Robolectric-cache and SDK steps with the same action pins (QUALITY.md §5.8);
+    - fails unless `version` is `MAJOR.MINOR.PATCH` with MINOR and PATCH in 0..99 and no leading zeros, `app/build.gradle.kts` holds that versionName and the versionCode the scheme gives for it, `fastlane/metadata/android/en-US/changelogs/<code>.txt` exists, and neither the tag `v<version>` nor a release for it exists (both looked up through the API, so a failed lookup fails the step);
+    - runs the full `./scripts/verify.sh`, the gate `ci.yml` runs;
+    - copies `app-release.apk` to `2048-<version>.apk` and writes its SHA-256;
+    - writes `notes.md`: the en-US `changelogs/<code>.txt` (its "• " bullets as Markdown list items), a Download line naming the APK, the APK's SHA-256, the signer certificate SHA-256 from `signing/ci-sideload.sha256` with the note that it is the public CI sideload key (D-131), not a store identity, and the line "Updates signed with this key install over each other; the F-Droid build, when it comes, is signed by F-Droid and needs a fresh install.";
+    - runs `gh release create "v<version>" "2048-<version>.apk" --target "$GITHUB_SHA" --title "2048 <version>" --notes-file notes.md` with `GH_TOKEN` set to the workflow's `GITHUB_TOKEN`; gh creates the tag at the built commit.
+
+    The `version` input reaches the scripts only through the environment and is checked before any API path uses it. `concurrency: release` runs one release at a time.
+  - **Tags.** A `v<versionName>` tag is created only by `release.yml`, at the commit its APK was built from, and is never moved or deleted. Pushed history is never rewritten (D-164).
+  - **Unchanged.** No store upload, no store signing and no Play artifact (D-133, D-257). The release APK is the CI release build, signed with the public sideload key (D-131), so it updates and is updated by CI release builds of an equal or higher versionCode. F-Droid stays a later follow-up (D-257): its recipe can build from a `v<version>` tag, and its build, signed by F-Droid, cannot update a sideload install (L10N_STORE_LEGAL.md §2.7 item 2). `ci.yml` stays the only merge gate; `release.yml` gates nothing and never runs on a pull request.
+  - **Workflows.** `.github/workflows` holds `ci.yml` and `release.yml` (PLAN.md §5.7 A9). `ci.yml`'s header comment calls it the CI workflow and names `release.yml`; nothing else in it changes.
+  - **Commit prefix.** `release: <summary>` is the subject prefix for a commit that sets a release's version or changes the release workflow (D-164), as this entry's commit does: `release: 1.0.0 (10000) and a GitHub Release workflow`.
+  - **Releasing a later version.** One `release:` commit raises the two literals (D-130) and every pin of them (`check-apk.sh` step 1, `check-metadata.sh`'s changelog name, `AppContainerTest`, `AboutScreenTest.versionLine`, `TEST_VERSION_CODE`), adds `changelogs/<code>.txt` in the 22 locales and a `Changelog.kt` entry with its `whatsnew_<code>_N` strings in all 21 string files, and passes `scripts/verify.sh`. After it merges, the owner dispatches `release.yml` on `master` with the version.
+- **Evidence:**
+  - Before the change, `git grep -n -E '30000|3\.0\.0'` outside `docs/` listed the places above. After it, it lists only the v1 fixture, the two tests that hold 30000 as the value before the renumbering (`PersistenceFixturesTest` with its generator of that fixture, and `WhatsNewTest.BEFORE_RENUMBERING`), README's note to uninstall a 30000 build, the unrelated score 30000 of `FIX_POP_TIERS_4` (`MotionFixtures.kt`), and the summary line of root `AGENTS.md`. That file is the agents' instruction file, which an implementer changes only on the owner's own instruction, so its version and its list of commit prefixes (`release:`) are left for the owner.
+  - `./scripts/verify.sh --record` changed exactly two goldens, both Read: `about_classic-light` (the header's version line reads "Version 1.0.0 (10000)" and the What's new history's title "1.0.0"; the changed pixels lie only in those rows, x 43–620, y 605–928) and `sheet_whatsnew_classic-light` (golden 44: the subtitle reads "Version 1.0.0"; the changed pixels are the one digit, x 199–217, y 1717–1745). The other 43 goldens are unchanged. `StoreAssetsTest` with `-PrecordStoreAssets=true` rewrote all 8 store images byte-identical (`git diff --exit-code fastlane/` clean); none shows a version.
+  - `release.yml` parses with PyYAML (`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/release.yml'))"`). actionlint 1.7.12 with ShellCheck 0.11.0 reports nothing on `release.yml` and `ci.yml`. The master guard, the version check and the notes step were run locally with a stub `gh`: 1.0.0 passes (code 10000); 1.0.1 (not the build file's version), `01.0.0`, `1.100.0` and `1.0.0;id` (format), an existing tag `v1.0.0`, an existing release `v1.0.0` and an API error each fail the step; a tag `v1.0.0-rc1` does not block 1.0.0; the guard fails on `refs/heads/feature`; the notes hold the five parts above.
+- **Rationale:** the owner's decisions of 2026-10-30. A new application id starts at 1.0.0; 3.0.0 suggested a successor to uberspot's 2.x, which this app is not (D-005: a separate install, no scores carried over). CI artifacts expire after 30 days and need a signed-in GitHub account (L10N_STORE_LEGAL.md §5.4); a GitHub Release is a permanent, public download of exactly the gated build, with its digests.
+- **Rejected:**
+  - keeping 3.0.0 / 30000;
+  - rewriting the v1 fixture's `lastSeenVersionCode` (write-once, D-041; the downgrade rule already covers it);
+  - a tag-push trigger (a hand-made tag would come before the gate, and a failed run would leave a tag without a release);
+  - a job-level `if:` for the `master` check (the job would show as skipped, not as failed with a reason);
+  - a third-party release action such as `action-gh-release` (gh is preinstalled on the runner; no new pinned action);
+  - attaching the debug APK or `mapping.txt` (the CI artifacts keep them; a release offers the build players install);
+  - signing releases with a real key (it needs secrets; L10N_STORE_LEGAL.md §5.7).
+- **Source:** [USER] owner decisions of 2026-10-30, relayed by the orchestrator · [ORCH] O17 (D-173 change control). D-133 and D-004 item 1 are [USER] U5; the owner changes their own decision, so D-173's rule that no one else supersedes a [USER] decision holds.
+
 ---
 
 ## Appendix A: Conflict-resolution index
@@ -4241,7 +4289,7 @@ jobs:
 | C6 | R8 DSL | Legacy, smoke-verified DSL | D-132 |
 | C7 | Metadata locale count | 29 legacy (01 is right). Final tree has 22: 13 kept, 9 added, 16 deleted | D-113 |
 | C8 | Metadata path | `fastlane/metadata/android/` | D-113 |
-| C9 | versionCode | 30000 / 3.0.0, literals | D-130 |
+| C9 | versionCode | 30000 / 3.0.0, literals; 10000 / 1.0.0 since D-271 | D-130, D-271 |
 | C10 | Merge target | `master` | D-165, D-168 |
 | C11 | Swipe commit timing | During the drag by default (O3); release as a setting | D-050 |
 | C12 | Input during animation | No queue; synchronous apply; snap | D-052 |
@@ -4275,7 +4323,7 @@ jobs:
 | X10 | research/05 "Confirm new game" toggle | Always confirm when in progress (O12) | D-007 |
 | X11 | research/07 G16 "no What's new UI in v1.0" | Mechanism ships (O11); fires only after an update | D-009 |
 | X12 | research/07 D3 "Undo Off switch, top-10 in v1.0" | Deferred; no-undo best kept | D-003, D-044 |
-| X13 | research/06 §3.5 release workflow with an ephemeral key; smoke release signed with debug | Committed sideload key; no release workflow | D-131, D-133 |
+| X13 | research/06 §3.5 release workflow with an ephemeral key; smoke release signed with debug | Committed sideload key; no release workflow in the overhaul; a hand-run GitHub Release workflow with the sideload key after it | D-131, D-133, D-271 |
 | X14 | research/04 §7.2 posture layouts vs research/07 G11 | Deferred | D-091 |
 | X15 | research/06 §1.3 `pixelCopyRenderMode` / `isReturnDefaultValues` | Not adopted (outside the baseline) | D-146 |
 | X16 | Smoke manifest sets `enableOnBackInvokedCallback` and a platform theme | Omitted / splash theme | D-090, D-112 |
@@ -4326,9 +4374,9 @@ jobs:
 | G13 Exported components; EmojiCompat | D-148, D-090 |
 | G14 Privacy | D-123 |
 | G15 Backup | D-048 |
-| G16 Versioning; What's new | D-130, D-009 |
+| G16 Versioning; What's new | D-130, D-009, D-271 |
 | G17 F-Droid | D-134, D-004 |
-| G18 Release policy | D-133 |
+| G18 Release policy | D-133, D-271 |
 | G19 Device-free verification | D-147, D-019 |
 | G20 AGENTS.md | D-171, D-177, D-192 |
 | G21 One PR with milestones | D-162, D-166, D-193, D-211 |

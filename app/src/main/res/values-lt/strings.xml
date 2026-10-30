@@ -181,10 +181,10 @@
     <string name="license_hide_text">Slėpti licencijos tekstą</string>
     <string name="whats_new_title">Kas naujo</string>
     <string name="whats_new_version">Versija %1$s</string>
-    <string name="whatsnew_30000_1">Visiškai perkurta kaip greita vietinė programa</string>
-    <string name="whatsnew_30000_2">Lentos dydžiai nuo 3×3 iki 8×8, kiekvienas su savo rekordu</string>
-    <string name="whatsnew_30000_3">Neribotas atšaukimas, net žaidimui pasibaigus</string>
-    <string name="whatsnew_30000_4">Šviesi, tamsi, Neon Arcade ir didelio kontrasto temos</string>
-    <string name="whatsnew_30000_5">Statistika, valdymas klaviatūra ir TalkBack palaikymas</string>
+    <string name="whatsnew_10000_1">Visiškai perkurta kaip greita vietinė programa</string>
+    <string name="whatsnew_10000_2">Lentos dydžiai nuo 3×3 iki 8×8, kiekvienas su savo rekordu</string>
+    <string name="whatsnew_10000_3">Neribotas atšaukimas, net žaidimui pasibaigus</string>
+    <string name="whatsnew_10000_4">Šviesi, tamsi, Neon Arcade ir didelio kontrasto temos</string>
+    <string name="whatsnew_10000_5">Statistika, valdymas klaviatūra ir TalkBack palaikymas</string>
 
 </resources>

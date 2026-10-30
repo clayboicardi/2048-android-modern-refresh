@@ -169,10 +169,10 @@
     <string name="license_hide_text">라이선스 전문 숨기기</string>
     <string name="whats_new_title">새로운 기능</string>
     <string name="whats_new_version">버전 %1$s</string>
-    <string name="whatsnew_30000_1">빠른 네이티브 앱으로 처음부터 새로 개발</string>
-    <string name="whatsnew_30000_2">3×3부터 8×8까지의 보드 크기, 크기별 최고 점수</string>
-    <string name="whatsnew_30000_3">게임 오버 후에도 가능한 무제한 되돌리기</string>
-    <string name="whatsnew_30000_4">밝은 테마, 어두운 테마, Neon Arcade 테마, 고대비 테마</string>
-    <string name="whatsnew_30000_5">통계, 키보드 조작, TalkBack 지원</string>
+    <string name="whatsnew_10000_1">빠른 네이티브 앱으로 처음부터 새로 개발</string>
+    <string name="whatsnew_10000_2">3×3부터 8×8까지의 보드 크기, 크기별 최고 점수</string>
+    <string name="whatsnew_10000_3">게임 오버 후에도 가능한 무제한 되돌리기</string>
+    <string name="whatsnew_10000_4">밝은 테마, 어두운 테마, Neon Arcade 테마, 고대비 테마</string>
+    <string name="whatsnew_10000_5">통계, 키보드 조작, TalkBack 지원</string>
 
 </resources>

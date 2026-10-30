@@ -173,10 +173,10 @@
     <string name="license_hide_text">Licencszöveg elrejtése</string>
     <string name="whats_new_title">Újdonságok</string>
     <string name="whats_new_version">Verzió: %1$s</string>
-    <string name="whatsnew_30000_1">Az alapoktól újraírva gyors, natív alkalmazásként</string>
-    <string name="whatsnew_30000_2">Táblaméretek 3×3-tól 8×8-ig, mindegyik saját rekorddal</string>
-    <string name="whatsnew_30000_3">Korlátlan visszavonás, a játék vége után is</string>
-    <string name="whatsnew_30000_4">Világos, sötét, Neon Arcade és nagy kontrasztú témák</string>
-    <string name="whatsnew_30000_5">Statisztika, billentyűzetes vezérlés és TalkBack-támogatás</string>
+    <string name="whatsnew_10000_1">Az alapoktól újraírva gyors, natív alkalmazásként</string>
+    <string name="whatsnew_10000_2">Táblaméretek 3×3-tól 8×8-ig, mindegyik saját rekorddal</string>
+    <string name="whatsnew_10000_3">Korlátlan visszavonás, a játék vége után is</string>
+    <string name="whatsnew_10000_4">Világos, sötét, Neon Arcade és nagy kontrasztú témák</string>
+    <string name="whatsnew_10000_5">Statisztika, billentyűzetes vezérlés és TalkBack-támogatás</string>
 
 </resources>

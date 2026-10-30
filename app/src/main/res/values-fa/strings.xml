@@ -173,10 +173,10 @@
     <string name="license_hide_text">پنهان کردن متن مجوز</string>
     <string name="whats_new_title">تازه‌ها</string>
     <string name="whats_new_version">نسخهٔ %1$s</string>
-    <string name="whatsnew_30000_1">از نو ساخته‌شده به‌صورت یک برنامهٔ بومی سریع</string>
-    <string name="whatsnew_30000_2">اندازه‌های صفحه از 3×3 تا 8×8، هر کدام با رکورد خود</string>
-    <string name="whatsnew_30000_3">واگرد نامحدود، حتی پس از پایان بازی</string>
-    <string name="whatsnew_30000_4">طرح‌های زمینهٔ روشن، تیره، Neon Arcade و پرکنتراست</string>
-    <string name="whatsnew_30000_5">آمار، کنترل با صفحه‌کلید و پشتیبانی از TalkBack</string>
+    <string name="whatsnew_10000_1">از نو ساخته‌شده به‌صورت یک برنامهٔ بومی سریع</string>
+    <string name="whatsnew_10000_2">اندازه‌های صفحه از 3×3 تا 8×8، هر کدام با رکورد خود</string>
+    <string name="whatsnew_10000_3">واگرد نامحدود، حتی پس از پایان بازی</string>
+    <string name="whatsnew_10000_4">طرح‌های زمینهٔ روشن، تیره، Neon Arcade و پرکنتراست</string>
+    <string name="whatsnew_10000_5">آمار، کنترل با صفحه‌کلید و پشتیبانی از TalkBack</string>
 
 </resources>

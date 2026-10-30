@@ -173,10 +173,10 @@
     <string name="license_hide_text">Lizenztext ausblenden</string>
     <string name="whats_new_title">Neuigkeiten</string>
     <string name="whats_new_version">Version %1$s</string>
-    <string name="whatsnew_30000_1">Von Grund auf neu entwickelt als schnelle native App</string>
-    <string name="whatsnew_30000_2">Spielfeldgrößen von 3×3 bis 8×8, jeweils mit eigenem Rekord</string>
-    <string name="whatsnew_30000_3">Unbegrenztes Rückgängigmachen, auch nach Spielende</string>
-    <string name="whatsnew_30000_4">Designs: hell, dunkel, Neon Arcade und kontrastreich</string>
-    <string name="whatsnew_30000_5">Statistik, Tastatursteuerung und TalkBack-Unterstützung</string>
+    <string name="whatsnew_10000_1">Von Grund auf neu entwickelt als schnelle native App</string>
+    <string name="whatsnew_10000_2">Spielfeldgrößen von 3×3 bis 8×8, jeweils mit eigenem Rekord</string>
+    <string name="whatsnew_10000_3">Unbegrenztes Rückgängigmachen, auch nach Spielende</string>
+    <string name="whatsnew_10000_4">Designs: hell, dunkel, Neon Arcade und kontrastreich</string>
+    <string name="whatsnew_10000_5">Statistik, Tastatursteuerung und TalkBack-Unterstützung</string>
 
 </resources>

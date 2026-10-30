@@ -385,7 +385,7 @@ Rules:
 | Key | English (source) | Arguments | Context for translators | Used in | M | Origin |
 |---|---|---|---|---|---|---|
 | `about` | About | — | Title of the About screen. | About `TopAppBar` | M3 | DESIGN_SYSTEM §6.11 |
-| `about_version` | Version %1$s (%2$s) | %1$s = versionName; %2$s = versionCode (Latin digits) | Version line, e.g. "Version 3.0.0 (30000)". | About header | M4 | DESIGN_SYSTEM §6.11 |
+| `about_version` | Version %1$s (%2$s) | %1$s = versionName; %2$s = versionCode (Latin digits) | Version line, e.g. "Version 1.0.0 (10000)". | About header | M4 | DESIGN_SYSTEM §6.11 |
 | `about_whats_new` | What's new | — | Section heading listing every release of this app. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `about_source_code` | Source code | — | Row that opens the GitHub repository. | About | M4 | DESIGN_SYSTEM §6.11 |
 | `about_source_code_url` ✱ | github.com/clayboicardi/2048-android-modern-refresh | — | Supporting text of the source row. | About | M4 | DESIGN_SYSTEM §6.11 |
@@ -401,12 +401,12 @@ Rules:
 | `license_show_text` | Show license text | — | Toggle row under a license group. | Licenses | M4 | DESIGN_SYSTEM §6.12 |
 | `license_hide_text` | Hide license text | — | Same toggle while expanded. | Licenses | M4 | DESIGN_SYSTEM §6.12 |
 | `whats_new_title` | What's new | — | Title of the sheet shown once after an update. | `WhatsNewSheet` | M4 | DESIGN_SYSTEM §6.13 |
-| `whats_new_version` | Version %1$s | %1$s = versionName, e.g. "3.0.0" | Subtitle of the sheet. | `WhatsNewSheet` | M4 | DESIGN_SYSTEM §6.13 |
-| `whatsnew_30000_1` | Rebuilt from scratch as a fast native app | — | Bullet in the 3.0.0 change list. No final period. | `Changelog.kt` → sheet and About | M4 | DESIGN_SYSTEM §6.13 |
-| `whatsnew_30000_2` | Board sizes from 3×3 to 8×8, each with its own best score | — | Bullet. Keep "3×3" and "8×8". | `Changelog.kt` | M4 | DESIGN_SYSTEM §6.13 |
-| `whatsnew_30000_3` | Unlimited undo, even after game over | — | Bullet. | `Changelog.kt` | M4 | DESIGN_SYSTEM §6.13 |
-| `whatsnew_30000_4` | Light, dark, Neon Arcade and high-contrast themes | — | Bullet. "Neon Arcade" is a product name; keep it in Latin letters. | `Changelog.kt` | M4 | DESIGN_SYSTEM §6.13 |
-| `whatsnew_30000_5` | Statistics, keyboard controls and TalkBack support | — | Bullet. Keep "TalkBack". | `Changelog.kt` | M4 | DESIGN_SYSTEM §6.13 |
+| `whats_new_version` | Version %1$s | %1$s = versionName, e.g. "1.0.0" | Subtitle of the sheet. | `WhatsNewSheet` | M4 | DESIGN_SYSTEM §6.13 |
+| `whatsnew_10000_1` | Rebuilt from scratch as a fast native app | — | Bullet in the 1.0.0 change list. No final period. | `Changelog.kt` → sheet and About | M4 | DESIGN_SYSTEM §6.13 |
+| `whatsnew_10000_2` | Board sizes from 3×3 to 8×8, each with its own best score | — | Bullet. Keep "3×3" and "8×8". | `Changelog.kt` | M4 | DESIGN_SYSTEM §6.13 |
+| `whatsnew_10000_3` | Unlimited undo, even after game over | — | Bullet. | `Changelog.kt` | M4 | DESIGN_SYSTEM §6.13 |
+| `whatsnew_10000_4` | Light, dark, Neon Arcade and high-contrast themes | — | Bullet. "Neon Arcade" is a product name; keep it in Latin letters. | `Changelog.kt` | M4 | DESIGN_SYSTEM §6.13 |
+| `whatsnew_10000_5` | Statistics, keyboard controls and TalkBack support | — | Bullet. Keep "TalkBack". | `Changelog.kt` | M4 | DESIGN_SYSTEM §6.13 |
 
 **Format of `values/strings.xml`** (generated from the tables; excerpt):
 
@@ -447,7 +447,7 @@ Rules:
 | Tile labels, scores, "+N", "2048"/"256" arguments | Game | Game numerals, `Long.toString()` (D-103) |
 | "–" | Loading chips; average score with 0 games | Typographic placeholder (`DESIGN_SYSTEM.md` §6.1, §6.9) |
 | "m:ss", "h:mm:ss" | Game-over card, Statistics, share text | `formatElapsed`, `Locale.ROOT` (§1.10) |
-| "3.0.0", "2.2 (25)" | About | `BuildConfig.VERSION_NAME` (compile-time, D-134) and `versionNameOf(versionCode)` for the What's new history titles (D-130); the legacy releases' "version (code)" titles from `legacy_history.json` (D-254) |
+| "1.0.0", "2.2 (25)" | About | `BuildConfig.VERSION_NAME` (compile-time, D-134) and `versionNameOf(versionCode)` for the What's new history titles (D-130); the legacy releases' "version (code)" titles from `legacy_history.json` (D-254) |
 | "•" | About's What's new history, the What's new sheet | The bullet glyph of a bullet row (D-254) |
 | " — " | About's credits rows | The separator in "name — role", around static English data (D-124, D-254) |
 | Credits and legacy history rows | About | English static data in `res/raw/legacy_history.json` (D-124, §4.5) |
@@ -829,7 +829,7 @@ fastlane/metadata/android/
 │   ├── title.txt
 │   ├── short_description.txt
 │   ├── full_description.txt
-│   ├── changelogs/30000.txt
+│   ├── changelogs/10000.txt
 │   └── images/
 │       ├── icon.png
 │       ├── featureGraphic.png
@@ -838,14 +838,14 @@ fastlane/metadata/android/
 │       └── tenInchScreenshots/1.png
 └── cs da de el eo es fa fr hu it ko lt nl pl pt-BR pt-PT ru sl sr tr uk/
     ├── title.txt  short_description.txt  full_description.txt
-    └── changelogs/30000.txt
+    └── changelogs/10000.txt
 ```
 
 Disposition of the 29 legacy `metadata/` directories (research/01 §6; DECISIONS A.1 C7):
 
 | Group | Locales | When | What happens |
 |---|---|---|---|
-| Kept, every text rewritten | de, el, en-US, es, fr, it, ko, lt, pt-BR, pt-PT, ru, tr, uk (13) | M0 move, M5 rewrite | The legacy `short_description.txt` (machine-translated "port") is replaced; `title.txt`, `full_description.txt` and `changelogs/30000.txt` are added |
+| Kept, every text rewritten | de, el, en-US, es, fr, it, ko, lt, pt-BR, pt-PT, ru, tr, uk (13) | M0 move, M5 rewrite | The legacy `short_description.txt` (machine-translated "port") is replaced; `title.txt`, `full_description.txt` and `changelogs/30000.txt` are added (renamed `10000.txt` by D-271) |
 | Added | cs, da, eo, fa, hu, nl, pl, sl, sr (9) | M5 | Created with the four files |
 | Deleted | af, am, ar, bg, ca, et, fi, hi, id, ja, lv, ro, sv, sw, th, vi (16) | M0 | Removed: the app has no strings in these languages, and their texts are mistranslations |
 
@@ -869,10 +869,10 @@ In M5, `StoreAssetsTest` overwrites `icon.png` and `featureGraphic.png`. The leg
   - `title.txt` ≤ 30 (Play's app-name limit; F-Droid allows 50);
   - `short_description.txt` ≤ 80;
   - `full_description.txt` ≤ 4,000;
-  - `changelogs/30000.txt` ≤ 500.
+  - `changelogs/10000.txt` ≤ 500.
 - `title.txt` is `2048` in all 22 directories (U2: the name is not translated).
 - Plain text only: no HTML and no Markdown. Bullets are "• " (U+2022 + space); paragraphs are separated by one blank line; headings are plain lines.
-- The changelog file name is the literal versionCode, `30000.txt`, without padding, in every locale.
+- The changelog file name is the literal versionCode, `10000.txt` for 1.0.0 (D-271), without padding, in every locale.
 - Latin digits only. Never `com.uberspot.a2048`. Every full description contains `com.clayboicardi.game2048` and the repository URL.
 - No `video.txt`, no `promoGraphic.png`, and no per-locale `images/`. F-Droid and fastlane fall back to the en-US graphics.
 
@@ -927,10 +927,10 @@ Credits
 The original 2048 game is by Gabriele Cirulli. The original 2048 Android app is by Paul Sarbinowski (uberspot) and its contributors and translators. This version's translations are machine-assisted; corrections are welcome on GitHub.
 ```
 
-`changelogs/30000.txt` (345 characters, short enough for a 45 % longer translation):
+`changelogs/10000.txt` (345 characters, short enough for a 45 % longer translation):
 
 ```text
-3.0.0 is a full rewrite as a native app with a new package name. It installs next to the original 2048 app; scores from the original app do not carry over.
+1.0.0 is a full rewrite as a native app with a new package name. It installs next to the original 2048 app; scores from the original app do not carry over.
 • Board sizes 3×3 to 8×8
 • Unlimited undo, even after game over
 • Neon Arcade, dark and high-contrast themes
@@ -951,7 +951,7 @@ D-114 coverage of the full description:
 | Side-by-side note (D-005, verbatim) | "A new app" |
 | Contains none of "port", "WebView", "long touch", uberspot store links | Checked by `check_store_listing` (§2.6) |
 
-The changelog says plainly that 3.0.0 is a fresh start: a new package, a separate install, and no scores carried over (D-005).
+The changelog says plainly that 1.0.0 is a fresh start: a new package, a separate install, and no scores carried over (D-005).
 
 ### 2.4 Translating the listing (M5)
 
@@ -982,7 +982,7 @@ The changelog says plainly that 3.0.0 is a fresh start: a new package, a separat
 **`StoreAssetsTest`** (`app/src/test/kotlin/com/clayboicardi/game2048/store/`):
 - Excluded from every normal run. Run it with `./gradlew :app:testDebugUnitTest -PrecordStoreAssets=true --tests 'com.clayboicardi.game2048.store.*'` (`ARCHITECTURE.md` §2.6, §2.11). The output directory is `System.getProperty("game2048.storeAssetsDir")`.
 - `@RunWith(AndroidJUnit4::class)`, `@GraphicsMode(GraphicsMode.Mode.NATIVE)`, SDK 36, one test method per file.
-- Conditions: motion Off, dynamic color off, locale en-US, `onboardingDone = true`, `lastSeenVersionCode = 30000`, the bundled font, fixtures from `DESIGN_SYSTEM.md` §10.3.
+- Conditions: motion Off, dynamic color off, locale en-US, `onboardingDone = true`, `lastSeenVersionCode = 10000` (the current version, D-271), the bundled font, fixtures from `DESIGN_SYSTEM.md` §10.3.
 - Composable captures run inside `Box(Modifier.requiredSize(widthDp, heightDp).testTag("store:frame"))`. The capture size is therefore exact whatever the window decor. Each test captures with `composeRule.onNodeWithTag("store:frame").captureToImage().asAndroidBitmap()` and passes the bitmap to `OpaquePngWriter.write(bitmap, background, file)` (below), with `background` = the frame's opaque background color.
 - The pixel size comes from the density of the test's `@Config(qualifiers = …)`: `w360dp-h640dp-xxhdpi` → 1080×1920, and likewise for the other rows of the table.
 - Every store PNG, the icon included (§3.7), is written by `OpaquePngWriter`: an 8-bit PNG of color type 2, the format app stores ask for in feature graphics and screenshots (Google Play's rule is "JPEG or 24-bit PNG, no alpha"; there is no Google Play listing, D-257). There is no Roborazzi API, no opt-in, no temporary PNG and no `BitmapFactory.decodeFile` (D-190). The file names stay those of D-115, and the images stay lossless.
@@ -1069,7 +1069,7 @@ The M5 listing, image and legal assertions are implemented in `QUALITY.md` §1.1
 - **`check_store_listing`** (F30-AC8):
   - exactly the 22 locale directories of D-113, and no `images/` directory outside en-US;
   - `title.txt` is exactly `2048` and at most 30 characters (Google Play's title limit);
-  - short description ≤ 80, full description ≤ 4,000 and `changelogs/30000.txt` ≤ 500 characters, counted as code points without the final newline;
+  - short description ≤ 80, full description ≤ 4,000 and `changelogs/10000.txt` ≤ 500 characters, counted as code points without the final newline;
   - no BOM or CR, and exactly one trailing newline;
   - every non-en-US short description, full description and changelog differs from en-US;
   - every full description contains `com.clayboicardi.game2048` and `https://github.com/clayboicardi/2048-android-modern-refresh`;
@@ -1085,7 +1085,7 @@ The listing and image logic was run on a synthetic 22-locale tree (§0.3 item 11
 
 ### 2.7 F-Droid compatibility
 
-No F-Droid submission is part of this overhaul (D-004 item 10; D-133 forbids tags). There is no Google Play listing; the owner plans an F-Droid submission after the execution PR merges (D-257), and the repository is kept ready for it.
+No F-Droid submission is part of this overhaul (D-004 item 10). D-133 forbade tags during the overhaul; since D-271, `release.yml` tags each release `v<version>`. There is no Google Play listing; the owner plans an F-Droid submission after the execution PR merges (D-257), and the repository is kept ready for it.
 
 | F-Droid expectation | v1.0 status | Evidence |
 |---|---|---|
@@ -1094,11 +1094,11 @@ No F-Droid submission is part of this overhaul (D-004 item 10; D-133 forbids tag
 | No anti-features (Ads, Tracking, NonFreeNet, NonFreeDep, NonFreeAssets) | None expected | D-002; the font is OFL and the icons Apache-2.0 |
 | No encrypted dependency-info block | `dependenciesInfo { includeInApk = false; includeInBundle = false }` | D-134 |
 | Metadata in-repo | `fastlane/metadata/android/<locale>/`, with `title.txt`, `changelogs/<versionCode>.txt` and `images/` | §2.1, research/01 §6 |
-| Parseable versions | `versionCode = 30000` and `versionName = "3.0.0"` as literals | D-130 |
+| Parseable versions | `versionCode = 10000` and `versionName = "1.0.0"` as literals | D-130, D-271 |
 | Reproducible-build hygiene | One JDK (21); no timestamps; BuildConfig with AGP's standard fields only (no `buildConfigField`); `vcsInfo` default; R8 from AGP 9.4.1. Watch `assets/dexopt/baseline.prof` and resource-shrinker order (research/06 §4.3) | D-134 |
 
 Items for a later submission (not done now):
-1. A `v3.0.0` tag on the release commit, created when the owner decides on releases (D-133).
+1. A `v1.0.0` tag on the release commit: `release.yml` creates it with the GitHub Release (D-271), and the recipe's build entry can point at it.
 2. **Signing.** F-Droid signs with its own key, so its APK cannot update a CI sideload install, and the reverse is also true; users switch by uninstalling. The recipe strips the release signing line in `prebuild`, e.g. `sed -i '/signingConfig = signingConfigs.getByName("ciSideload")/d' app/build.gradle.kts`, which leaves debug untouched because the recipe builds release only. Reproducible builds with a developer signature would need the real key of §5.7, never the public sideload key.
 3. `signing/ci-sideload.p12` is a committed binary. If `fdroid scanner` flags it, the recipe lists it under `scandelete`.
 4. The listing shows androidx.core's signature permission under "Permissions"; the "no runtime permissions" wording (§4.8) stays accurate.
@@ -1817,9 +1817,9 @@ Result, 32 names: alexara, amoseui, Balázs Meskó, BValeo, Caio Melo, dark15912
 ```markdown
 # Privacy policy
 
-Applies to the Android app "2048" (package `com.clayboicardi.game2048`, and its debug build `com.clayboicardi.game2048.debug`), version 3.0.0 and later, built from https://github.com/clayboicardi/2048-android-modern-refresh.
+Applies to the Android app "2048" (package `com.clayboicardi.game2048`, and its debug build `com.clayboicardi.game2048.debug`), version 1.0.0 and later, built from https://github.com/clayboicardi/2048-android-modern-refresh.
 
-Last updated: 2026-10-28.
+Last updated: 2026-10-30.
 
 ## Summary
 
@@ -1884,18 +1884,19 @@ These sentences match the D-148 allowlists and are true for both APKs.
 - replace the "Building" section with "Build with JDK 21: `./scripts/verify.sh`";
 - leave the rest until M5 (`ARCHITECTURE.md` §1.3).
 
-**M5 (full rewrite)**, sections in this order. The quoted sentences are required verbatim; other wording is free.
+**M5 (full rewrite)**, sections in this order (item 5 added by D-271). The quoted sentences are required verbatim; other wording is free.
 
 1. **2048** with a one-paragraph description. Optional CI badge for this repository only: `![CI](https://github.com/clayboicardi/2048-android-modern-refresh/actions/workflows/ci.yml/badge.svg?branch=master)`. No store badges.
 2. **Features:** a short list (sizes, unlimited undo, themes, accessibility, 21 languages, offline).
 3. **A new app:** "This is a new app with a new package name (`com.clayboicardi.game2048`); the old app can stay installed side by side; scores do not carry over." (D-005)
 4. **Privacy and permissions:** a link to [PRIVACY.md](PRIVACY.md), the §4.8 paragraph verbatim, and the exported-components line.
-5. **Install a CI build:** the steps of §5.4 in short form, and the sentence "CI builds are signed with a key whose password is public (see `signing/README.md`); install them only from this repository's Actions runs."
-6. **Build from source:** JDK 21; Android SDK with `platforms;android-37.0` and `build-tools;37.0.0`; `./scripts/verify.sh` (the same gate as CI); `./gradlew :app:assembleDebug`; recording goldens; store graphics (`ARCHITECTURE.md` §2.11).
-7. **Saved games:** "The game is saved after every move. If Android stops the app while a save is being written, at most that one change is lost." (D-043)
-8. **Translations:** "The 20 translations were produced with machine assistance and checked automatically; corrections are welcome as pull requests to `app/src/main/res/values-*/strings.xml`. Please follow `docs/modernization/i18n-glossary.md`." (D-105)
-9. **Credits:** Gabriele Cirulli (original game), Paul Sarbinowski (uberspot) and contributors (original Android app), the legacy translators (link to [NOTICE](NOTICE)).
-10. **License:** "MIT; see [LICENSE](LICENSE). Third-party notices: [NOTICE](NOTICE)."
+5. **Releases** (D-271): download `2048-<version>.apk` from GitHub Releases, with the APK's SHA-256 and the signer digest in the release notes; releases and CI release builds share the sideload key and install over each other; a 30000 CI build from before 1.0.0 is uninstalled once (§5.4, §5.5).
+6. **Install a CI build:** the steps of §5.4 in short form, and the sentence "CI builds are signed with a key whose password is public (see `signing/README.md`); install them only from this repository's Actions runs."
+7. **Build from source:** JDK 21; Android SDK with `platforms;android-37.0` and `build-tools;37.0.0`; `./scripts/verify.sh` (the same gate as CI); `./gradlew :app:assembleDebug`; recording goldens; store graphics (`ARCHITECTURE.md` §2.11).
+8. **Saved games:** "The game is saved after every move. If Android stops the app while a save is being written, at most that one change is lost." (D-043)
+9. **Translations:** "The 20 translations were produced with machine assistance and checked automatically; corrections are welcome as pull requests to `app/src/main/res/values-*/strings.xml`. Please follow `docs/modernization/i18n-glossary.md`." (D-105)
+10. **Credits:** Gabriele Cirulli (original game), Paul Sarbinowski (uberspot) and contributors (original Android app), the legacy translators (link to [NOTICE](NOTICE)).
+11. **License:** "MIT; see [LICENSE](LICENSE). Third-party notices: [NOTICE](NOTICE)."
 
 The README never contains `com.uberspot.a2048` store links, "WebView" or "port". F27-AC5 checks its links to `PRIVACY.md` and `NOTICE` and the permission name.
 
@@ -1913,12 +1914,13 @@ The README never contains `com.uberspot.a2048` store links, "WebView" or "port".
 
 ## 5. Signing and distribution
 
-### 5.1 Policy (U5, D-131, D-133)
+### 5.1 Policy (U5, D-131, D-133, D-271)
 
 - One key, `signing/ci-sideload.p12`, signs **both** the debug and the release build types. The key is committed on purpose, and its password is public.
 - Purpose: every CI-built APK installs over the previous CI build of the same variant, keeping the player's data.
 - It is **never** used for Google Play, F-Droid or any other store, and never registered with Android developer verification (§5.6).
-- There is no release workflow, no tag, no GitHub Release and no store upload in this overhaul (D-133). The deliverables are the CI artifacts: debug APK, release APK and `mapping.txt` (D-151).
+- There was no release workflow, no tag, no GitHub Release and no store upload in this overhaul (D-133). Its deliverables are the CI artifacts: debug APK, release APK and `mapping.txt` (D-151).
+- After it, `.github/workflows/release.yml`, dispatched by hand on `master`, publishes a GitHub Release for each version, tagged `v<version>`, with the release APK `2048-<version>.apk` signed by this same key (D-271; `QUALITY.md` §5.11). There is still no store upload.
 
 ### 5.2 Key material (M0)
 
@@ -1962,18 +1964,22 @@ If GitHub push protection rejects the keystore, D-172 condition 5 applies: stop 
    - computer: `adb install -r apk/release/app-release.apk`;
    - device: copy the APK, open it in a file manager, and allow "Install unknown apps" for that file manager when Android asks. Play Protect may show a scan prompt for an app from an unknown developer; choosing to install anyway is the user's decision.
 
+**From a GitHub Release (D-271).** Each version's release on `https://github.com/clayboicardi/2048-android-modern-refresh/releases` carries `2048-<version>.apk`: the release build of the tagged commit, passed by `scripts/verify.sh` and signed with the same key as the CI artifacts. It needs no account and does not expire. The release notes give the APK's SHA-256 and the signer certificate digest; check them with `sha256sum` and step 3, then install as in step 4.
+
 ### 5.5 Update in place
 
 | From → to | Result |
 |---|---|
-| CI release → newer CI release (same versionCode 30000) | Updates in place. Android accepts an equal versionCode; only a lower one is a downgrade |
+| CI release → newer CI release (same versionCode, 10000 for 1.0.0) | Updates in place. Android accepts an equal versionCode; only a lower one is a downgrade |
+| GitHub Release APK ↔ CI release APK | Same package and key: each updates the other at an equal or higher versionCode (D-271) |
+| A 30000 CI build of the execution PR → 1.0.0 (10000) | Refused as a downgrade: uninstall the 30000 build once (D-271) |
 | CI debug → newer CI debug | Updates in place (`.debug` package) |
 | CI release ↔ CI debug | Independent apps; both can be installed |
 | CI build → a build with a higher versionCode | Updates in place; going back needs an uninstall (or `adb install -r -d` for the debuggable debug variant only) |
-| CI build ↔ any store build | Signature mismatch: uninstall first |
+| CI build ↔ any store build, including the F-Droid build | Signature mismatch: uninstall first |
 | `com.uberspot.a2048` ↔ this app | Different packages: both stay installed; no data moves (D-005) |
 
-Every CI build of this overhaul carries versionCode 30000 (D-130), so any CI APK can replace any other of the same variant, including an older commit's.
+Every CI build carries the versionCode of its commit's build file (D-130): 10000 since the D-271 commit, 30000 on the execution PR before it. Builds of one version can replace one another, including an older commit's; a 30000 build must be uninstalled once before a 10000 build installs (D-271).
 
 ### 5.6 Android developer verification (sideloading, 2026–2027)
 
@@ -1993,7 +1999,7 @@ None of this is part of the execution PR (U5, D-133). When the owner adds secret
 1. Adds an upload/release key held only in GitHub secrets, for example `GAME2048_RELEASE_KEYSTORE_BASE64`, `GAME2048_RELEASE_STORE_PASSWORD`, `GAME2048_RELEASE_KEY_ALIAS` and `GAME2048_RELEASE_KEY_PASSWORD`. It is never committed.
 2. Adds `signingConfigs.create("release")`, read from Gradle properties or environment variables. It is used only by a new release-only path, a signed release APK (no AAB: there is no Google Play listing, D-257). Debug and the CI `assembleRelease` artifact keep `ciSideload`, so sideload users keep updating in place.
 3. Changes `check-apk.sh` step 6 for the store artifact only: its digest is checked against a new committed public certificate digest, while the CI APKs keep checking `signing/ci-sideload.sha256`.
-4. Adds `release.yml` (tag `v*`, tag == versionName, D-130), and raises versionCode per D-130's scheme.
+4. Extends `release.yml` (D-271), which already tags `v<versionName>` after checking the build file's version, to publish the release-key APK, and raises versionCode per D-130's scheme.
 5. Registers the package with Android developer verification using the real key (§5.6). There is no Play Console listing, so there is no Data safety form (D-257).
 6. Tells users plainly that store builds cannot update CI sideload installs (§5.3). Players move by Android backup restore or start fresh.
 

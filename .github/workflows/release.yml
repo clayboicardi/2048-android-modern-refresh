@@ -1,0 +1,150 @@
+# Publishes one GitHub Release per version (D-271, which amends D-133). Run it by hand from the
+# Actions tab, on master, with the version to publish (for example 1.0.0). Design and rationale:
+# docs/modernization/QUALITY.md §5.11.
+#
+# The job refuses to run off master. It checks that app/build.gradle.kts carries exactly that
+# version (versionCode = MAJOR·10000 + MINOR·100 + PATCH, D-130) and that neither the tag v<version>
+# nor its release exists yet, runs scripts/verify.sh (the same gate as ci.yml), then attaches the
+# release APK, signed with the public CI sideload key (D-131), to a new release. gh creates the tag
+# at the built commit. No store upload and no store signing (D-133, D-257).
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish: versionName in app/build.gradle.kts, for example 1.0.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write # gh release create makes the tag and the release
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.console=plain
+  ANDROID_BUILD_TOOLS: '37.0.0'
+  # The input reaches the scripts only through the environment, never spliced into their text.
+  VERSION: ${{ inputs.version }}
+  GH_REPO: ${{ github.repository }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-24.04 # pinned, as in ci.yml
+    timeout-minutes: 45
+    steps:
+      - name: Refuse to run off master
+        run: |
+          if [[ "$GITHUB_REF" != refs/heads/master ]]; then
+            echo "::error::release.yml publishes from master only; this run is on $GITHUB_REF (D-271)"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the version, and that it is not published yet
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*"; exit 1; }
+          # D-130: MAJOR.MINOR.PATCH with MINOR and PATCH below 100, no leading zeros.
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)$ ]] ||
+            fail "version '$VERSION' is not MAJOR.MINOR.PATCH with MINOR and PATCH in 0..99"
+          code=$((BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3]))
+          name_in_file="$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' app/build.gradle.kts)"
+          code_in_file="$(sed -n 's/^ *versionCode = \([0-9]*\)$/\1/p' app/build.gradle.kts)"
+          [[ "$name_in_file" == "$VERSION" ]] ||
+            fail "app/build.gradle.kts has versionName '$name_in_file', not '$VERSION'"
+          [[ "$code_in_file" == "$code" ]] ||
+            fail "app/build.gradle.kts has versionCode '$code_in_file', not $code for $VERSION"
+          changelog="fastlane/metadata/android/en-US/changelogs/$code.txt"
+          [[ -f "$changelog" ]] || fail "$changelog is missing (the release notes start with it)"
+          # Both lookups fail the step on an API error, so a failed lookup never reads as "absent".
+          tags="$(gh api "repos/$GH_REPO/git/matching-refs/tags/v$VERSION" --jq '.[].ref')"
+          ! grep -qxF "refs/tags/v$VERSION" <<< "$tags" || fail "tag v$VERSION already exists"
+          releases="$(gh release list --limit 1000 --json tagName --jq '.[].tagName')"
+          ! grep -qxF "v$VERSION" <<< "$releases" || fail "a release for v$VERSION already exists"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "changelog=$changelog" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle (validates every wrapper JAR checksum)
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic # MIT-licensed provider (D-151)
+          cache-read-only: false
+          validate-wrappers: true
+
+      - name: Cache Robolectric android-all jars
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'app/src/test/resources/robolectric.properties') }}
+          restore-keys: robolectric-${{ runner.os }}-
+
+      - name: Android SDK packages (idempotent)
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" --install "platforms;android-37.0" "build-tools;36.0.0" "build-tools;37.0.0" > /dev/null
+
+      - name: Verify (scripts/verify.sh, the same gate as ci.yml)
+        run: ./scripts/verify.sh
+
+      - name: Name the APK and write its SHA-256
+        id: apk
+        run: |
+          set -euo pipefail
+          apk="2048-$VERSION.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$apk"
+          sha256sum "$apk" | tee "$apk.sha256"
+          echo "sha256=$(cut -d' ' -f1 "$apk.sha256")" >> "$GITHUB_OUTPUT"
+
+      - name: Write the release notes
+        env:
+          CODE: ${{ steps.version.outputs.code }}
+          CHANGELOG: ${{ steps.version.outputs.changelog }}
+          APK_SHA256: ${{ steps.apk.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          cert="$(tr -d '[:space:]' < signing/ci-sideload.sha256)"
+          {
+            # The en-US store changelog; its "• " bullets become Markdown list items.
+            sed 's/^• /- /' "$CHANGELOG"
+            echo
+            echo "**Download:** \`2048-$VERSION.apk\` (versionCode $CODE), under Assets below."
+            echo
+            echo "**APK SHA-256:** \`$APK_SHA256\`"
+            echo
+            echo "**Signer certificate SHA-256:** \`$cert\`. This is the public CI sideload key" \
+              "(D-131, \`signing/README.md\`), not a store identity: its password is public."
+            echo
+            echo "Updates signed with this key install over each other; the F-Droid build, when it" \
+              "comes, is signed by F-Droid and needs a fresh install."
+          } > notes.md
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the release (gh creates the tag v<version> at this commit)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" "2048-$VERSION.apk" --target "$GITHUB_SHA" \
+            --title "2048 $VERSION" --notes-file notes.md

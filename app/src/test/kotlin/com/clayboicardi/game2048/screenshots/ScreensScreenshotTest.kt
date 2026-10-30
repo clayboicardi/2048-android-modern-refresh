@@ -226,6 +226,6 @@ class ScreensScreenshotTest {
 
     private companion object {
         /** DESIGN_SYSTEM.md §10.4 row 44: a version seen before this one. */
-        const val SEEN_BEFORE_UPDATE = 20000
+        const val SEEN_BEFORE_UPDATE = 9999
     }
 }

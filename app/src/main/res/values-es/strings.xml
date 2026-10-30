@@ -177,10 +177,10 @@
     <string name="license_hide_text">Ocultar el texto de la licencia</string>
     <string name="whats_new_title">Novedades</string>
     <string name="whats_new_version">Versión %1$s</string>
-    <string name="whatsnew_30000_1">Reconstruida desde cero como una aplicación nativa y rápida</string>
-    <string name="whatsnew_30000_2">Tamaños de tablero de 3×3 a 8×8, cada uno con su mejor puntuación</string>
-    <string name="whatsnew_30000_3">Deshacer ilimitado, incluso tras el fin de la partida</string>
-    <string name="whatsnew_30000_4">Temas claro, oscuro, Neon Arcade y de alto contraste</string>
-    <string name="whatsnew_30000_5">Estadísticas, controles de teclado y compatibilidad con TalkBack</string>
+    <string name="whatsnew_10000_1">Reconstruida desde cero como una aplicación nativa y rápida</string>
+    <string name="whatsnew_10000_2">Tamaños de tablero de 3×3 a 8×8, cada uno con su mejor puntuación</string>
+    <string name="whatsnew_10000_3">Deshacer ilimitado, incluso tras el fin de la partida</string>
+    <string name="whatsnew_10000_4">Temas claro, oscuro, Neon Arcade y de alto contraste</string>
+    <string name="whatsnew_10000_5">Estadísticas, controles de teclado y compatibilidad con TalkBack</string>
 
 </resources>

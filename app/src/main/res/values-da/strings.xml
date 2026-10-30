@@ -173,10 +173,10 @@
     <string name="license_hide_text">Skjul licenstekst</string>
     <string name="whats_new_title">Nyheder</string>
     <string name="whats_new_version">Version %1$s</string>
-    <string name="whatsnew_30000_1">Genopbygget fra bunden som en hurtig, native app</string>
-    <string name="whatsnew_30000_2">Brætstørrelser fra 3×3 til 8×8, hver med sin egen bedste score</string>
-    <string name="whatsnew_30000_3">Ubegrænset fortryd, også når spillet er slut</string>
-    <string name="whatsnew_30000_4">Temaer: lyst, mørkt, Neon Arcade og høj kontrast</string>
-    <string name="whatsnew_30000_5">Statistik, tastaturstyring og understøttelse af TalkBack</string>
+    <string name="whatsnew_10000_1">Genopbygget fra bunden som en hurtig, native app</string>
+    <string name="whatsnew_10000_2">Brætstørrelser fra 3×3 til 8×8, hver med sin egen bedste score</string>
+    <string name="whatsnew_10000_3">Ubegrænset fortryd, også når spillet er slut</string>
+    <string name="whatsnew_10000_4">Temaer: lyst, mørkt, Neon Arcade og høj kontrast</string>
+    <string name="whatsnew_10000_5">Statistik, tastaturstyring og understøttelse af TalkBack</string>
 
 </resources>

@@ -173,10 +173,10 @@
     <string name="license_hide_text">Απόκρυψη κειμένου άδειας</string>
     <string name="whats_new_title">Τι νέο υπάρχει</string>
     <string name="whats_new_version">Έκδοση %1$s</string>
-    <string name="whatsnew_30000_1">Ξαναφτιάχτηκε από την αρχή ως γρήγορη εγγενής εφαρμογή</string>
-    <string name="whatsnew_30000_2">Μεγέθη ταμπλό από 3×3 έως 8×8, το καθένα με το δικό του ρεκόρ</string>
-    <string name="whatsnew_30000_3">Απεριόριστη αναίρεση, ακόμη και μετά το τέλος του παιχνιδιού</string>
-    <string name="whatsnew_30000_4">Θέματα: ανοιχτό, σκούρο, Neon Arcade και υψηλής αντίθεσης</string>
-    <string name="whatsnew_30000_5">Στατιστικά, χειρισμός με πληκτρολόγιο και υποστήριξη TalkBack</string>
+    <string name="whatsnew_10000_1">Ξαναφτιάχτηκε από την αρχή ως γρήγορη εγγενής εφαρμογή</string>
+    <string name="whatsnew_10000_2">Μεγέθη ταμπλό από 3×3 έως 8×8, το καθένα με το δικό του ρεκόρ</string>
+    <string name="whatsnew_10000_3">Απεριόριστη αναίρεση, ακόμη και μετά το τέλος του παιχνιδιού</string>
+    <string name="whatsnew_10000_4">Θέματα: ανοιχτό, σκούρο, Neon Arcade και υψηλής αντίθεσης</string>
+    <string name="whatsnew_10000_5">Στατιστικά, χειρισμός με πληκτρολόγιο και υποστήριξη TalkBack</string>
 
 </resources>

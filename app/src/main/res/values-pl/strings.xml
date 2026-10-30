@@ -181,10 +181,10 @@
     <string name="license_hide_text">Ukryj tekst licencji</string>
     <string name="whats_new_title">Co nowego</string>
     <string name="whats_new_version">Wersja %1$s</string>
-    <string name="whatsnew_30000_1">Napisana od nowa jako szybka natywna aplikacja</string>
-    <string name="whatsnew_30000_2">Rozmiary planszy od 3×3 do 8×8, każdy z własnym rekordem</string>
-    <string name="whatsnew_30000_3">Nieograniczone cofanie, nawet po zakończeniu gry</string>
-    <string name="whatsnew_30000_4">Motywy: jasny, ciemny, Neon Arcade i o wysokim kontraście</string>
-    <string name="whatsnew_30000_5">Statystyki, sterowanie klawiaturą i obsługa TalkBack</string>
+    <string name="whatsnew_10000_1">Napisana od nowa jako szybka natywna aplikacja</string>
+    <string name="whatsnew_10000_2">Rozmiary planszy od 3×3 do 8×8, każdy z własnym rekordem</string>
+    <string name="whatsnew_10000_3">Nieograniczone cofanie, nawet po zakończeniu gry</string>
+    <string name="whatsnew_10000_4">Motywy: jasny, ciemny, Neon Arcade i o wysokim kontraście</string>
+    <string name="whatsnew_10000_5">Statystyki, sterowanie klawiaturą i obsługa TalkBack</string>
 
 </resources>

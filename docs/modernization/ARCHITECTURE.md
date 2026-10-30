@@ -48,7 +48,8 @@ Before writing the build sections, a scratch copy of `research/smoke-build/` was
 ├── .gitignore                                   [M0] rewritten (§2.10)
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                               from the plan PR (D-177); the only workflow (D-151)
+│       ├── ci.yml                               from the plan PR (D-177); the only CI workflow (D-151)
+│       └── release.yml                          a GitHub Release per version, dispatched by hand (D-271)
 ├── AGENTS.md                                    from the plan PR (D-177); `## Code Review Rules` (D-171, D-192)
 ├── CLAUDE.md                                    from the plan PR (D-177); root agent instructions
 ├── LICENSE                                      [M0] MIT, three copyright lines (D-120)
@@ -99,14 +100,14 @@ Before writing the build sections, a scratch copy of `research/smoke-build/` was
 │   └── metadata/android/
 │       ├── en-US/
 │       │   ├── title.txt  short_description.txt  full_description.txt
-│       │   ├── changelogs/30000.txt
+│       │   ├── changelogs/10000.txt
 │       │   └── images/
 │       │       ├── icon.png  featureGraphic.png
 │       │       ├── phoneScreenshots/1.png … 4.png
 │       │       ├── sevenInchScreenshots/1.png
 │       │       └── tenInchScreenshots/1.png
 │       └── cs da de el eo es fa fr hu it ko lt nl pl pt-BR pt-PT ru sl sr tr uk/
-│           └── title.txt  short_description.txt  full_description.txt  changelogs/30000.txt
+│           └── title.txt  short_description.txt  full_description.txt  changelogs/10000.txt
 ├── core/
 │   └── engine/
 │       ├── AGENTS.md                            [M0] `## Code Review Rules` → `### Game rules` (D-171, D-192)
@@ -132,7 +133,7 @@ Before writing the build sections, a scratch copy of `research/smoke-build/` was
             └── screenshots/*.png                [M0 one golden; M3–M5 the 45-PNG matrix of D-204]
 ```
 
-There is no `buildSrc/`, `build-logic/`, `androidTest/`, `:baselineprofile`, `release.yml` or `.github/dependabot.yml` (D-017, D-020, D-153).
+There is no `buildSrc/`, `build-logic/`, `androidTest/`, `:baselineprofile` or `.github/dependabot.yml` (D-017, D-020, D-153). `release.yml` exists only since D-271, after the execution PR, and gates nothing.
 
 ### 1.2 What exists after M0
 
@@ -417,8 +418,10 @@ android {
         applicationId = "com.clayboicardi.game2048"
         minSdk = 24
         targetSdk = 37
-        versionCode = 30000
-        versionName = "3.0.0"
+        // Literals (D-130): versionCode = MAJOR·10000 + MINOR·100 + PATCH. release.yml checks both
+        // against the version it publishes (D-271).
+        versionCode = 10000
+        versionName = "1.0.0"
     }
 
     signingConfigs {
@@ -1379,11 +1382,11 @@ The `animatorScale` parameter arrives in M3 p1 together with `ui/theme/Effective
 
 - `Game2048Application` is `open`. `onCreate()` sets `container = createContainer()`, and `protected open fun createContainer(): AppContainer = AppContainer.create(this)`. Activities read it through `(application as Game2048Application).container`. Robolectric tests that need the fakes in an activity run under `@Config(application = SeamsTestApplication::class)` (`testing/SeamsTestApplication.kt`), whose `createContainer()` passes a `FakeSystemBarsController` and a `FakeContrastLevelSource` to `AppContainer.create` (§10.5).
 - There is exactly **one** DataStore per file per process; two instances on one file throw `IllegalStateException` (D-022).
-- Tests construct `AppContainer(files = { File(tmp.root, it) }, versionCode = 30000, applicationScope = testScope.backgroundScope, ioDispatcher = testDispatcher, mainDispatcher = testDispatcher, clock = FakeClock(), seedSource = FixedSeedSource(0x2048))` (from M3 p1 also `animatorScale = <fake>`; from M4 optionally `contrastLevel = FakeContrastLevelSource()` and `systemBars = FakeSystemBarsController()`) through `testing/TestAppContainer.kt`. Each test uses a fresh `TemporaryFolder`.
+- Tests construct `AppContainer(files = { File(tmp.root, it) }, versionCode = 10000, applicationScope = testScope.backgroundScope, ioDispatcher = testDispatcher, mainDispatcher = testDispatcher, clock = FakeClock(), seedSource = FixedSeedSource(0x2048))` (from M3 p1 also `animatorScale = <fake>`; from M4 optionally `contrastLevel = FakeContrastLevelSource()` and `systemBars = FakeSystemBarsController()`) through `testing/TestAppContainer.kt`. Each test uses a fresh `TemporaryFolder`.
 - `DataStoreFiles`: `SETTINGS = "settings.json"`, `RECORDS = "records.json"`, `fun game(size) = "game-${size.n}.json"`. Production files land in `files/datastore/<name>` (D-040), which the backup rules include (§8.2).
 - **Version without `PackageManager` (D-134).** `create` runs on the main thread inside `Application.onCreate()`, so it makes no `PackageManager` call. `versionCode` is `BuildConfig.VERSION_CODE`, the compile-time constant AGP generates from D-130's literal (§2.6); it is the same value in debug and release. The M2 container already passes it, so the version needs no M4 helper. There is no `AppVersion` class and no `getPackageInfo`/`PackageInfoCompat` call anywhere in main sources; the About header formats `BuildConfig.VERSION_NAME` and `BuildConfig.VERSION_CODE` the same way (FEATURES.md F25). The app's own startup code (`Game2048Application.onCreate` → `create`, `MainActivity.onCreate`, the first composition) calls no `PackageManager` at all. `di/AppContainerTest` (Robolectric, M2) guards this:
-  - `createDoesNotTouchPackageManager` (F30-AC10) wraps the Robolectric application in a `ContextWrapper` whose `getPackageManager()` throws `AssertionError("PackageManager on the startup path")` and whose `getApplicationContext()` returns the wrapper itself. `AppContainer.create(wrapper)` must return, and `versionCode` must be 30000; the test then cancels `applicationScope`. A `PackageManager` version lookup in `create`, the old `AppVersion.code(context)` included, fails it;
-  - `versionComesFromBuildConfigStandardFields` (F30-AC11) checks that the names of `BuildConfig::class.java.declaredFields.filterNot { it.isSynthetic }` (coverage agents add synthetic fields) are exactly `{DEBUG, APPLICATION_ID, BUILD_TYPE, VERSION_CODE, VERSION_NAME}`, that `BuildConfig.VERSION_CODE == 30000` and that `BuildConfig.VERSION_NAME == "3.0.0"` (D-130). An added `buildConfigField`, such as a build time, fails it.
+  - `createDoesNotTouchPackageManager` (F30-AC10) wraps the Robolectric application in a `ContextWrapper` whose `getPackageManager()` throws `AssertionError("PackageManager on the startup path")` and whose `getApplicationContext()` returns the wrapper itself. `AppContainer.create(wrapper)` must return, and `versionCode` must be 10000; the test then cancels `applicationScope`. A `PackageManager` version lookup in `create`, the old `AppVersion.code(context)` included, fails it;
+  - `versionComesFromBuildConfigStandardFields` (F30-AC11) checks that the names of `BuildConfig::class.java.declaredFields.filterNot { it.isSynthetic }` (coverage agents add synthetic fields) are exactly `{DEBUG, APPLICATION_ID, BUILD_TYPE, VERSION_CODE, VERSION_NAME}`, that `BuildConfig.VERSION_CODE == 10000` and that `BuildConfig.VERSION_NAME == "1.0.0"` (D-271) (D-130). An added `buildConfigField`, such as a build time, fails it.
 
 ### 4.3 Persisted documents
 
@@ -2071,7 +2074,7 @@ fun decideWhatsNew(lastSeen: Int, current: Int, changelog: Map<Int, List<Int>>):
     }
 ```
 
-`AppViewModel` evaluates it once after `settings.awaitLoaded()`. If `entries` is non-empty it exposes them on `whatsNew` (as an `ImmutableList<ChangelogEntry>`) and `GameScreen` shows the sheet over the Game root (§7.2); `storeVersionCode` is written immediately (`settings.update { it.copy(lastSeenVersionCode = …) }`), so the sheet appears at most once even if the process dies while it is open. `Changelog.kt` holds `val CHANGELOG: Map<Int, List<Int>> = mapOf(30000 to listOf(R.string.whatsnew_30000_1, R.string.whatsnew_30000_2, R.string.whatsnew_30000_3, R.string.whatsnew_30000_4, R.string.whatsnew_30000_5))`. `WhatsNewSheet` shows the entries through `GameModalSheet` (D-181). `WhatsNewTest` covers fresh install (0 → nothing shown, 30000 stored), update (e.g. 29999 → entries for 30000) and equal codes (nothing). Because 30000 is the first version code of this app, the sheet cannot appear in v1.0 builds (noted in D-009).
+`AppViewModel` evaluates it once after `settings.awaitLoaded()`. If `entries` is non-empty it exposes them on `whatsNew` (as an `ImmutableList<ChangelogEntry>`) and `GameScreen` shows the sheet over the Game root (§7.2); `storeVersionCode` is written immediately (`settings.update { it.copy(lastSeenVersionCode = …) }`), so the sheet appears at most once even if the process dies while it is open. `Changelog.kt` holds `val CHANGELOG: Map<Int, List<Int>> = mapOf(10000 to listOf(R.string.whatsnew_10000_1, R.string.whatsnew_10000_2, R.string.whatsnew_10000_3, R.string.whatsnew_10000_4, R.string.whatsnew_10000_5))`. `WhatsNewSheet` shows the entries through `GameModalSheet` (D-181). `WhatsNewTest` covers fresh install (0 → nothing shown, 10000 stored), update (e.g. 9999 → entries for 10000), equal codes (nothing) and a higher stored code such as a pre-D-271 file's 30000 (nothing, kept). Because 10000 is the first version code of this app (D-271), the sheet cannot appear in v1.0 builds (noted in D-009).
 
 ---
 
@@ -2830,7 +2833,7 @@ There is no `app/src/debug/AndroidManifest.xml`. The debug classpath adds `ui-te
 
 | Assertion | Release (`app-release.apk`) | Debug (`app-debug.apk`) |
 |---|---|---|
-| Badging (`aapt2 dump badging`) | `package: name='com.clayboicardi.game2048' versionCode='30000' versionName='3.0.0'`, `application-label:'2048'`, `minSdkVersion:'24'`, `targetSdkVersion:'37'` | package `com.clayboicardi.game2048.debug`, label `2048 Debug` |
+| Badging (`aapt2 dump badging`) | `package: name='com.clayboicardi.game2048' versionCode='10000' versionName='1.0.0'` (D-271), `application-label:'2048'`, `minSdkVersion:'24'`, `targetSdkVersion:'37'` | package `com.clayboicardi.game2048.debug`, label `2048 Debug` |
 | Permissions (every `uses-permission` line) | exactly `name='com.clayboicardi.game2048.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'` | exactly `…game2048.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` |
 | Exported components | {`com.clayboicardi.game2048.MainActivity`, `androidx.profileinstaller.ProfileInstallReceiver`} | release set + `androidx.activity.ComponentActivity` |
 | Size | ≤ 3,145,728 B | — |
@@ -3078,7 +3081,7 @@ Root package:
 | `about/LicensesScreen.kt` | Stub (M3 p2); renders `third_party_licenses.json` + texts (M4) | M3 p2 | D-122 |
 | `about/LicenseCatalog.kt` | JSON model + parser | M4 | D-122 |
 | `about/LegacyHistory.kt` | JSON model + parser for `legacy_history.json` | M4 | D-124 |
-| `about/Changelog.kt` | `ChangelogEntry(versionCode, lines: ImmutableList<Int>)` (M4.1); `CHANGELOG: Map<Int, List<@StringRes Int>>` (`whatsnew_30000_1` … `whatsnew_30000_5`, M4.5) (§4.13) | M4 | D-009, D-248 |
+| `about/Changelog.kt` | `ChangelogEntry(versionCode, lines: ImmutableList<Int>)` (M4.1); `CHANGELOG: Map<Int, List<@StringRes Int>>` (`whatsnew_10000_1` … `whatsnew_10000_5`, M4.5; D-271) (§4.13) | M4 | D-009, D-248, D-271 |
 | `about/WhatsNewPolicy.kt` | §4.13 (pure) | M4 | D-009 |
 | `about/WhatsNewSheet.kt` | Sheet UI on `GameModalSheet` | M4 | D-009, D-181 |
 
@@ -3261,7 +3264,8 @@ The D-146 named suites all appear above.
 
 | Path | Responsibility | M | D-IDs |
 |---|---|---|---|
-| `.github/workflows/ci.yml` | Exactly D-151 as refined by D-177 (QUALITY.md §5) | plan PR | D-151, D-177 |
+| `.github/workflows/ci.yml` | Exactly D-151 as refined by D-177 (QUALITY.md §5); its header comment names `release.yml` (D-271) | plan PR | D-151, D-177, D-271 |
+| `.github/workflows/release.yml` | One GitHub Release per version: dispatched on `master` with `version`, checks the build file's version, runs `verify.sh`, publishes `2048-<version>.apk` with its notes, tagged `v<version>` (QUALITY.md §5.11) | after the execution PR | D-271 |
 | `AGENTS.md` (root) | `## Code Review Rules`: a severity paragraph and six `###` groups (D-177) | plan PR | D-171, D-177, D-192 |
 | `CLAUDE.md` | Root agent instructions for this repository | plan PR | D-177 |
 | `docs/modernization/README.md`, `DECISIONS.md`, `PLAN.md`, `ARCHITECTURE.md`, `FEATURES.md`, `DESIGN_SYSTEM.md`, `MOTION_SPEC.md`, `QUALITY.md`, `L10N_STORE_LEGAL.md`, `research/` | The planning set; `research/` is frozen evidence | plan PR | D-160, D-177 |

@@ -1,4 +1,4 @@
-A versão 3.0.0 é uma reescrita completa como aplicação nativa, com um novo nome de pacote. Instala-se ao lado da aplicação 2048 original; as pontuações da aplicação original não são transferidas.
+A versão 1.0.0 é uma reescrita completa como aplicação nativa, com um novo nome de pacote. Instala-se ao lado da aplicação 2048 original; as pontuações da aplicação original não são transferidas.
 • Tamanhos de tabuleiro de 3×3 a 8×8
 • Desfazer ilimitado, mesmo depois do fim do jogo
 • Temas Neon Arcade, escuro e de alto contraste

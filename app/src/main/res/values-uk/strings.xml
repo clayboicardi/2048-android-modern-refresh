@@ -181,10 +181,10 @@
     <string name="license_hide_text">Сховати текст ліцензії</string>
     <string name="whats_new_title">Що нового</string>
     <string name="whats_new_version">Версія %1$s</string>
-    <string name="whatsnew_30000_1">Створено з нуля як швидкий нативний застосунок</string>
-    <string name="whatsnew_30000_2">Розміри поля від 3×3 до 8×8, у кожного свій рекорд</string>
-    <string name="whatsnew_30000_3">Необмежене скасування ходів, навіть після завершення гри</string>
-    <string name="whatsnew_30000_4">Світла, темна, Neon Arcade і контрастна теми</string>
-    <string name="whatsnew_30000_5">Статистика, керування з клавіатури й підтримка TalkBack</string>
+    <string name="whatsnew_10000_1">Створено з нуля як швидкий нативний застосунок</string>
+    <string name="whatsnew_10000_2">Розміри поля від 3×3 до 8×8, у кожного свій рекорд</string>
+    <string name="whatsnew_10000_3">Необмежене скасування ходів, навіть після завершення гри</string>
+    <string name="whatsnew_10000_4">Світла, темна, Neon Arcade і контрастна теми</string>
+    <string name="whatsnew_10000_5">Статистика, керування з клавіатури й підтримка TalkBack</string>
 
 </resources>
