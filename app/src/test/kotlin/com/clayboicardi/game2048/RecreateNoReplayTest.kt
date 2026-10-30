@@ -61,9 +61,11 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowLooper
 
 /**
- * D-047: recreation and a pause/resume cycle replay nothing (ARCHITECTURE.md §4.11). In M2 `App()`
- * composes no board, so the test makes the presentation reports that `BoardView` and `GameHeader`
- * make from M3, and reads the activity-scoped `GameViewModel`.
+ * D-047: recreation and a pause/resume cycle replay nothing (ARCHITECTURE.md §4.11), on the real
+ * `MainActivity` and its activity-scoped `GameViewModel`. The first two tests report their move as
+ * presented themselves, with the calls that `BoardView` and `GameHeader` make once a move settles,
+ * so they wait for no frame; the tests that read the Game screen's frames run under the motion
+ * harness.
  */
 @RunWith(AndroidJUnit4::class)
 class RecreateNoReplayTest {
@@ -104,7 +106,7 @@ class RecreateNoReplayTest {
         val header = vm.header.value
         val scenario = compose.activityRule.scenario
 
-        // From M3, GameScreen's LifecycleResumeEffect makes these two calls.
+        // GameScreen's LifecycleResumeEffect also makes these two calls as the activity moves.
         scenario.moveToState(Lifecycle.State.CREATED)
         vm.onPaused()
         scenario.moveToState(Lifecycle.State.RESUMED)

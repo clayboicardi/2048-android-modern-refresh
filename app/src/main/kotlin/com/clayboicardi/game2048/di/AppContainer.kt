@@ -119,11 +119,11 @@ class AppContainer(
     companion object {
         /**
          * The production container. Runs on the main thread in `Application.onCreate`: no I/O and
-         * no `PackageManager` call; `versionCode = BuildConfig.VERSION_CODE` (D-134). The files are
-         * `files/datastore/<name>` (D-040), resolved only when a store first opens its file. The
-         * one `SystemAnimatorScaleSource` and `SystemContrastLevelSource` share the application
-         * scope. [systemBars] and [contrastLevel] are the seams that a test application replaces
-         * (`testing/SeamsTestApplication.kt`, D-248); `null` means the system source.
+         * no call to the package manager; `versionCode = BuildConfig.VERSION_CODE` (D-134). The
+         * files are `files/datastore/<name>` (D-040), resolved only when a store first opens its
+         * file. The one `SystemAnimatorScaleSource` and `SystemContrastLevelSource` share the
+         * application scope. [systemBars] and [contrastLevel] are the seams that a test application
+         * replaces (`testing/SeamsTestApplication.kt`, D-248); `null` means the system source.
          */
         @Suppress("InjectDispatcher") // the production root makes the one application scope (§4.2)
         fun create(

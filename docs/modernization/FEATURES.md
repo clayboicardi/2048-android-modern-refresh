@@ -552,7 +552,7 @@ The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
 - An abandoned game with score 0 is not counted.
 - A `KEEP_PLAYING` game abandoned through New game counts as both won and abandoned (D-198).
 - A win counts by the **final** board: if the winning tile was undone before New game, the game is not a win (D-198).
-- After a reset, the current game's `bestAtStart` keeps its pre-reset value, so its new-best moment can still fire against the old best; only that one game is affected (D-198). The header Best then shows the current score.
+- After a reset, the current game's `bestAtStart` keeps its pre-reset value, so its new-best moment can still fire against the old best; only that one game is affected (D-198). The header Best, and the Best of a shown game-over card, then show the current score at once, before any move (D-264).
 - A corrupt `records.json` yields empty records; game files are untouched (F07). The recovery entries of the surviving game files are counted again at their next load, which restores those games' contributions.
 - A kill between New game's records and game writes counts the old game exactly once, whichever write landed (F06 item 5, D-044).
 
@@ -584,6 +584,8 @@ The N/R keys are F16-AC3; the TalkBack action is F17-AC5.
 | F08-AC20 | `FIX_RECORDS` plus `lastFinalizedGameId = {"4": 6, "3": 5}` (the `records.json` fixture's map, QUALITY.md §1.5) | `reset`; then `nextGameId(…, 4×4, null)`, `isFinalized(…, 4×4, 6)` and `isFinalized(…, 4×4, 7)` | `sizes` empty and `lastFinalizedGameId` unchanged; `7`; `true`; `false` (D-044) | `RecordsMathTest.resetKeepsOnlyFinalizationIdentity` |
 | F08-AC21 | Case 1: empty 4×4 records with `lastFinalizedGameId["4"] = 7` and a saved `OVER` game with `gameId 7`. Case 2: empty records and a saved fresh 4×4 game (`gameId 8`) whose `pendingFinalizations` are two `OVER` games, `gameId 6` with score 1000 and `gameId 7` with score 3012 | `StatsViewModel` derives | Case 1: Games played 0 (the already finalized game is skipped). Case 2: Games played 2 and Average "2,006" (both entries, applied oldest first; newest first would skip game 6). `records.json` is unchanged in both cases (D-198) | `StatsViewModelTest.foldCountsEachGameIdOnce` |
 | F08-AC22 | Container A: a 4×4 `FIX_OVER_4` with `gameId 7`, then `onNewGame` (the fresh `game-4.json` carries game 7's recovery entry) | `records.resetAll()`; `awaitIdle()`; A's scope cancelled; container B loads | B's `records.sizes` is empty and `lastFinalizedGameId["4"] == 7`: the recovery entry is not counted again after the reset (D-044) | `FinalizationRecoveryTest.resetIsNotUndoneByRecovery` |
+| F08-AC23 | Case 1: `FIX_RECORDS` and `FIX_MID_4` after one accepted move (DOWN: score 10,224, Best 24,680). Case 2: `FIX_RECORDS` and `FIX_OVER_4` with its game-over card restored (Best 24,680) | `records.resetAll()`; the scheduler runs | Case 1: `header` equals its value before with only `best` changed, to the score 10,224; `board` is the same instance; no game is saved. Case 2: the card equals its value before with only `summary.best` changed, to 3,012, so its entry stays `Restored`; `header.best` is 3,012; no game is saved (D-264) | `GameViewModelTest.resetStatisticsShowsCurrentScoreAsBest` |
+| F08-AC24 | `FIX_RECORDS` and `FIX_MID_4` under Full motion, after one accepted move: the BEST chip shows 24680 | Menu → Statistics → Reset → "Reset" → "Reset everything" → Back | On the Game screen the BEST chip draws the current score, its description is "Best " and the score, and the motion probe's `displayedBest` is the score; `board.moveId` is unchanged (D-264) | `GameScreenTest.bestChipShowsCurrentScoreAfterStatisticsReset` |
 
 ### F09 — New-best moment
 
@@ -1981,7 +1983,7 @@ Every test class named in §1, plus the motion classes of MOTION_SPEC.md §8.5 a
 | `LongGameGeneratorTest` | App JVM | `data/` | M2 | F07-AC22 |
 | `ProcessDeathRestoreTest` | App JVM | root | M2 | F04-AC10, F05-AC15, F05-AC16, F07-AC1 |
 | `FinalizationRecoveryTest` | App JVM | root | M2 | F06-AC14…AC22, F08-AC22 |
-| `GameViewModelTest` | App JVM | `game/` | M2 | F01-AC21, F01-AC22, F02-AC3…AC6, F03-AC8…AC10, F03-AC15, F04-AC1, F04-AC9, F04-AC11, F05-AC8, F06-AC7…AC9, F06-AC13, F06-AC23, F07-AC2, F07-AC3, F07-AC10, F07-AC24, F07-AC32, F07-AC33, F08-AC8, F08-AC16, F09-AC1…AC4, F13-AC14, F22-AC1…AC4, F22-AC10 |
+| `GameViewModelTest` | App JVM | `game/` | M2, M6 | F01-AC21, F01-AC22, F02-AC3…AC6, F03-AC8…AC10, F03-AC15, F04-AC1, F04-AC9, F04-AC11, F05-AC8, F06-AC7…AC9, F06-AC13, F06-AC23, F07-AC2, F07-AC3, F07-AC10, F07-AC24, F07-AC32, F07-AC33, F08-AC8, F08-AC16, F09-AC1…AC4, F13-AC14, F22-AC1…AC4, F22-AC10 (M2); F08-AC23 (M6, D-264) |
 | `InputBurstOrderingTest` | App JVM | `game/` | M2 | F15-AC13 |
 | `PlayClockTest` | App JVM | `game/` | M2 | F04-AC12, F05-AC14, F07-AC4 |
 | `BoardPresenterTest` | App JVM | `game/board/` | M2 | F05-AC9, F06-AC11, F07-AC25 |
@@ -2007,9 +2009,9 @@ Every test class named in §1, plus the motion classes of MOTION_SPEC.md §8.5 a
 | `ManifestPolicyTest` | Robolectric | root | M4 | F16-AC9, F18-AC6, F18-AC7, F27-AC6, F28-AC10, F30-AC6, F30-AC7; L-AC12 `legacyLauncherIconOnApi24` |
 | `ImmersiveModeTest` | Robolectric | root | M4 | F19-AC1…AC5 |
 | `KeepScreenOnTest` | Robolectric | root | M4 | F20-AC1…AC5 |
-| `LocalizationTest` | Robolectric | root | M5 | F24-AC8, F28-AC2…AC6 |
+| `LocalizationTest` | Robolectric | root | M5, M6 | F24-AC8, F28-AC2…AC6 (M5); `greekChipLabelsDropStressMarks`, the L-OI-13 regression test (M6, D-261) |
 | `TranslationQualityTest` | Robolectric | root | M5 | L-AC4: the 10 methods of L10N_STORE_LEGAL.md §1.9 (class KDoc `/** L-AC4 */`; D-259) |
-| `GameScreenTest` | Robolectric | `game/` | M3–M4 | M3: F02-AC7, F03-AC11…AC14, F03-AC16, F03-AC19, F04-AC2…AC7, F05-AC10…AC13, F06-AC1…AC6, F06-AC10, F09-AC5, F09-AC6, F10-AC6…AC8, F13-AC9, F13-AC10, F13-AC13, F21-AC2, F21-AC10; F03-AC18 and F04-AC14 for the two portrait windows (M3 part 2's STACKED layout, D-244). M4: F03-AC18 and F04-AC14's `w915dp-h412dp-land` window (D-244), F05-AC17, F17-AC15, F17-AC21, F17-AC23, F17-AC24, F18-AC10, F18-AC12, F18-AC16, F22-AC5, F22-AC6, F22-AC9, F24-AC7 |
+| `GameScreenTest` | Robolectric | `game/` | M3–M4, M6 | M3: F02-AC7, F03-AC11…AC14, F03-AC16, F03-AC19, F04-AC2…AC7, F05-AC10…AC13, F06-AC1…AC6, F06-AC10, F09-AC5, F09-AC6, F10-AC6…AC8, F13-AC9, F13-AC10, F13-AC13, F21-AC2, F21-AC10; F03-AC18 and F04-AC14 for the two portrait windows (M3 part 2's STACKED layout, D-244). M4: F03-AC18 and F04-AC14's `w915dp-h412dp-land` window (D-244), F05-AC17, F17-AC15, F17-AC21, F17-AC23, F17-AC24, F18-AC10, F18-AC12, F18-AC16, F22-AC5, F22-AC6, F22-AC9, F24-AC7. M6: F08-AC24 (D-264) |
 | `TalkBackModeTest` | Robolectric | `game/` | M4 | F17-AC8…AC14, F17-AC19, F17-AC20 |
 | `TileRecompositionTest` | Robolectric | `game/board/` | M3 | F13-AC12 (also AC-PERF-1) |
 | `BoardSemanticsTest` | Robolectric | `game/board/` | M3–M4 | F17-AC1…AC6 (M3); F17-AC7 (M4) |
@@ -2074,7 +2076,7 @@ Gate-mapped ACs (no test class):
 
 Golden coverage: §1 claims all 45 goldens of DESIGN_SYSTEM.md §10.4 (D-204): 1–4 F12-AC11, 5–7 F02-AC13, 8–12 F12-AC10, 13–14 F03-AC17, 15–16 F04-AC13, 17–18 F11-AC12, 19 F08-AC17, 20 F23-AC7, 21 F25-AC8, 22 F26-AC6, 23–26 F28-AC11…AC13, 27–28 F17-AC17, 29–35 F18-AC4, 36 F17-AC18, 37–41 F13-AC8, 42 F02-AC14, 43 F06-AC12, 44 F24-AC9, 45 F22-AC8.
 
-The remaining Robolectric observability risk and its fallback are OI-F13 (manifest facts and locale-config parsing).
+OI-F13 (manifest facts and locale-config parsing), the last Robolectric observability risk, was resolved at first use without its fallback (Open issues below).
 
 Seams this file relies on (all pure or test-only, none changes production behavior):
 - `layoutModeFor(widthDp: Int, heightDp: Int): LayoutMode` in `ui/components/WindowMode.kt`, the preference `GameLayout` applies to its measured window (F18-AC1, D-256);
@@ -2090,8 +2092,8 @@ Seams this file relies on (all pure or test-only, none changes production behavi
 
 ## Open issues
 
-This section keeps only verification risks that remain open, each with its fallback.
+This section kept the verification risks that remained open, each with its fallback. None is open now.
 
-- **OI-F13 (Robolectric observability).** `ManifestPolicyTest` relies on Robolectric's package parser exposing `ApplicationInfo.category`, `reqFeatures`, the `InitializationProvider` meta-data, the adaptive icon's monochrome layer and the API 24 legacy icon (L-AC12). F28-AC3 parses the generated `R.xml._generated_res_locale_config` resource in the debug unit test. Neither was smoke-run. Verified at first use (M4 for the manifest facts, M5 for the locale config). Fallback, recorded in the PR body: assert the same facts with `aapt2 dump xmltree` on the debug APK's manifest and on its generated locale-config XML, as added checks in `scripts/check-apk.sh`; the test methods keep the facts Robolectric does expose, and an AC whose fact moves to the gate names that gate step instead.
+- **OI-F13 (Robolectric observability; resolved at first use, D-260).** `ManifestPolicyTest` relies on Robolectric's package parser exposing `ApplicationInfo.category`, `reqFeatures`, the `InitializationProvider` meta-data, the adaptive icon's monochrome layer and the API 24 legacy icon (L-AC12). F28-AC3 parses the generated `R.xml._generated_res_locale_config` resource in the debug unit test. Neither was smoke-run. Verified at first use (M4 for the manifest facts, M5 for the locale config). Fallback, recorded in the PR body: assert the same facts with `aapt2 dump xmltree` on the debug APK's manifest and on its generated locale-config XML, as added checks in `scripts/check-apk.sh`; the test methods keep the facts Robolectric does expose, and an AC whose fact moves to the gate names that gate step instead. Resolved: Robolectric exposes every fact, so the fallback was not used: `ManifestPolicyTest` reads the manifest and icon facts since M4, and `LocalizationTest.localeConfigListsTwentyOneLocales` parses the generated locale config since M5.
 
 Resolved during planning: OI-F1 → D-198; OI-F2, OI-F3 → D-199; OI-F4 → D-190; OI-F5 → D-204 and the canonical names; OI-F6 → `BigInteger` in `TileLabels.fullDecimal` and `ShareText` (F02, F10 text); OI-F7 → QUALITY V4; OI-F8 → D-198; OI-F9 → D-198; OI-F10 → D-201; OI-F11 → D-186; OI-F12 → D-181; OI-F14 → `SystemBarsController` seam adopted; OI-F15 → as specified in F10/F04 (D-103).

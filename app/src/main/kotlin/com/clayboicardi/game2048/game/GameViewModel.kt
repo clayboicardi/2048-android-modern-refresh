@@ -326,6 +326,30 @@ class GameViewModel(
         _ready.value = true
         publishUi()
         viewModelScope.launch { recoverOtherSizes(size) }
+        viewModelScope.launch { records.state.collect { followRecords() } }
+    }
+
+    /**
+     * F08 item 8 and edge cases (D-264): the header's Best, and the Best of a shown card, stay
+     * `max(records.best(size), score)` also when the records change without a move, so after Reset
+     * statistics they read the current score. Only `best` is replaced: no new `moveId`, epoch or
+     * entry, so nothing replays (§4.11), and nothing is saved. A move, an undo or an epoch has
+     * already published the same value, so this changes nothing then. While a size switch loads it
+     * waits for the loaded game's epoch.
+     */
+    private fun followRecords() {
+        val game = current?.takeIf { !busy } ?: return
+        val best = bestOf(game)
+        val header = _header.value
+        if (header.best != best) _header.value = header.copy(best = best)
+        val overlay = _overlay.value
+        val followed =
+            when (overlay) {
+                OverlayUi.None -> overlay
+                is OverlayUi.Win -> overlay.copy(summary = overlay.summary.copy(best = best))
+                is OverlayUi.GameOver -> overlay.copy(summary = overlay.summary.copy(best = best))
+            }
+        if (followed != overlay) _overlay.value = followed
     }
 
     /** §4.8 step 4, after the engine accepted the move. */

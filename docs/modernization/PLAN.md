@@ -60,7 +60,7 @@ Replace the 2014 WebView shell (`MainActivity.java` around the `assets/2048` web
 | S10 | 45 goldens (`DESIGN_SYSTEM.md` §10.4) committed, each compared by a test, total ≤ 10 MiB, each Read | `check-test-counts.sh` golden rules G1–G5 (QUALITY §1.15: results match the goldens exactly, every result `unchanged`, no results fails); `check_golden_budget`; commit bodies |
 | S11 | 20 locales complete; Lint translation issues 0; `TranslationQualityTest` green | `:app:lintDebug`; test report |
 | S12 | 22 store-listing directories valid; 8 store images generated from code and reproducible | `check_store_listing`, `check_store_images`; second `StoreAssetsTest` run leaves `git diff --exit-code fastlane/` clean |
-| S13 | No opt-in outside the two allowlisted files; no Lint/detekt baseline; every suppression carries a reason | `check_optin_allowlist`, `check_no_baselines`; suppression inventory in the PR body |
+| S13 | No opt-in outside the three allowlisted files (D-174, D-181, D-215); no Lint/detekt baseline; every suppression carries a reason | `check_optin_allowlist`, `check_no_baselines`; suppression inventory in the PR body |
 | S14 | "Deviations from DECISIONS.md" in the PR body reads None or lists only entries added during execution (D-212 and later); D-174–D-211 and TC-1–TC-7 were decided in the plan PR | PR body |
 | S15 | No AI model name or model identifier in any tracked file | The orchestrator's out-of-repo term grep over tracked files before each push prints nothing (D-180) |
 
@@ -561,9 +561,9 @@ Run each from the repository root on the M6 candidate commit; paste results into
 | A5 | No platform RNG or clock in game logic outside `data/platform` | `git grep -n -E 'kotlin\.random\|java\.util\.Random\|Math\.random\|currentTimeMillis\|nanoTime' -- app/src/main/kotlin` |
 | A6 | No `Vibrator`, `VibrationEffect`, `INTERNET`, `FLAG_IGNORE_GLOBAL_SETTING`, `material-icons`, `ui-text-google-fonts`, `ui-tooling` on the classpath | `git grep -n -E 'Vibrator\|VibrationEffect\|android\.permission\.INTERNET\|FLAG_IGNORE_GLOBAL_SETTING\|material-icons\|ui-text-google-fonts' -- app gradle`; `grep -n 'ui.tooling' app/build.gradle.kts` |
 | A7 | No named companion object on a `@Serializable` class; no `buildConfigField`; no `PackageManager` in main sources, so the version comes only from `BuildConfig` (D-134) | Review every `@Serializable` declaration listed by `git grep -n '@Serializable' -- app/src/main`; `git grep -n -E 'buildConfigField' -- app/build.gradle.kts` and `git grep -n -E 'PackageManager\|packageManager\|PackageInfo\|getPackageInfo' -- app/src/main/kotlin` print nothing |
-| A8 | Suppression inventory, each with a same-line reason (D-142, QUALITY §2.5) | `git grep -n -E '@Suppress\(\|tools:ignore=' -- app core` |
+| A8 | Suppression inventory, each with a same-line reason (D-142, QUALITY §2.5) | `git grep -n -E '@([a-z]+:)?Suppress\(\|tools:ignore=' -- app core` (the optional use-site target also lists file-level `@file:Suppress(`, D-260) |
 | A9 | Workflows, modules and non-gates (D-133, D-153) | `ls .github/workflows` = `ci.yml`; no `app/src/androidTest`, no `.github/dependabot.yml`, no `gradle/verification-metadata.xml`, no `:baselineprofile` |
-| A10 | Every check-metadata function of QUALITY §1.16 (D-179, D-190) is called | `grep -c '^check_' scripts/check-metadata.sh` equals the number of call lines |
+| A10 | Every check-metadata function of QUALITY §1.16 (D-179, D-190) is called | `grep -c -E '^check_[a-z_]+\(\) *\{' scripts/check-metadata.sh` (the definitions) equals `grep -c -E '^check_[a-z_]+( +#.*)?$' scripts/check-metadata.sh` (the call lines), and each defined name is called once (D-260) |
 | A11 | 45 goldens (D-204), all compared | `ls app/src/test/screenshots/*.png \| wc -l` = 45; last verify's `check-test-counts.sh` prints no G1–G5 error (QUALITY §1.15), so all 45 have an `unchanged` result |
 | A12 | AC coverage (S4) | the script below prints `0 missing` |
 
@@ -1125,4 +1125,4 @@ Every open issue raised by the spec writers, with its disposition. "D-NNN" and "
 
 ## 10. Open issues of this plan
 
-None beyond the verification-at-first-use items, each with its fallback: DECISIONS verification items 1, 2, 6, 11 and 12; MOTION_SPEC AC-BACK-1; FEATURES OI-F13; L10N L-OI-13.
+None. The verification-at-first-use items are settled: DECISIONS verification items 1, 2 and 6 during execution (D-260), and items 11 and 12 on the plan PR's Codex loop, whose conversation records the outcome (QUALITY §7.3); MOTION_SPEC AC-BACK-1 in M3; FEATURES OI-F13 at first use in M4 and M5 (D-260); L10N L-OI-13 in M5, with its regression test in M6 (D-261).

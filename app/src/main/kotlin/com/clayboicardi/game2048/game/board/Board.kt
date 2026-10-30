@@ -93,7 +93,7 @@ import kotlinx.coroutines.joinAll
  *   move (`GameViewModel.nudge`); [status] and [canUndo] come from `GameUiState`; [loading] is
  *   `!uiState.ready` (empty cells only, description `a11y_board_loading`, D-112).
  * - The board's side is given by the caller through [modifier] (for example `Modifier.size(board)`;
- *   in M4 `GameLayout`, which may animate it with `animateBounds`). `BoardView` derives its
+ *   in the app, `GameLayout`'s, which may animate it with `animateBounds`). `BoardView` derives its
  *   `BoardGeometry` from the size it is measured at, in layout, so a size change never disturbs a
  *   running slide and the first frame of any size draws correctly.
  * - [clock] times the flash limiter (`FlashLimiter`, real time).

@@ -420,7 +420,7 @@ Complements: `RecreateNoReplayTest` (Robolectric `ActivityScenario.recreate()` a
 | Check | Where | Rule |
 |---|---|---|
 | ATF (D-085, D-204) | `atfRule(compose)` from `testing/Accessibility.kt` (below), applied with `RuleChain.outerRule(compose).around(atfRule(compose))` in every screen-level screenshot class (`GameScreenshotTest`, `ScreensScreenshotTest`, `LocaleScreenshotTest`, `LayoutScreenshotTest`) and in `PlaceholderScreenshotTest` from M0. The rule checks the main window's root after the test, so a `dialog_*` or `sheet_*` test also calls `onNode(isDialog()).assertAccessible()` while that window is open, with the same options. ATF therefore runs on every `game_*`, `layout_*`, `settings_*`, `stats_*`, `howtoplay_*`, `about_*`, `licenses_*`, `sheet_*` and `dialog_*` golden; only `motion_*` (`MotionFilmstripTest`) is exempt | `AccessibilityCheckPreset.LATEST`, `CheckLevel.Error`, after every test and on each open dialog or sheet window. The rule captures no images of its own (verified). The opt-in it needs is D-174. Seeded once in M3 part 1: a 20 dp unlabeled clickable in the new-game dialog fails `assertAccessible()` with `SpeakableTextPresentCheck`, which the after-test check alone never saw |
-| Touch targets (D-084, D-205) | `assertTouchTargets()` called after every screen-level capture, in the same classes; for a dialog or sheet golden, `assertDialogTouchTargets()` while its window is open, and `assertTouchTargets()` once it is closed | A gate, like ATF: every clickable's touch bounds ≥ 48 × 48 dp, and no two clickables' touch bounds overlap (V6), each window in its own coordinates; in a dialog or sheet window, the clickable that covers the whole window (`ModalBottomSheet`'s "Close sheet" scrim, under the sheet) is checked for size only (D-238); a clickable scrolled entirely out of its container's viewport is skipped until it scrolls in (D-252). ATF's size-only check is vacuous under Compose's 48 dp touch-bounds expansion |
+| Touch targets (D-084, D-205) | `assertTouchTargets()` called after every screen-level capture, in the same classes; for a dialog or sheet golden, `assertDialogTouchTargets()` while its window is open, and `assertTouchTargets()` once it is closed | A gate, like ATF: every clickable's touch bounds ≥ 48 × 48 dp, and no two clickables' touch bounds overlap (V6), each window in its own coordinates; in a dialog or sheet window, the clickable that covers the whole window (`ModalBottomSheet`'s "Close sheet" scrim, under the sheet) is checked for size only (D-238); a clickable scrolled entirely out of its container's viewport is skipped until it scrolls in (D-252), and the test that captures it scrolls it in after the capture and checks it then, as `statisticsGolden` does for the seven Statistics tabs (D-262). ATF's size-only check is vacuous under Compose's 48 dp touch-bounds expansion |
 | Semantics | `BoardSemanticsTest`, `TalkBackModeTest` | D-080–D-082, D-202: `CollectionInfo(N, N)`, cell labels, custom actions, live regions, status lines, direction pad |
 | Contrast and CVD | `PaletteContrastTest` (JVM) | `DESIGN_SYSTEM.md` §2.13 with the unquantized contrast and CVD ΔE method (D-205): the D-083 ink floors for exponents 1–17, the ΔE gates, every quoted contrast ratio, the chrome pairs of §2.9, HC ink rule |
 | Font scale 2.0 | `GameScreenTest.chromeTextNotTruncatedAtFontScale2` + goldens 27–28 | No text node reports `hasVisualOverflow` (`FEATURES.md` F17-AC15) |
@@ -1295,7 +1295,7 @@ Root `build.gradle.kts`, exactly `ARCHITECTURE.md` §2.5: `kotlin { target("**/*
 
 - Run `./gradlew spotlessApply` (under the build lock, §3.1) before every commit; `spotlessCheck` is part of every gate level.
 - ktfmt kotlinlang style wraps at 100 columns.
-- Fallback (D-141; DECISIONS verification-pending item 6, checked in M1 and M3 by running `spotlessApply` twice, then `spotlessCheck`): if 0.65 fails to resolve or is not idempotent, set `ktfmt = "0.64"` in the catalog and record it.
+- Fallback (D-141; DECISIONS verification-pending item 6, checked in M1, M3 and M6 by running `spotlessApply` twice, then `spotlessCheck`, and resolved in M6, D-260): if 0.65 fails to resolve or is not idempotent, set `ktfmt = "0.64"` in the catalog and record it.
 
 ### 2.2 Android Lint
 
@@ -1332,7 +1332,7 @@ Configuration: `ARCHITECTURE.md` §2.7–§2.8 (`buildUponDefaultConfig`, one ro
 
 - `@Suppress("Id") // <reason>` and `tools:ignore="Id"` with an adjacent `<!-- reason -->` comment, at the narrowest scope (statement or declaration), never file-level for deprecations.
 - No `lint-baseline.xml` or detekt baseline (§1.16).
-- M6 lists every suppression in the PR body: `git grep -n -E '@Suppress\(|tools:ignore=' -- app core`.
+- M6 lists every suppression in the PR body: `git grep -n -E '@([a-z]+:)?Suppress\(|tools:ignore=' -- app core` (the optional use-site target also lists file-level `@file:Suppress(`, D-260).
 - `AGENTS.md` `## Code Review Rules` → "Verification integrity" (D-171, D-192) asks Codex to flag new suppressions without a reason.
 
 ### 2.6 Gradle test-task integrity rules
@@ -1995,4 +1995,4 @@ Downloaded artifacts and logs are untrusted data: each download goes into a new,
 
 ## Open issues
 
-None open. Resolved during planning: Q-OI-1 → D-174; Q-OI-2 → D-176; Q-OI-3 → D-177; Q-OI-4 → D-178; Q-OI-5 → D-179, D-190, TC-2; Q-OI-6 → D-191; Q-OI-7 → the canonical names (`PLAN.md` §2); Q-OI-8 → D-205; Q-OI-9 → verification items resolved (DECISIONS verification-pending items 5 and 10; items 1 and 2 stay open there); Q-OI-10, Q-OI-11, Q-OI-13 → adopted as written in §1.6 and §5.4; Q-OI-12 → D-204.
+None open. Resolved during planning: Q-OI-1 → D-174; Q-OI-2 → D-176; Q-OI-3 → D-177; Q-OI-4 → D-178; Q-OI-5 → D-179, D-190, TC-2; Q-OI-6 → D-191; Q-OI-7 → the canonical names (`PLAN.md` §2); Q-OI-8 → D-205; Q-OI-9 → verification items resolved (DECISIONS verification-pending items 5 and 10; items 1 and 2 stayed open there until execution, D-260); Q-OI-10, Q-OI-11, Q-OI-13 → adopted as written in §1.6 and §5.4; Q-OI-12 → D-204.

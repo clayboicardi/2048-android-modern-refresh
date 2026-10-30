@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.navigation3.runtime.NavKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.clayboicardi.game2048.ABOUT_LICENSES_TAG
@@ -28,12 +29,15 @@ import com.clayboicardi.game2048.fixtures.GoldenFixtures
 import com.clayboicardi.game2048.screenTag
 import com.clayboicardi.game2048.settings.SETTINGS_LIST_TAG
 import com.clayboicardi.game2048.stats.STATS_HERO_TAG
+import com.clayboicardi.game2048.stats.STATS_TABS
+import com.clayboicardi.game2048.stats.statsTabTag
 import com.clayboicardi.game2048.testing.assertAccessible
 import com.clayboicardi.game2048.testing.assertDialogTouchTargets
 import com.clayboicardi.game2048.testing.assertTouchTargets
 import com.clayboicardi.game2048.testing.atfRule
 import com.clayboicardi.game2048.testing.captureGolden
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
+import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -85,6 +89,18 @@ class ScreensScreenshotTest {
             // StatsViewModel's ui is null until the records and every size's game are read.
             compose.awaitLoaded { exists(STATS_HERO_TAG) }
             capture("stats_classic-light")
+            // D-262: after the capture, each tab is scrolled into the row's viewport and the
+            // touch-target gate runs again, so the tabs past the screen edge are checked too.
+            for (i in STATS_TABS.indices) {
+                val tab = compose.onNodeWithTag(statsTabTag(i))
+                tab.performScrollTo()
+                compose.waitForIdle()
+                val bounds = tab.fetchSemanticsNode().boundsInRoot
+                assertWithMessage("the visible bounds of tab $i after the scroll")
+                    .that(bounds.width > 0f && bounds.height > 0f)
+                    .isTrue()
+                compose.assertTouchTargets()
+            }
         }
     }
 

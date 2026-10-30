@@ -1853,7 +1853,7 @@ sequenceDiagram
 | Resume | `playClock.resume(now)` if in progress | — | — |
 | Presentation reported (`onBoardPresented`, `onHeaderPresented`, `onOverlayPresented`) | Replaces only the reported presentation with its static form (§4.11): `board = BoardPresenter.settled(board)`, `header.lastDelta = 0`, or an `Animated(moveId)` entry → `Restored`; a stale or repeated id is a no-op. No engine call, no `SavedGame`, clock, records or settings change | — (same `moveId`; event becomes `Restored`) | — |
 | Hint dismissed | `settings.update { onboardingDone = true }` | — | settings |
-| Reset statistics (Stats screen, after two dialogs) | `records.resetAll()` (`RecordsMath.reset`: `sizes` emptied, `lastFinalizedGameId` kept); in-progress games, including their `bestAtStart` and `pendingFinalizations`, are untouched (D-044, D-198) | — | records |
+| Reset statistics (Stats screen, after two dialogs) | `records.resetAll()` (`RecordsMath.reset`: `sizes` emptied, `lastFinalizedGameId` kept); in-progress games, including their `bestAtStart` and `pendingFinalizations`, are untouched (D-044, D-198). `GameViewModel` collects `records.state` from ready on: when `max(records.best(size), score)` differs from `header.best`, it replaces only `header.best`, and only `summary.best` of a shown card, with no new `moveId`, epoch or entry and no save; so after a reset both show the current score (D-264) | — | records |
 
 `fresh(size, replaced: SavedGame?) = SavedGame(Game.newGame(size, seedSource.nextSeed()), elapsedMs = 0, bestAtStart = records.best(size), newBestAnnounced = false, gameId = records.nextGameId(size, replaced), pendingFinalizations = emptyList())`.
 
@@ -3154,7 +3154,7 @@ Root package:
 | `BackOnRootTest` | Robolectric (§7.3) | M3 p2 |
 | `ManifestPolicyTest` | Robolectric, including `legacyLauncherIconOnApi24` and `splashThemeUsesIdentityColors` | M4 |
 | `ImmersiveModeTest`, `KeepScreenOnTest` | Robolectric | M4 |
-| `LocalizationTest` | Robolectric (F24-AC8, F28-AC2–AC6) | M5 |
+| `LocalizationTest` | Robolectric (F24-AC8, F28-AC2–AC6; the L-OI-13 regression test, D-261) | M5, M6 |
 | `TranslationQualityTest` | Robolectric, the 10 methods of L10N_STORE_LEGAL.md §1.9 (D-259) | M5 |
 
 `data/` (all JVM, M2): `PersistenceFixturesTest`, `PersistenceCorruptionTest`, `PersistenceBudgetTest`, `ConflatedWriterTest`, `SettingsRepositoryTest`, `RecordsMathTest`, `LongGameGeneratorTest`, `DataMigrationSeamTest`.
@@ -3165,10 +3165,10 @@ Root package:
 
 | Class | Kind | M |
 |---|---|---|
-| `game/GameViewModelTest` | JVM + Turbine; includes `hintShownWhileStartingGameHasNoMove` and `hintHiddenAfterAMove` (D-201), `presentationReportsSettleWithoutStateChange` (§4.11), `headerCarriesBoardEventAndEpoch` (§4.8) and `engineCheckFailureIsCorruption` (§9.1, D-214) | M2 (extended M3–M4) |
+| `game/GameViewModelTest` | JVM + Turbine; includes `hintShownWhileStartingGameHasNoMove` and `hintHiddenAfterAMove` (D-201), `presentationReportsSettleWithoutStateChange` (§4.11), `headerCarriesBoardEventAndEpoch` (§4.8), `engineCheckFailureIsCorruption` (§9.1, D-214) and `resetStatisticsShowsCurrentScoreAsBest` (§4.9, D-264, M6) | M2 (extended M3–M4, M6) |
 | `game/InputBurstOrderingTest` | JVM | M2 |
 | `game/PlayClockTest` | JVM | M2 |
-| `game/GameScreenTest` | Robolectric: `undoUsedSnackbarUntilFirstFinalizedUndoGame` (D-186) and the other M3 p1 ACs; `shareOnBothCardsNotInMenu` (D-200), `menuOpensEveryDestination` and the other M3 p2 ACs; F17-AC15, F22-AC5–AC6, F24-AC7, the short-window layout checks `shortWindowsKeepBoardAndChromeOnScreen` (F18-AC10) and `scrollModeCardBringsBoardIntoView` (F18-AC12), and the long-score header check `longScoresFitHeaderWithoutTruncation` (F17-AC23) (M4) | M3 p1 |
+| `game/GameScreenTest` | Robolectric: `undoUsedSnackbarUntilFirstFinalizedUndoGame` (D-186) and the other M3 p1 ACs; `shareOnBothCardsNotInMenu` (D-200), `menuOpensEveryDestination` and the other M3 p2 ACs; F17-AC15, F22-AC5–AC6, F24-AC7, the short-window layout checks `shortWindowsKeepBoardAndChromeOnScreen` (F18-AC10) and `scrollModeCardBringsBoardIntoView` (F18-AC12), and the long-score header check `longScoresFitHeaderWithoutTruncation` (F17-AC23) (M4); `bestChipShowsCurrentScoreAfterStatisticsReset` (F08-AC24, D-264) (M6) | M3 p1 |
 | `game/TalkBackModeTest` | Robolectric | M4 |
 | `game/header/ScoreFitTest` | JVM: `fallbackChainTable` (F17-AC22, DESIGN_SYSTEM.md §7.2) | M4 |
 | `game/board/BoardPresenterTest` | JVM (§5.2), including `settledKeepsIdentityAndIsStatic` | M2 |

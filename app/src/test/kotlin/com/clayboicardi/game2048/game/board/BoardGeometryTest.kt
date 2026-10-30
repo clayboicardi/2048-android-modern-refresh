@@ -1,10 +1,10 @@
 package com.clayboicardi.game2048.game.board
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.clayboicardi.game2048.ui.components.LayoutMode
 import com.clayboicardi.game2048.ui.theme.ClassicLightSkin
+import com.clayboicardi.game2048.ui.theme.NeonLightSkin
 import com.clayboicardi.game2048.ui.theme.TileSkin
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
@@ -27,7 +27,7 @@ class BoardGeometryTest {
             }
         }
         for ((i, board) in BOARDS.withIndex()) {
-            assertCell("Neon 4×4 at $board dp", 4, board, NEON_SKIN, NEON_4[i])
+            assertCell("Neon 4×4 at $board dp", 4, board, NeonLightSkin, NEON_4[i])
         }
 
         val d075 = boardGeometry(4, 328.dp, ClassicLightSkin, 1f)
@@ -572,21 +572,6 @@ class BoardGeometryTest {
                 Cell(12, 67.0f, 14.7f),
                 Cell(14, 77.5f, 17.1f),
                 Cell(20, 155.0f, 34.0f),
-            )
-
-        /** DESIGN_SYSTEM.md §4.2 Neon geometry; the Neon palettes and skins arrive in M4. */
-        val NEON_SKIN =
-            TileSkin(
-                id = "neon-test",
-                gapRatio = 0.18f,
-                radiusFraction = 0.22f,
-                radiusMin = 4.dp,
-                radiusMax = 34.dp,
-                numeralWeight = 900,
-                numeralRond = 100f,
-                titleColor = Color.Black,
-                boardInsetWell = true,
-                tileOutline = null,
             )
     }
 }

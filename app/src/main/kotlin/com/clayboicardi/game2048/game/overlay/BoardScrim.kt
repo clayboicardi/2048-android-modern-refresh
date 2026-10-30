@@ -224,11 +224,11 @@ private class FitCache {
 }
 
 /**
- * A card's title (DESIGN_SYSTEM.md §3.5, §6.3, §6.4): `GameTextStyles.cardTitle`
- * (`displaySmallEmphasized`, Regular) or `cardTitleCompact` (`headlineSmallEmphasized`, Compact),
- * the 1.5-only emphasized styles read through their `ui/theme` wrappers (D-026), centred in
- * `onSurface`, [inset] clear of the win card's Share button on both sides. Unless [measuring], it
- * is the one assertive live region of its card (D-081).
+ * A card's title (DESIGN_SYSTEM.md §3.5, §6.3, §6.4): `GameTextStyles.cardTitle` (the emphasized
+ * small display style, Regular) or `cardTitleCompact` (the emphasized small headline style,
+ * Compact), the 1.5-only emphasized styles read through their `ui/theme` wrappers (D-026), centred
+ * in `onSurface`, [inset] clear of the win card's Share button on both sides. Unless [measuring],
+ * it is the one assertive live region of its card (D-081).
  */
 @Composable
 internal fun CardTitle(text: String, compact: Boolean, inset: Dp, measuring: Boolean) {

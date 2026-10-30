@@ -43,7 +43,7 @@ object StandardContrastLevel : ContrastLevelSource {
  * Reads `UiModeManager.getContrast()` on API 34+ and observes it with `addContrastChangeListener`
  * on the main executor (D-073); below API 34 it reports 0 and registers nothing. Created once, by
  * `AppContainer.create`, on the main thread inside `Application.onCreate`, so construction stays
- * cheap: one read and one listener, never `PackageManager`. [scope] is the container's
+ * cheap: one read and one listener, never the package manager. [scope] is the container's
  * `applicationScope`; the listener is removed when it completes.
  */
 class SystemContrastLevelSource(context: Context, scope: CoroutineScope) : ContrastLevelSource {

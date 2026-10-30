@@ -1207,7 +1207,7 @@ Regular layout (`game/overlay/WinCard.kt`, container and scrim from `game/overla
 
 ### 6.3a Game: Compact win card (D-200)
 
-Used when the Regular layout does not fit the board − 16 dp budget (§6.3), for example on the 280 dp board of a 360×640 window (store screenshot 2, §8.6). Height ≈ 220 dp.
+Used when the Regular layout does not fit the board − 16 dp budget (§6.3), for example on the 328 dp board of a 360×640 window (store screenshot 2, §8.6; D-261). Height ≈ 220 dp.
 
 ```
 ┌─────── ElevatedCard  w = min(clamp(board − 32, 264, 400), board − 16) ───────┐
@@ -1786,7 +1786,7 @@ Geometry (research/01 §5.3, research/07-critique.md G4):
 | File | Qualifier | Content |
 |---|---|---|
 | `phoneScreenshots/1.png` | `w360dp-h640dp-xxhdpi` (1080×1920) | `FIX_MID_4`, Classic light |
-| `phoneScreenshots/2.png` | same | `FIX_WON_4`, Classic light, win card in its Compact layout (board 280 dp at `w360dp-h640dp`, §6.3a) |
+| `phoneScreenshots/2.png` | same | `FIX_WON_4`, Classic light, win card in its Compact layout (board 328 dp at `w360dp-h640dp`, §6.3a; D-261) |
 | `phoneScreenshots/3.png` | same | `FIX_MID_4`, Neon dark |
 | `phoneScreenshots/4.png` | same | Statistics, 4×4 tab, `FIX_RECORDS`, Classic light |
 | `sevenInchScreenshots/1.png` | `w1067dp-h600dp-land-xhdpi` (2134×1200) | `FIX_MID_4`, Classic light, side panel |

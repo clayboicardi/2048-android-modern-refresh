@@ -17,8 +17,10 @@ import com.clayboicardi.game2048.game.board.TileLabels
 import com.clayboicardi.game2048.game.header.BEST_TAG
 import com.clayboicardi.game2048.game.header.SCORE_TAG
 import com.clayboicardi.game2048.screenshots.GoldenRig
+import com.clayboicardi.game2048.ui.components.chipLabelText
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.google.common.truth.Truth.assertWithMessage
+import java.text.Normalizer
 import java.util.Locale
 import org.junit.Rule
 import org.junit.Test
@@ -31,9 +33,9 @@ import org.xmlpull.v1.XmlPullParser
 /**
  * The 21 locales as the app resolves them (L10N_STORE_LEGAL.md §1.1, §1.2, §1.5, §1.10, §1.13;
  * D-100–D-103, D-009): the What's new lines, the untranslated `app_name`, the generated locale
- * config, the legacy `settings` translations, the Russian plural categories and the Latin game
- * numerals of the Persian Game screen. `TranslationQualityTest` checks the translations' text; the
- * two classes do not overlap.
+ * config, the legacy `settings` translations, the Russian plural categories, the Greek chip labels
+ * without stress marks (L-OI-13) and the Latin game numerals of the Persian Game screen.
+ * `TranslationQualityTest` checks the translations' text; the two classes do not overlap.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -117,6 +119,36 @@ class LocalizationTest {
         val texts = listOf(1, 3, 5).map { res.getQuantityString(R.plurals.moves_count, it, "#") }
         for (text in texts) assertWithMessage("a moves_count item").that(text).contains("#")
         assertWithMessage("moves_count for 1, 3 and 5 in ru").that(texts.toSet()).hasSize(3)
+    }
+
+    /** L-OI-13 (D-261): Greek chip labels are upper-cased without stress marks. */
+    @Test
+    fun greekChipLabelsDropStressMarks() {
+        // The labels that ScoreChipLabel and the game-over card upper-case: the JVM keeps the
+        // tonos when it upper-cases Greek ("Ρεκόρ" → "ΡΕΚΌΡ"), so chipLabelText removes U+0301.
+        val greek = Locale.forLanguageTag("el")
+        val res = resourcesFor("el")
+        val expected =
+            mapOf(
+                R.string.score_label to "ΣΚΟΡ",
+                R.string.best_label to "ΡΕΚΟΡ",
+                R.string.new_best_label to "ΝΕΟ ΡΕΚΟΡ",
+                R.string.best_tile to "ΚΑΛΥΤΕΡΟ ΠΛΑΚΙΔΙΟ",
+            )
+        for ((id, text) in expected) {
+            val key = app.resources.getResourceEntryName(id)
+            val label = chipLabelText(res.getString(id), greek)
+            assertWithMessage("el $key").that(label).isEqualTo(text)
+            assertWithMessage("U+0301 in el $key after NFD")
+                .that(Normalizer.normalize(label, Normalizer.Form.NFD))
+                .doesNotContain(COMBINING_ACUTE)
+        }
+
+        // Outside el the upper-cased label keeps its accents.
+        val spanish = resourcesFor("es").getString(R.string.new_best_label)
+        assertWithMessage("es new_best_label")
+            .that(chipLabelText(spanish, Locale.forLanguageTag("es")))
+            .isEqualTo("NUEVO RÉCORD")
     }
 
     /** F28-AC6 */
@@ -233,6 +265,9 @@ class LocalizationTest {
         val PSEUDO_LOCALES = listOf("en-XA", "ar-XB")
 
         const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
+
+        /** The combining acute accent: the Greek tonos after NFD decomposition. */
+        const val COMBINING_ACUTE = "\u0301"
 
         /** A game numeral: ASCII digits and the compact suffixes (DESIGN_SYSTEM.md §3.4). */
         const val GAME_NUMERAL = "[0-9KMGTPE]+"

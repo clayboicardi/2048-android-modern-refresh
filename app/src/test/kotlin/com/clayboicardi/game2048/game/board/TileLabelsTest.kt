@@ -1,9 +1,8 @@
 package com.clayboicardi.game2048.game.board
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.clayboicardi.game2048.ui.theme.ClassicLightSkin
-import com.clayboicardi.game2048.ui.theme.TileSkin
+import com.clayboicardi.game2048.ui.theme.NeonLightSkin
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Assert.assertThrows
@@ -69,7 +68,8 @@ class TileLabelsTest {
     @Test
     fun firstCompactExponentTable() {
         // Density 1, exponents up to 2^17; Classic r = 0.14, Neon r = 0.18.
-        for ((skin, table) in listOf(ClassicLightSkin to FIRST_COMPACT, NEON_SKIN to NEON_FIRST)) {
+        for ((skin, table) in
+            listOf(ClassicLightSkin to FIRST_COMPACT, NeonLightSkin to NEON_FIRST)) {
             for ((n, row) in table) {
                 for ((i, board) in COMPACT_BOARDS.withIndex()) {
                     val tile = boardGeometry(n, board.dp, skin, 1f).tilePx
@@ -174,19 +174,5 @@ class TileLabelsTest {
 
         /** The same table for Neon: only 8×8 at 481 dp differs (2^17 "128K"). */
         val NEON_FIRST: Map<Int, List<Int?>> = FIRST_COMPACT + (8 to listOf(10, 10, 14, 17, null))
-
-        val NEON_SKIN =
-            TileSkin(
-                id = "neon-test",
-                gapRatio = 0.18f,
-                radiusFraction = 0.22f,
-                radiusMin = 4.dp,
-                radiusMax = 34.dp,
-                numeralWeight = 900,
-                numeralRond = 100f,
-                titleColor = Color.Black,
-                boardInsetWell = true,
-                tileOutline = null,
-            )
     }
 }

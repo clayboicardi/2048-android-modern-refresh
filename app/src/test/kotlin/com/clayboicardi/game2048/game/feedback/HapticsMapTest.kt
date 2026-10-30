@@ -150,7 +150,8 @@ class HapticsMapTest {
     /** F14-AC6, AC-HAP-2 */
     @Test
     fun hapticsOffSuppressesEverything() {
-        // The Settings switches of AC-HAP-2 arrive with the Settings screen (M4, AC-HAP-4).
+        // The Settings switches of AC-HAP-2 are checked on the Settings screen (AC-HAP-4,
+        // SettingsScreenTest.switchesFireToggleHaptics).
         val over = Case(MotionFixtures.FIX_OVER_MERGE_4, Direction.LEFT, MoveHaptic.MERGE)
         val cases = listOf(over) + suite(newBestSize = NEW_BEST_N).drop(1)
         val fixture =

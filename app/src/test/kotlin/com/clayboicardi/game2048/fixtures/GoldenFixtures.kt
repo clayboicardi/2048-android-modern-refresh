@@ -15,9 +15,9 @@ import com.clayboicardi.game2048.engine.Snapshot
 /**
  * The fixtures of DESIGN_SYSTEM.md §10.3. Every game fixture is a `SavedGame` with `gameId = 1` and
  * empty `pendingFinalizations`, and `FIX_RECORDS` has an empty `lastFinalizedGameId` (D-044); a
- * test that needs other identities uses `copy(gameId = …)`. M2 holds the fixtures that the M2 tests
- * name; M3 part 1 adds the rest of the table. Values the table leaves open are chosen here and
- * named in each KDoc.
+ * test that needs other identities uses `copy(gameId = …)`. M2 added the fixtures that the M2 tests
+ * name and M3 part 1 the rest of the table. Values the table leaves open are chosen here and named
+ * in each KDoc.
  */
 object GoldenFixtures {
     /**

@@ -56,7 +56,7 @@ import kotlinx.coroutines.launch
  * colours are shown on F0. With a `LocalMotionProbe`, the fraction is its palette reader, the
  * crossfade one of its running readers and the crossfade's first frame its `paletteOriginMs`.
  */
-@Suppress("LongParameterList") // D-248: the M4.2 signature, one parameter per appearance input
+@Suppress("LongParameterList") // D-248: the GameTheme signature, one parameter per appearance input
 @Composable
 fun GameTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

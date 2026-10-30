@@ -37,8 +37,8 @@ fun viewUrlIntent(url: String): Intent = Intent(Intent.ACTION_VIEW, url.toUri())
 /**
  * Starts [intent] from [context] and returns `true`, or returns `false` and starts nothing when no
  * activity handles it (`ActivityNotFoundException`; D-009, FEATURES.md F11 item 6, F25). A context
- * that is not an activity starts it in a new task. It never resolves the intent through
- * `PackageManager` first (D-134).
+ * that is not an activity starts it in a new task. It never resolves the intent through the package
+ * manager first (D-134).
  */
 fun startIntent(context: Context, intent: Intent): Boolean {
     if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

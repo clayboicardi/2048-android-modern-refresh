@@ -138,6 +138,7 @@ import com.clayboicardi.game2048.game.overlay.WIN_CARD_TAG
 import com.clayboicardi.game2048.game.overlay.sizeRowTag
 import com.clayboicardi.game2048.menuItemTag
 import com.clayboicardi.game2048.screenTag
+import com.clayboicardi.game2048.stats.STATS_RESET_TAG
 import com.clayboicardi.game2048.testing.FakeAnimatorScaleSource
 import com.clayboicardi.game2048.testing.FakeClock
 import com.clayboicardi.game2048.testing.FakeHapticFeedback
@@ -182,7 +183,7 @@ import org.robolectric.shadows.ShadowLooper
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Suppress("LargeClass") // FEATURES.md §8 puts every GameScreen criterion of M3 and M4 in this class
+@Suppress("LargeClass") // FEATURES.md §8 puts every GameScreen criterion in this one class
 class GameScreenTest {
     @get:Rule val compose = createComposeRule()
     @get:Rule val tmp = TemporaryFolder()
@@ -1653,6 +1654,62 @@ class GameScreenTest {
         }
     }
 
+    /** F08-AC24 */
+    @Test
+    fun bestChipShowsCurrentScoreAfterStatisticsReset() {
+        rig(GoldenFixtures.FIX_MID_4, records = GoldenFixtures.FIX_RECORDS).use { rig ->
+            var dispatcher: OnBackPressedDispatcher? = null
+            compose.setContent {
+                dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+                RigContent(rig)
+            }
+            rig.awaitReady(compose)
+            compose.waitForIdle()
+            // A move first: the header the player leaves is a Full-motion move's header.
+            rig.playOneMove()
+            compose.waitForIdle()
+            val score = rig.vm.header.value.score
+            val moveId = rig.vm.board.value.moveId
+            assertBestChip("before the reset", FIX_RECORDS_BEST_4)
+
+            compose.onNodeWithTag(MORE_TAG).performClick()
+            compose.waitForIdle()
+            compose.onNodeWithTag(menuItemTag(StatsKey)).performClick()
+            compose.waitForIdle()
+            compose.onNodeWithTag(STATS_RESET_TAG).performClick()
+            compose.waitForIdle()
+            compose.onNodeWithTag(DIALOG_CONFIRM_TAG).assert(hasText("Reset")).performClick()
+            compose.waitForIdle()
+            compose
+                .onNodeWithTag(DIALOG_CONFIRM_TAG)
+                .assert(hasText("Reset everything"))
+                .performClick()
+            compose.waitForIdle()
+            assertThat(rig.container.recordsRepository.state.value.sizes).isEmpty()
+            checkNotNull(dispatcher).onBackPressed()
+            compose.waitForIdle()
+
+            compose.onNodeWithTag(BOARD_TAG).assertIsDisplayed()
+            assertBestChip("after the reset", score)
+            assertWithMessage("the board after the reset: no new move")
+                .that(rig.vm.board.value.moveId)
+                .isEqualTo(moveId)
+        }
+    }
+
+    /** The BEST chip shows [best]: its drawn digits, its description and the probe's value. */
+    private fun assertBestChip(label: String, best: Long) {
+        assertWithMessage("$label: Best digits")
+            .that(drawnDigits(BEST_TAG).joinToString("") { it.first })
+            .isEqualTo(best.toString())
+        assertWithMessage("$label: Best description")
+            .that(compose.onNodeWithTag(BEST_TAG).fetchSemanticsNode().config[CONTENT_DESCRIPTION])
+            .containsExactly("Best $best")
+        assertWithMessage("$label: displayed best")
+            .that(checkNotNull(probe.snapshot().header).displayedBest)
+            .isEqualTo(best)
+    }
+
     /** F21-AC10 */
     @Test
     fun navigationIsInstantWhenMotionOff() {
@@ -2771,6 +2828,9 @@ private val CARD_BOARD_INSET = 8.dp
 private const val PX = 0.5f
 
 private const val SHARE = "Share"
+
+/** `GoldenFixtures.FIX_RECORDS`' 4×4 best score. */
+private const val FIX_RECORDS_BEST_4 = 24_680L
 
 /** The share emoji of FEATURES.md F10 (each one code point). */
 private val EMPTY = String(Character.toChars(0x2B1C))

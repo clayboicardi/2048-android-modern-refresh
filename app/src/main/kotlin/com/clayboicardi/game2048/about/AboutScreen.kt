@@ -68,7 +68,7 @@ fun aboutReleaseTag(index: Int): String = "about:release:$index"
  * (at most `ContentMaxWidth` wide, the scaffold's column):
  * - the header: the app icon composed from its two adaptive layers at `AboutIcon`, "2048" in the
  *   title numerals at `AboutTitle` in `skin.titleColor`, and `about_version` "Version 3.0.0
- *   (30000)" from `BuildConfig.VERSION_NAME` and `VERSION_CODE` (no `PackageManager`, D-134);
+ *   (30000)" from `BuildConfig.VERSION_NAME` and `VERSION_CODE` (not the package manager, D-134);
  * - What's new: every [CHANGELOG] entry, newest first, titled with its versionName, then bullets;
  * - Source code: a link row to the repository through `rememberIntentLauncher`, which shows
  *   `link_open_failed` in this screen's snackbar host when no app can open it (F25-AC4);
@@ -241,9 +241,9 @@ private fun ReleaseTitle(text: String, modifier: Modifier = Modifier) {
 
 /**
  * A section header of How to play, About and Licenses (DESIGN_SYSTEM.md §3.5, §6.10–§6.12): [text]
- * in `GameTextStyles.sectionHeader` (`titleSmallEmphasized`) and `primary`, 16 dp from the start,
- * 24 dp below the previous row and 8 dp above the next, spoken as a heading (as Settings' headers,
- * §6.8).
+ * in `GameTextStyles.sectionHeader` (the emphasized small title style) and `primary`, 16 dp from
+ * the start, 24 dp below the previous row and 8 dp above the next, spoken as a heading (as
+ * Settings' headers, §6.8).
  */
 @Composable
 internal fun InfoSectionHeader(text: String, modifier: Modifier = Modifier) {
@@ -277,7 +277,7 @@ internal fun InfoBody(text: String, modifier: Modifier = Modifier) {
 
 /**
  * The `a11y_action_open` ("Open") click label of a link row (DESIGN_SYSTEM.md §6.8, §6.11): it adds
- * only the label to the row's own click action, which `ListItem(onClick)` provides.
+ * only the label to the row's own click action, which the clickable list item provides.
  */
 private fun Modifier.openLink(label: String): Modifier = semantics {
     onClick(label = label, action = null)

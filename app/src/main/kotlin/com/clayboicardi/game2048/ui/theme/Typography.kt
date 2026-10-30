@@ -13,7 +13,7 @@ import androidx.compose.ui.text.TextStyle
  * outside `ui/theme` and `ui/components` reads them only through these wrappers, so PLAN.md §5.7's
  * A3 check (`Emphasized\b`) stays clean and a 1.4 fallback touches this file only.
  *
- * M4.1 contract (D-248); M4.2 owns this file and may add to it.
+ * M4.1 contract (D-248).
  */
 object GameTextStyles {
     /** Section headers of Settings, How to play, About and Licenses (`titleSmallEmphasized`). */

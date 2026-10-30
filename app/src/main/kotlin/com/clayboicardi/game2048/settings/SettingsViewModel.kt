@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
  * contrast (the High-contrast row's lock). Entry-scoped: `container.settingsViewModelFactory()`
  * inside the `SettingsKey` entry. A lock never rewrites the stored value (F11 item 5).
  *
- * M4.1 contract (D-248): the constructor is fixed; M4.4 owns the members below and may add to them.
+ * M4.1 contract (D-248): the constructor is fixed.
  */
 class SettingsViewModel(
     private val repository: SettingsRepository,

@@ -254,7 +254,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-247 | Quality | F03-AC12 reads "no confetti particle" (D-187's one canvas is always composed); AC-SCALE-3 also compares the live confetti count with the burst stepped at scale 2 on every frame; F21-AC10's "next frame" is the first frame `NavDisplay` composes Settings, at most two frames after the tap |
 | D-248 | Architecture | M4 contracts: `App`, `AppNavHost` and `GameScreen` take the container; `AppViewModel.appearance` with `lastBoardSize`; the contrast and system-bar seams; entry ViewModel constructors; `GameFonts` and `GameTextStyles` as the only numeral and emphasized styles; `PlainRow`, `SubScreenScaffold` actions and snackbars, `openUrl`; the eight M4 icons; ownership exceptions |
 | D-249 | Adaptive layout | More moves to the size chip's header row in STACKED and SCROLL (40 dp container, 48 dp target); the controls bar is Undo and New game at 1 : 1; the COMPACT size chip drops its grid icon; F18-AC16 checks one-line labels |
-| D-250 | Visual design | On the selected size row the "In progress" pill is `secondary` / `onSecondary` (≥ 4.0:1 boundary, ≥ 6.4:1 text); the row's text is already `onSecondaryContainer` at full emphasis |
+| D-250 | Visual design | On the selected size row the "In progress" pill is `secondary` / `onSecondary` (≥ 4.0:1 boundary, ≥ 6.4:1 text); the row's text is already `onSecondaryContainer` at full emphasis; the check is `primary` (D-261) |
 | D-251 | Visual design | No crossfade on restore (Motion Off until the game is ready); the crossfade also lerps the title colour and tile outlines; the Neon well over the board and cells; the font's output sha256 and CRLF OFL file; the subset's 1.252 em score line makes the score chip about 67 dp, so rendered boards come from the measured chrome |
 | D-252 | Adaptive layout | A motion-level change composes the arrangement and its presentation scope anew (no double offset from `animateBounds`, no replay); the pad leaves on F0; AC-LAYOUT-1, F18-AC6, F18-AC12 and the traversal as tested; the blank status line hidden from accessibility and a repeated status read again; the game-over card wraps digits and stacks its boxes and New game rather than cut them; the touch-target gate skips clickables scrolled out of view |
 | D-253 | Settings | F11-AC2 under Motion Off; switch rows keep unselected colours; `ChoiceDialog` takes an `ImmutableList` and an `optionExtra`; `openAppLanguageSettings(context, launch)`; Statistics formats per locale in `StatsUi` |
@@ -264,6 +264,11 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-257 | Scope | No Google Play listing (owner, 2026-10-29); an F-Droid submission follows after the execution PR merges. The listing tree stays store-neutral and F-Droid-compatible; no AAB, upload key, Play Console or Data safety files; no text implies a Play listing |
 | D-258 | Localization | Every `values-xx/strings.xml` declares `xmlns:tools` and gives its `in_progress` `tools:override="true"` (Lint `PrivateResource` reports a locale override of compose-ui's private string too); locale files stay comment-free; no-break spaces in string resources are the escape `\u00A0`, in store texts the U+00A0 character |
 | D-259 | Localization | Chip labels stay within 12 characters: fr and lt "New best" become "Record battu" and "Rekordas!"; fa "Keep going" writes its ezafe; `TranslationQualityTest` gains `chipLabelsAtMostTwelveCharacters`; the `in_progress` context says ≤ 12 |
+| D-260 | Process | M6 close-out: the last milestone commit, then the owner's independent review and the final Codex loop; the completeness bar (A12 `missing=0`, no placeholder, no temporary suppression, every check assertion active, every exit criterion with evidence); A3/A7 comment hits reworded, A8 lists file-level suppressions too and A10 compares definitions with calls; the probe on the candidate commit; no Play-only artifact; device-only checks as an owner checklist, never marked passed |
+| D-261 | Process | Record corrections: D-250's check is `primary`; the locale goldens restate the Pixel 7 window in their qualifier call; store screenshot 2's board is 328 dp; L-OI-13 resolved by the M5 fallback, with a regression test; the missing back-notes |
+| D-262 | Accessibility | A clickable that the touch-target gate skips as scrolled away is checked after it is scrolled in: `statisticsGolden` scrolls each Statistics tab into view after its capture and runs `assertTouchTargets()` |
+| D-263 | Localization | lt `new_best_label` "Rekordas!" keeps its exclamation mark as the one exception to §1.7 rule 3, because lt `best_label` is "Rekordas" and the label must change when the moment fires |
+| D-264 | Data | The header's Best and a shown card's Best follow a records change that comes without a move (Reset statistics): `GameViewModel` collects `records.state` and replaces only `best`, so nothing replays and nothing is saved |
 
 ---
 
@@ -946,7 +951,7 @@ detekt = { id = "dev.detekt", version.ref = "detekt" }
 - **Rationale:** a tile composes once, and per-frame work stays in the layout and draw phases (research/04 §4.1–4.2, §4.5).
 - **Rejected:** a single-Canvas board (loses semantics and keys); `LookaheadScope` for tiles; `graphicsLayer` translation (frame-rate voting, research/04 §4.2).
 - **Source:** [RESEARCH] research/04 §4.
-- **Note:** Clarified by D-182; amended by D-187.
+- **Note:** Clarified by D-182; amended by D-187; clarified by D-228 (scale and alpha in the placement layer).
 
 #### D-026 — Compose and M3 API usage policy
 - **Decision:**
@@ -1307,7 +1312,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - a single recovery entry overwritten by the next New game (the Codex r1 design): a records write that failed, followed by a New game from a score-0 game before the next load, dropped the counted game;
   - an unbounded entry list: the cap of 16 with in-memory counting and retries keeps the file bounded (D-046) and loses an entry only when `records.json` cannot be written at all.
 - **Source:** [ORCH] O7, O8 · [RESEARCH].
-- **Note:** Clarified by D-198, D-218.
+- **Note:** Clarified by D-198, D-218, D-264.
 - **Amended in plan review (Codex r1):** added the finalization identity, the idempotent finalization, the `previousFinalization` recovery entry with the R1/R2 load-time recovery, and Reset keeping `lastFinalizedGameId`. Before, a kill between New game's records and game writes either restored an already counted game, which D-198's fold and the next New game then counted again, or lost the old game's stats.
 - **Amended in plan review (Codex r2):** the single `previousFinalization` became `pendingFinalizations`, a list carried by every replacement until the records file is known to hold each entry (durable success reported by the writer), capped at 16 with the overflow rule above; R1 and D-198's fold apply every entry in id order; New game and pause retry a failed records write (D-043). Before, if New game's records write failed with the swallowed `IOException` and the player started New game again before a move, the second New game set the entry to absent (the score-0 game was not counted) and overwrote the only durable copy, so after a relaunch neither file held the first game's finalization.
 
@@ -1443,7 +1448,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - research/04 §4.4 (120 ms auto-repeat).
 - **Rejected:** a separate gamepad button mapping (TV is out of scope).
 - **Source:** [ORCH] O3 · [RESEARCH].
-- **Note:** Amended by D-199; extended by D-203.
+- **Note:** Amended by D-199; extended by D-203; clarified by D-222 (input limits in `GameMotion.Input`), D-227 and D-240 (focus visuals in keyboard input mode only).
 
 #### D-054 — Input during overlays; Back
 - **Decision:**
@@ -1509,7 +1514,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/04 §10.1–10.4.
 - **Rejected:** the legacy timeline (pop and spawn from scale 0 after a 100 ms delay; research/04 §1).
 - **Source:** [RESEARCH].
-- **Note:** Extended by D-183.
+- **Note:** Extended by D-183; clarified by D-224 (drawn flips inside the due frame's callback).
 
 #### D-062 — Interruption
 - **Decision.** When a new move commits:
@@ -1575,7 +1580,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/04 §10; research/07 D9.
 - **Rejected:** the legacy 1200 ms overlay delay; the experimental `MaterialShapes` (D-012).
 - **Source:** [ORCH] O4, O12 · [RESEARCH] research/04 §10.
-- **Note:** Clarified by D-182, D-187, D-200; extended by D-183; technical correction TC-7.
+- **Note:** Clarified by D-182, D-187, D-200, D-222, D-224; extended by D-183; technical correction TC-7.
 - **Amended in plan review (Codex r1):** the layout bullet now limits `animateBounds` to changes within one arrangement, following D-095's amendment. Before, it read "re-layout between modes", which an arrangement switch cannot animate.
 
 #### D-065 — Haptic map
@@ -1606,7 +1611,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - research/04's ≥ 128 threshold, Subtle/Full levels, and `ToggleOff` on undo;
   - stacking several haptics on one move.
 - **Source:** [ORCH] O5.
-- **Note:** Extended by D-185 (from origin; no invalid-move haptic below API 30).
+- **Note:** Extended by D-185 (from origin; no invalid-move haptic below API 30); clarified by D-224 (the nudge's `Reject` fires on its first animation frame).
 
 #### D-066 — Haptic implementation rules
 - **Decision:**
@@ -1749,7 +1754,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - A digit subset is about 18 KB (research/04 §9.1).
 - **Rejected:** Clear Sans (no `tnum`, Latin only; research/04 §9.2); Inter for all UI text; downloadable fonts.
 - **Source:** [ORCH] O6 · [RESEARCH]. O6's "tile numerals + title" is read to include every digit-only game numeral listed under **Usage**, because they need `tnum` and carry no translated text (OI-3, settled).
-- **Note:** Extended by D-251 (the subset's output pin and its 1.252 em score line).
+- **Note:** Clarified by D-226 (the Game title is a game numeral); extended by D-251 (the subset's output pin and its 1.252 em score line).
 
 #### D-077 — Tile label sizing and compact labels
 - **Decision.** Font size in **dp** (it ignores `fontScale`) as a fraction of the tile side `t`, with letter spacing −0.02 em and `LineHeightStyle(Center, Trim.Both)`:
@@ -1810,7 +1815,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/04 §6.3; research/05 §4.21 (TalkBack consumes swipes).
 - **Rejected:** per-tile semantics (tiles are transient during animation, research/04 §6.3); swipe-only play under TalkBack.
 - **Source:** [RESEARCH].
-- **Note:** Amended by D-249 (More is the last item of the header group).
+- **Note:** Clarified by D-228 (tiles carry no semantics of their own); amended by D-249 (More is the last item of the header group).
 
 #### D-081 — Announcements
 - **Decision:**
@@ -1825,7 +1830,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** `announceForAccessibility` is `@Deprecated` in API 36 and 37 (research/04 §2, §6.3).
 - **Rejected:** research/04's Brief/Detailed verbosity setting (deferred).
 - **Source:** [RESEARCH].
-- **Note:** Amended by D-202; extended by D-252 (a repeated status is read again).
+- **Note:** Amended by D-202; clarified by D-240 (focus visuals in keyboard input mode only); amended by D-249 (traversal: More is the last item of the header group); extended by D-252 (a repeated status is read again).
 
 #### D-082 — TalkBack direction pad
 - **Decision:**
@@ -1857,7 +1862,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/04 §6.3–§6.5 (48 dp; non-linear font scaling to 200 %); WCAG 1.4.11. At `fontScale` 2.0, 14 sp is 26 dp, so a 9-digit value at the 0.665 em digit advance is 156 dp wide before padding.
 - **Rejected:** scaling tile numerals with `fontScale` (they already fill the fixed geometry, research/04 §6.5); a minimum below 14 sp, compact K/M scores and ellipsized values for long scores (the exact score is the point of the chip, and K/M would differ from the spoken value).
 - **Source:** [RESEARCH] research/04 §6.3–6.5.
-- **Note:** Extended by D-205.
+- **Note:** Extended by D-205; clarified by D-227 (the focus ring in keyboard input mode) and D-238 (a sheet's scrim in the touch-target check).
 - **Amended in plan review (Codex r2):** added the score-value fallback chain and its measurement. Before, a value that needed less than 14 sp stayed at 14 sp and its chip widened only "up to its slot", a width no document defined, and the measurement probe sized the header with scores of 0. At `fontScale` 2.0 an 8×8 game's 9-digit Score and Best need about 367 dp side by side (2 × (156 + 24) + 8, before the title or size chip) in a 328 dp header (360 dp window), so they clipped. F17-AC22 and F17-AC23 were added.
 - **Amended in plan review (Codex r2), game-over card:** the game-over card's Score and Best values (Regular and Compact) follow the same rule: one fitted size from 14 sp up to the card's maximum (40 sp for the Regular score, 24 sp for the boxes) for the value's width, then wrapping between digits at 14 sp (`scoreLines`). `Text(autoSize = …)` with `maxLines = 1` is not used for any score value, because at its minimum it clips (F17-AC24).
 
@@ -2075,6 +2080,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/07 G7, U13.
 - **Rejected:** using real `ar` for bidi goldens (not a shipped locale; research/07 C17).
 - **Source:** [RESEARCH].
+- **Note:** Clarified by D-261 (the locale goldens restate the Pixel 7 window in their qualifier call).
 
 ---
 
@@ -2088,6 +2094,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** debug and release install side by side; AGP 9 turns `resValues` off by default (research/03 §1.2), so the label uses a source-set override.
 - **Rejected:** a translated or localized-digit label (U2); `resValue` for the debug label (needs `buildFeatures.resValues`).
 - **Source:** [USER] U2 · [ORCH] O14.
+- **Note:** Clarified by D-226 (the Game title is built in code, not from `app_name`).
 
 #### D-111 — Launcher icon
 - **Decision.** "2048 tile" identity. The adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml` and `ic_launcher_round.xml`) has these layers:
@@ -2126,7 +2133,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
   - The listing-only texts are mistranslations such as "harbour" and "robot" (research/01 §6).
 - **Rejected:** keeping `metadata/` (fastlane `supply` reads only the fastlane path); keeping the 16 listing-only locales.
 - **Source:** [ORCH] O13.
-- **Note:** Extended by D-190.
+- **Note:** Extended by D-190; clarified by D-257 (no Google Play listing; the tree stays store-neutral and F-Droid-compatible).
 
 #### D-114 — Store text
 - **Decision.** Each locale directory contains:
@@ -2149,7 +2156,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/01 §6 (limits, obsolete copy).
 - **Rejected:** reusing the legacy texts ("port", "WebView", the 3-second long touch; research/01 §6).
 - **Source:** [ORCH] O13 · [RESEARCH].
-- **Note:** Extended by D-190.
+- **Note:** Extended by D-190; clarified by D-257 (no text implies a Google Play listing).
 
 #### D-115 — Store graphics from code
 - **Decision.** `app/src/test/kotlin/com/clayboicardi/game2048/store/StoreAssetsTest.kt` (Robolectric, SDK 36) writes into `fastlane/metadata/android/en-US/images/`. It is excluded from normal test runs and included only when `-PrecordStoreAssets=true` is passed. It produces:
@@ -2183,6 +2190,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** research/01 §6.8.
 - **Rejected:** keeping the legacy README (a dead Travis badge; it advertises someone else's listing).
 - **Source:** [RESEARCH].
+- **Note:** Clarified by D-257 (no store badges; no text implies a Google Play listing).
 
 ---
 
@@ -2387,7 +2395,7 @@ lint {
 - **Rationale:** research/06 §2.1; research/07 C22 (`MissingTranslation` is an error).
 - **Rejected:** a lint baseline (fresh code starts at zero findings, research/06 §2.1); informational `MissingTranslation`.
 - **Source:** [ORCH] O16.
-- **Note:** Clarified by D-208, D-232.
+- **Note:** Clarified by D-208, D-232, D-239.
 
 #### D-143 — Kotlin compiler strictness
 - **Decision:**
@@ -2672,7 +2680,7 @@ jobs:
 - **Rationale:** research/06 §6; research/07 G2, G21.
 - **Rejected:** one big commit (unreviewable; it loses the milestone gates).
 - **Source:** [ORCH] O17 · [RESEARCH].
-- **Note:** Refined by D-177, D-193, D-211.
+- **Note:** Refined by D-177, D-193, D-211, D-260 (the M6 close-out).
 
 #### D-163 — Local gate per push
 - **Decision:**
@@ -3019,6 +3027,7 @@ jobs:
   - A compile probe showed `delayed()` is internal in animation-core 1.12.1, although its bytecode looks public.
 - **Rejected:** `kotlinx.coroutines.delay` for visible state; flip-started springs as the default; a per-move impulse tier.
 - **Source:** [ORCH] O4 · [RESEARCH] MOTION_SPEC.md §0–§3, §7; research/04 §10.
+- **Note:** Clarified by D-224 (drawn flips inside the due frame's callback); extended by D-236.
 
 #### D-184 — Level-dependent `MotionScheme`; platform dialog and snackbar motion (amends D-026; clarifies D-063)
 - **Decision:**
@@ -3082,7 +3091,7 @@ jobs:
   - On 360×640 the gap between the board and the controls is 24 dp, so the earlier placement rules could not both hold.
 - **Rejected:** showing it once per game; a persisted "hint seen" flag; covering the controls bar.
 - **Source:** [ORCH] orchestrator brief (undo-hint snackbars) · [RESEARCH] DESIGN_SYSTEM.md §5.4, §7.6.
-- **Note:** Extended by D-231.
+- **Note:** Clarified by D-222 (the particle seed in `HeaderUi`); extended by D-231.
 
 #### D-187 — Effect layers and the "+N" pill (amends D-025; clarifies D-064)
 - **Decision:**
@@ -3181,6 +3190,7 @@ jobs:
 - **Rationale:** it checks D-134's hygiene without making third-party non-determinism a merge blocker (QUALITY.md V11).
 - **Rejected:** a gating reproducibility check.
 - **Source:** [ORCH] O16 · [RESEARCH] QUALITY.md §1.17.
+- **Note:** Clarified by D-260 (it runs on the M6 candidate commit; its line goes into the M6 commit body and the PR body).
 
 #### D-192 — Codex review rules heading (clarifies D-171)
 - **Decision:**
@@ -3394,6 +3404,7 @@ jobs:
 - **Rationale:** DESIGN_SYSTEM.md DS-OI-5; MOTION_SPEC.md §8.3 (the test clock advances in 16 ms frames).
 - **Rejected:** renaming the filmstrip goldens.
 - **Source:** [ORCH] O16 · [RESEARCH] DESIGN_SYSTEM.md §10.4.
+- **Note:** Clarified by D-261 (the locale goldens' qualifier call restates the Pixel 7 window).
 
 #### D-205 — Contrast method and touch-target rule (clarifies D-072, D-083; extends D-084, D-085)
 - **Decision:**
@@ -3404,7 +3415,7 @@ jobs:
   - ATF's size-only touch-target check is vacuous under Compose's 48 dp touch-bounds expansion (QUALITY.md V6).
 - **Rejected:** the quantized research/04 numbers as the oracle; ATF alone for D-084.
 - **Source:** [ORCH] O16 · [RESEARCH] DESIGN_SYSTEM.md §2.13; QUALITY.md §1.12, V6.
-- **Note:** Extended by D-252 (the touch-target gate skips clickables scrolled out of view).
+- **Note:** Clarified by D-238 (a sheet's scrim is checked for size only); extended by D-252 (the touch-target gate skips clickables scrolled out of view) and D-262 (they are checked after they are scrolled in).
 
 #### D-206 — High-contrast empty cells (extends D-073)
 - **Decision:** with high contrast on, the empty-cell `drawBehind` pass also strokes each empty cell:
@@ -3498,6 +3509,7 @@ jobs:
 - **Rationale:** sequencing; a pushed recovery point in the largest milestone; early detection of missing AC coverage.
 - **Rejected:** a single M3 commit.
 - **Source:** [ORCH] O17 · orchestrator directive (plan review, 2026-10-28).
+- **Note:** Refined by D-260 (the M6 close-out).
 
 ---
 
@@ -3685,6 +3697,7 @@ jobs:
 - **Rationale:** the board holds focus whenever Game is shown, so with the rule as written a touch player would always see a ring around the board, and every golden would show it. Compose switches to keyboard input mode on the first key event and back on touch, the same rule as Android's own focus highlights, so a keyboard, D-pad or gamepad player sees the ring from the first key press with D-084's ≥ 3:1 contrast.
 - **Rejected:** requesting the board's focus only after a key event (keys would not reach the board first, D-053, F16-AC7); a ring in every input mode.
 - **Source:** [ORCH] O17 (D-173 change control, M3 part 1 integration).
+- **Note:** Extended by D-240 (game buttons too).
 
 #### D-228 — Tiles set scale and alpha in their placement layer; the nudge runs on `AnimationState` (amends ARCHITECTURE.md §5.3, §5.7; clarifies D-025, D-080)
 - **Decision:**
@@ -3792,7 +3805,7 @@ jobs:
   - A stub sub-screen without a title and a back arrow would not satisfy F21 item 3, which M3 tests.
 - **Rejected:** a fourth part 2 work package (PLAN.md §5.3 allows three at once); passing `AppViewModel` as a placeholder type; reading the six game files from composition; exposing `SheetState` (it carries `ExperimentalMaterial3Api`); stub screens with hard-coded titles (AGENTS.md).
 - **Source:** [ORCH] O17 (D-173 change control, M3 part 2 contracts).
-- **Note:** Amended by D-245 (the sheet's reading waits for the game to be ready); extended by D-248 (the M4 contracts).
+- **Note:** Extended by D-237 (the win overlay's spawn cell); amended by D-245 (the sheet's reading waits for the game to be ready); extended by D-248 (the M4 contracts).
 
 #### D-237 — The win overlay carries the winning spawn cell (clarifies MOTION_SPEC.md §3.12; amends ARCHITECTURE.md §4.7; extends D-236)
 - **Decision:**
@@ -3943,11 +3956,12 @@ jobs:
 #### D-250 — The board-size sheet's selected row keeps its pill visible (amends DESIGN_SYSTEM.md §6.7)
 - **Decision:**
   - On the selected (current-size) row, whose container is `secondaryContainer`, the "In progress" pill is `secondary` with `onSecondary` text: text 6.42 / 7.72 / 6.43 / 7.71:1 and boundary against the row 4.98 / 5.31 / 4.00 / 5.11:1 in Classic light / Classic dark / Neon light / Neon dark (DESIGN_SYSTEM.md §2.8 values, the §2.13 formula), so its text is above 4.5:1 and its shape above 3:1. On the other rows it stays `secondaryContainer` / `onSecondaryContainer`. Shape (`CircleShape`), padding (8 × 4 dp) and `labelMedium` are unchanged.
-  - The selected row's headline, supporting text and trailing check keep material3's selected colours, which are already `onSecondaryContainer` at full emphasis: in 1.5.0-beta02 `ListTokens.ItemSelectedLabelTextColor`, `ItemSelectedSupportingTextColor`, `ItemSelectedTrailingSupportingTextColor` and `ItemSelectedTrailingIconColor` are all `OnSecondaryContainer`, with no alpha (`javap -c` on `ListTokens`). The 4.6:1 measured on golden 42 is the Classic light pair itself (DESIGN_SYSTEM.md §2.9: `onSecondaryContainer` on `secondaryContainer` 4.60, as on Undo and the hint card), not a dimming, so `SelectableRow` sets no colours of its own.
+  - The selected row's headline and supporting text keep material3's selected colours, which are already `onSecondaryContainer` at full emphasis: in 1.5.0-beta02 `ListTokens.ItemSelectedLabelTextColor`, `ItemSelectedSupportingTextColor` and `ItemSelectedTrailingSupportingTextColor` are all `OnSecondaryContainer`, with no alpha (`javap -c` on `ListTokens`). The trailing check is the sheet's own `ic_check`, tinted `primary` as DESIGN_SYSTEM.md §6.7 specifies (corrected by D-261). The 4.6:1 measured on golden 42 is the Classic light pair itself (DESIGN_SYSTEM.md §2.9: `onSecondaryContainer` on `secondaryContainer` 4.60, as on Undo and the hint card), not a dimming, so `SelectableRow` sets no colours of its own.
   - Golden 42 (`sheet_boardsize_classic-light`) is re-recorded in M4.6 and Read.
 - **Rationale:** the pill and the selected row were both `secondaryContainer`, so the pill's shape disappeared on the 4×4 row of golden 42 (M3 part 2 goldens).
 - **Rejected:** a `surface` pill with a 1 dp `outline` border (`outline` on `secondaryContainer` is only 2.74–3.49:1, below 3:1 in three schemes; `surface` itself is 1.21–2.23:1); overriding the selected row's text with `onSurface` (it would differ from every other `secondaryContainer` surface of the app and from M3's selected list item); dropping the pill on the current size (F02-AC7 shows "In progress" on every unfinished size).
 - **Source:** [ORCH] O17 (D-173 change control, M4 contracts; orchestrator decision on the M3 part 2 goldens).
+- **Note:** Corrected by D-261 (the trailing check is `primary`).
 
 #### D-251 — Theming as built: no crossfade on restore, the crossfade's extent, the Neon well's order, the font's pins and its score line (amends MOTION_SPEC.md §3.14, §3.15, §8.2; DESIGN_SYSTEM.md §3.1, §4.7, §5.3, §7.2; L10N_STORE_LEGAL.md §0.3 item 8, §4.4; ARCHITECTURE.md §4.12, §10.3; FEATURES.md F18-AC10, F18-AC13, F18-AC14; MOTION_SPEC.md AC-LAYOUT-2, AC-LAYOUT-3; extends D-076, D-248)
 - **Decision:**
@@ -3982,6 +3996,7 @@ jobs:
 - **Rationale:** the motion re-key, the status line, the card's fit and the gate's scroll rule were found while integrating M4 (a layout test in the default window, ATF on golden 36, F17-AC24 and golden 19), and the presentation scope under the motion key and the repeated status in the M4 review; the rest is what M4-B built against D-188 and D-249, recorded where the specification said otherwise.
 - **Rejected:** keeping `animateBounds` attached at every level with a `snap()` spec under Reduced and Off (the snap lands one frame after F0, which AC-LAYOUT-1 forbids); dropping D-251's gate (a restored appearance would crossfade); fading the pad out over the returning controls bar; smaller label text in the Compact card.
 - **Source:** [ORCH] O17 (D-173 change control, M4 integration).
+- **Note:** Extended by D-262 (a clickable the touch-target gate skips is checked after it is scrolled in).
 
 #### D-253 — Settings and Statistics as built (amends FEATURES.md F11-AC2; DESIGN_SYSTEM.md §6.8, §7.5; L10N_STORE_LEGAL.md §1.13; ARCHITECTURE.md §10.3)
 - **Decision:**
@@ -4033,6 +4048,7 @@ jobs:
 - **Rationale:** the owner's distribution choice; D-113's tree is the metadata F-Droid reads from the repository, so keeping it store-neutral costs nothing and keeps the follow-up small.
 - **Rejected:** an AAB or Play upload path; Play Console or Data safety files; dropping the store graphics or the length limits (F-Droid shows the same graphics and texts).
 - **Source:** [USER] owner decision of 2026-10-29, relayed by the orchestrator · [ORCH] O17 (D-173 change control, M5 contracts).
+- **Note:** Clarified by D-260 (M6 adds no Play-only artifact and makes no store submission).
 
 #### D-258 — Locale-file conventions: every `in_progress` overrides compose-ui's private string; no-break spaces are written `\u00A0` (amends D-239; L10N_STORE_LEGAL.md §1.3 rule 6, §1.7 rule 8 and the fr row, §1.8 step 3)
 - **Decision:**
@@ -4055,6 +4071,74 @@ jobs:
 - **Rationale:** the label changes when a game beats its best, mid-game; a longer one widens the BEST chip or wraps it (DESIGN_SYSTEM.md §7.2), and the header re-lays out around it. Rule 7's 12 characters is what the de and ru labels ("Neuer Rekord", "Новый рекорд") already use, and the evidence above shows that at Pixel 7 width it leaves the title size and the header rows as they were.
 - **Rejected:** a recorded exception to rule 7 for fr and lt (the title would still shrink at Pixel 7 width when the moment fires); abbreviations such as "Nouv. record" or "Naujas rek."; lt "Naujas!" ("new!", which drops the record).
 - **Source:** [ORCH] O17 (D-173 change control, M5 integration).
+- **Note:** Amended by D-263 (lt "Rekordas!" is the one exception to L10N_STORE_LEGAL.md §1.7 rule 3).
+
+#### D-260 — M6 close-out: scope, the completeness bar, the audit as run and the owner's device checklist (refines D-162, D-211; clarifies D-191, D-257; amends PLAN.md §5.7 A8 and A10 and QUALITY.md §2.5)
+- **Decision:**
+  - **The last milestone.** M6 is one local commit, `M6: harden gates and close out the native rewrite` (PLAN.md §5.6), on top of `119c36a` (M5). It holds the M6.1 audit fixes, `scripts/repro-probe.sh` (M6.3), the M6.4 docs fixes and the carried items below. After its push the owner runs an independent review of the whole PR; its verified findings are fixed as `review(r<k>): …` commits (PLAN.md §6.10 rule 7); then the final Codex loop runs to the merge gate (D-166 b, D-168, D-196).
+  - **The completeness bar** at the M6 gate, each item shown in the M6 commit body:
+    1. The A12 script prints `missing=0`: every acceptance criterion that FEATURES.md §8 assigns to M0–M6 maps to the first KDoc line of a test method or to a named gate. FEATURES.md §8 assigns no new class to M6; the two criteria the M6 review adds, F08-AC23 and F08-AC24 (D-264), are M6 methods of the existing `GameViewModelTest` and `GameScreenTest`.
+    2. No placeholder remains: `git grep -n -I -E 'TODO|FIXME|STOPSHIP' -- app core scripts config gradle .github '*.kts'` prints only the forbidden-comment rule of `config/detekt/detekt.yml`; in particular no `TODO("M…")` remains.
+    3. No temporary suppression remains: every line of the A8 inventory carries a same-line reason that names a lasting cause, and none names a milestone or says "temporary" or "until". D-232's suppression is gone since M3 part 2. Lint's `disable` set is exactly D-142's four version checks, and there is no `lint.xml` and no baseline.
+    4. Every assertion of D-148 (items 1–7), D-152, D-179 and D-190 is present and runs: `check-apk.sh` applies all seven as D-148 defines them: items 1–3, 5 and 6 to both APKs, item 4 to the release APK and item 7 to the release runtime classpath; `check-metadata.sh` defines 15 `check_*` functions and calls each once; `check-test-counts.sh` applies the floors and G1–G5; `check-licenses.sh` covers the release runtime classpath. D-152's phase-in ends here.
+    5. Every exit criterion of PLAN.md §5.6 (QUALITY.md §7.2's M6 row and §7.4; success criteria S1–S15) appears in the M6 handoff with its evidence, or is named as the orchestrator's (S2, S3, S14, S15, the CI durations, the PR body and the Codex loop).
+  - **The audit as run** (PLAN.md §5.7). A3 and A7 print nothing only when no comment names the APIs they match: at M5 they printed comment lines only (`titleSmallEmphasized`, `displaySmallEmphasized` and `headlineSmallEmphasized` in KDoc, `ListItem(onClick)` in a KDoc of `AboutScreen.kt`, and six KDoc mentions of `PackageManager`). M6 rewords those comments without changing what they say, and the commands stay as written. A10's `grep -c '^check_'` counts the function definitions and the call lines together (30 at M5), so A10 compares the definitions, `grep -c -E '^check_[a-z_]+\(\) *\{' scripts/check-metadata.sh`, with the calls, `grep -c -E '^check_[a-z_]+( +#.*)?$' scripts/check-metadata.sh` (15 and 15 at M5), as PLAN.md §5.7 A10 now says. A8's `@Suppress\(` never matches a use-site-targeted annotation, so it missed the four file-level `@file:Suppress(` lines of the main sources (`GameLayout.kt`, `WindowMode.kt`, `NumeralFont.kt`, `Typography.kt`; 30 lines listed instead of 34). A8 is `git grep -n -E '@([a-z]+:)?Suppress\(|tools:ignore=' -- app core`, as PLAN.md §5.7 A8 and QUALITY.md §2.5 now say. Those four suppress file-scoped detekt rules (`MatchingDeclarationName`; `TooManyFunctions`' functions-per-file count), so the file is their narrowest scope (QUALITY.md §2.5). No other suppression form is used: no `@SuppressLint`, `@SuppressWarnings`, `noinspection` comment or `lint.xml`.
+  - **The reproducibility probe** (D-191) runs once, under the build lock, on the M6 candidate commit, after the checkout's release APK has been rebuilt for that commit (AGP's default VCS info puts the commit id in the APK, D-134). Its result line goes into the M6 commit body, with the candidate's SHA, and into the handoff for the PR body. The final commit changes only the candidate's message, so its tree is the probed tree. Differences are reported, not fixed (QUALITY.md §1.17).
+  - **Distribution** (D-257): M6 adds no Play-only artifact (no `bundleRelease` task or app bundle, upload key, Play Console, Data safety or content-rating file) and submits nothing to a store. The F-Droid submission follows after the merge.
+  - **Device-only checks.** This environment has no device or emulator (PLAN.md §1.4). The checks below go into the M6 handoff and the PR body's Notes as an owner checklist for the release APK of the `game2048-apks-<sha>` CI artifact, sideloaded (it installs beside the legacy app, D-005). No agent marks any of them as passed. The JVM tests that stand in for each are named beside it:
+    1. haptics on a real vibrator, Haptics On and Off: one effect per move by priority (win, new best, big merge, merge), the blocked-move effect on API 30 and later (D-185), nothing while Off (F14; D-065, D-066; JVM: `HapticsMapTest` and the `FakeHapticFeedback` timing tests);
+    2. predictive back on hardware (API 34 and later): the back preview and its cancel from each sub-screen, back from an open sheet or dialog, and no interception on the Game root (F21; D-094, D-054; JVM: `PredictiveBackTest`, `BackOnRootTest`);
+    3. frame timing on a physical phone: no visible jank while tiles slide and merge, during the win confetti and during the theme crossfade under Full motion (D-150; JVM: `TileRecompositionTest`, `BoardRecompositionBudgetTest` and `ConfettiSystemTest`'s CPU budget).
+    Optional owner checks: a TalkBack pass (a non-goal of this PR, PLAN.md §1.4), Immersive mode and display cutouts (F19, D-093), dynamic colour from a real wallpaper (D-074), the per-app language page on API 33 and later (D-102), backup and restore with `bmgr` (F29, D-048), and a hardware keyboard or D-pad (F16, D-053).
+  - **Carried items** from the M4 and M5 internal reviews, all in the M6 commit: D-261 (record corrections and back-notes), D-262 (the Statistics tabs' touch targets) and D-263 (the lt new-best label). Two need no decision: `BoardGeometryTest` and `TileLabelsTest` use the shipped `NeonLightSkin` instead of a hand-made copy, and `BoardGeometryTest` loses its stale "arrive in M4" comment; the da `settings` line gets back its legacy bytes, because L10N_STORE_LEGAL.md §1.8 step 3 keeps "the legacy `settings` line unchanged" and M5 re-indented it from 2 to 4 spaces.
+  - **Verification-pending items** (the last section of this file): items 1, 2 and 6 move to "Resolved during execution" with their evidence (the M0 CI run on `511aee7` compared the locally recorded golden and passed; the plan PR pushed `.github/workflows/ci.yml`; on the M6 sources `spotlessApply` run twice, then `spotlessCheck`, leaves the tree unchanged with ktfmt 0.65). Items 11 and 12 were settled on the plan PR's Codex loop, whose conversation records the outcome (QUALITY.md §7.3); the list points there. FEATURES.md OI-F13 is marked resolved at first use (Robolectric exposed every fact: `ManifestPolicyTest` since M4, `LocalizationTest.localeConfigListsTwentyOneLocales` since M5; the `aapt2` fallback was not used), and PLAN.md §10 and QUALITY.md's open-issues line name the settled items.
+- **Rationale:** the orchestrator's M6 brief of 2026-10-29. M6 closes the PR before an independent review and the final Codex loop, so every gate and every record must be complete and true as committed. Checks that cannot run here go to the owner as a checklist; they are not claimed.
+- **Rejected:** marking a device-only check as passed on the strength of its JVM substitute; accepting comment hits in A3 and A7 as "justified" (the audit asks each command to print nothing); narrowing the A3 and A7 patterns to skip comments (a call on a line with a trailing comment would then go unseen).
+- **Source:** [ORCH] orchestrator brief for M6 (2026-10-29) · [USER] owner decision of 2026-10-29 (D-257), relayed by the orchestrator · [ORCH] O17 (D-173 change control, M6 contracts; the A8 command, M6 review).
+
+#### D-261 — Close-out record corrections: D-250's check colour, the locale goldens' qualifier, store screenshot 2's board, L-OI-13 and the missing back-notes (corrects D-250; clarifies D-106, D-204; corrects DESIGN_SYSTEM.md §6.3a, §8.6; records L10N_STORE_LEGAL.md §1.12; resolves L10N_STORE_LEGAL.md L-OI-13; amends FEATURES.md §8 `LocalizationTest`)
+- **Decision:**
+  - **D-250's trailing check.** D-250 said the selected size row's trailing check keeps material3's selected colour, `onSecondaryContainer`. As built since M4, and as DESIGN_SYSTEM.md §6.7 specifies, `BoardSizeSheet.kt` tints `ic_check` with `colorScheme.primary`. On the row's `secondaryContainer` that is 5.18 / 5.30 / 4.81 / 5.10:1 in Classic light / Classic dark / Neon light / Neon dark (DESIGN_SYSTEM.md §2.8 values, §2.13 formula), above the 3:1 of a graphical object, and the check is decorative: the row is spoken as selected. The code, DESIGN_SYSTEM.md and golden 42 stand; D-250's text now says `primary`.
+  - **The locale goldens' qualifier** (L10N_STORE_LEGAL.md §1.12). Goldens 23–26 set their locale with one `RuntimeEnvironment.setQualifiers("+…")` call that also restates the Pixel 7 window (`"+en-rXA-w411dp-h914dp"`): each `+` call recomputes the window from its pixel size rounded down to whole dp, which lost about 1 dp, so the board no longer matched golden 3. `LocaleScreenshotTest` checks that each capture is the whole 411 × 914 dp display. The M5 review fix changed §1.12 and the test without an entry; this entry records it. D-106's pseudo-locales and D-204's qualifiers are otherwise unchanged.
+  - **Store screenshot 2's board** (DESIGN_SYSTEM.md §6.3a, §8.6). At `w360dp-h640dp` the STACKED board is 328 dp (984 of 1080 px at xxhdpi in `phoneScreenshots/2.png`), not 280 dp. The win card is Compact there all the same: the Regular layout is taller than its 312 dp budget (board − 16 dp, §6.3). Both lines now say 328 dp.
+  - **L-OI-13 is resolved.** M5 found that the JVM keeps the stress mark when it upper-cases Greek ("Ρεκόρ" → "ΡΕΚΌΡ") and applied the planned fallback: `chipLabelText` in `ui/components/ScoreCard.kt` removes U+0301 after upper-casing for `el` (M5 commit body). M6 adds the regression test `LocalizationTest.greekChipLabelsDropStressMarks`: it reads the el `score_label`, `best_label`, `new_best_label` and `best_tile` (the labels that `ScoreChipLabel` and the game-over card upper-case) and expects "ΣΚΟΡ", "ΡΕΚΟΡ", "ΝΕΟ ΡΕΚΟΡ" and "ΚΑΛΥΤΕΡΟ ΠΛΑΚΙΔΙΟ" (no U+0301 after NFD decomposition), and it checks that another locale keeps its accents (es `new_best_label` → "NUEVO RÉCORD"). L10N_STORE_LEGAL.md's L-OI-13 and the `LocalizationTest` rows of FEATURES.md §8 and ARCHITECTURE.md §10 say so.
+  - **Back-notes** (Conventions): the entries touched by D-222, D-224, D-226–D-228, D-236–D-240, D-249 (D-081) and D-257 (D-113, D-114, D-116) get the notes they lacked, and the entries touched by D-260–D-263 get theirs.
+- **Rationale:** the M4 and M5 internal reviews found these records out of step with the code, or untraced. The code is right in each case, so the records change.
+- **Rejected:** tinting the check `onSecondaryContainer` to match D-250's old text (it would differ from DESIGN_SYSTEM.md §6.7 and change golden 42 for no gain in contrast).
+- **Source:** [ORCH] O17 (D-173 change control, M6 contracts; carried P3 items of the M4 and M5 internal reviews).
+
+#### D-262 — Clickables that the touch-target gate skips are checked after they are scrolled in (extends D-252; amends QUALITY.md §1.12)
+- **Decision:**
+  - D-252's exemption stays: `assertTouchTargets()` skips a clickable that has a laid-out size but no visible bounds, which no touch can reach. D-252 expected such a clickable to be "checked in any screenshot where it is visible", but none is: golden 19 (`stats_classic-light`, Pixel 7) shows the tabs "All sizes" to "6×6", the first and the last partly, and the 7×7 and 8×8 tabs lie past the screen edge in every golden.
+  - `ScreensScreenshotTest.statisticsGolden`, after its capture, brings each of the seven tabs (`statsTabTag(0)` … `statsTabTag(6)`) into view with `performScrollTo()`, asserts that the tab's node then has visible bounds, and runs `assertTouchTargets()`. The capture comes first and is unchanged, so golden 19 keeps its bytes.
+  - Touch bounds are clipped to the row's viewport, so after a scroll the tab at the far edge can show only a sliver narrower than 48 dp, which is the scroll position and not a defect of that tab. If the whole-screen check fails only for such a sliver, the test uses an overload `assertTouchTargets(matcher)` in `testing/Accessibility.kt` instead: the size rule for the clickables that `matcher` selects (the scrolled-in tab, then fully visible) and the overlap rule between them and every other visible clickable. QUALITY.md §1.12's copy of `Accessibility.kt` follows the file. The evidence says which form the test uses.
+  - Every other clickable that the exemption skips in a screen-level golden test is checked the same way, in its own test method. The M6 integrator finds them with a temporary, uncommitted print in the exemption during one run of the screenshot classes; the evidence below lists them and the methods that now check them.
+- **Evidence:** M6 integration. One run of the four screenshot classes (`:app:testDebugUnitTest --tests '*ScreenshotTest*' -Proborazzi.test.verify=true`: `GameScreenshotTest` 14 methods, `LayoutScreenshotTest` 7, `LocaleScreenshotTest` 3, `ScreensScreenshotTest` 8, all green) with a temporary print in the exemption, not committed, which covered `assertTouchTargets()` and `assertDialogTouchTargets()`:
+  - `ScreensScreenshotTest.statisticsGolden`, the check after its capture: the 7×7 and 8×8 tabs (`statsTabTag(5)`, `statsTabTag(6)`; laid out 236 × 126 px, no visible bounds). They are the only clickables the exemption skipped in any method of the four classes; every sheet and dialog check skipped none.
+  - `statisticsGolden` now checks them: after its capture it scrolls each of the seven tabs in with `performScrollTo()`, asserts the tab's visible bounds, and runs the whole-screen `assertTouchTargets()`. At each scroll position the far-side tabs are skipped in turn (tabs 5 and 6 while tabs 0–4 are scrolled in, tabs 0 and 6 while tab 5 is, tabs 0 and 1 while tab 6 is), and each of them is checked at its own position. No partly visible tab was narrower than 48 dp at any position, so the whole-screen form passes and the `assertTouchTargets(matcher)` overload was not needed; `testing/Accessibility.kt` and QUALITY.md §1.12's copy of it are unchanged.
+  - Golden 19 (`stats_classic-light.png`) keeps its bytes: its Roborazzi result is `unchanged`, and the file is not modified.
+- **Rationale:** an exemption that no test ever lifts leaves a rule unchecked (D-171, verification integrity). Scrolling after the capture checks the real tab row without a new golden.
+- **Rejected:** a wider Statistics window or another golden of the scrolled row (it adds or changes goldens for a touch-target check); dropping the exemption (an off-screen tab's empty visible bounds would read as too small).
+- **Source:** [ORCH] O17 (D-173 change control, M6 contracts; carried P3 of the M4 internal review).
+
+#### D-263 — lt "Rekordas!" keeps its exclamation mark, the one exception to punctuation parity (amends D-259; L10N_STORE_LEGAL.md §1.7 rule 3)
+- **Decision:**
+  - lt `new_best_label` stays "Rekordas!" (D-259). It is the one recorded exception to L10N_STORE_LEGAL.md §1.7 rule 3: English "New best" has no exclamation mark.
+  - The reason: lt `best_label` is "Rekordas", the §1.6 glossary term for "Best", and F09 swaps the BEST chip's label for `new_best_label` when the moment fires ("BEST" → "NEW BEST", FEATURES.md F09 item 3; under Off an instant swap). Without the mark both labels would be the same word, and the swap would change no text. §1.7 rule 7's 12 characters leave no Lithuanian phrase that keeps "new" ("Naujas rekordas" has 15), and D-259 already rejected abbreviations and "Naujas!".
+  - §1.7 rule 3 names this exception. The glossary (§1.6 and `i18n-glossary.md`) and the strings are unchanged. `TranslationQualityTest` has no punctuation rule, so no test changes.
+- **Rationale:** a label that stays the same when a new best is set would drop the moment's text cue; the mark is the smallest difference that keeps both glossary terms.
+- **Rejected:** "Rekordas" (the same as `best_label`); renaming lt "Best" to "Geriausias" (it would change the glossary term in `best_label`, `board_size_best`, `stats_best_no_undo` and the store text for one chip, after the M5 review); an abbreviation (D-259).
+- **Source:** [ORCH] O17 (D-173 change control, M6 contracts; carried P3 of the M5 internal review).
+
+#### D-264 — The header's Best and a shown card's Best follow a records change without a move (clarifies D-044; amends ARCHITECTURE.md §4.9; adds FEATURES.md F08-AC23, F08-AC24)
+- **Decision:**
+  - Once ready, `GameViewModel` collects `records.state`. When `max(records.best(size), score)` of the current game differs from `header.best`, it publishes the header with only `best` replaced, and a shown Win or GameOver card with only `summary.best` replaced. `moveId`, `epoch`, `event`, `deltaMoveId`, `lastDelta` and the card's entry stay, so nothing replays (ARCHITECTURE.md §4.11), and nothing is saved. While a size switch loads it does nothing: the loaded game's epoch brings its own best.
+  - Only Reset statistics changes anything here. A move, an undo, Keep going and every epoch already publish the same value, and recovering another size's game leaves the current size's best alone. After a reset the header's Best, and the Best of a shown game-over card, read the current score at once, as FEATURES.md F08 item 8 and its edge cases say, and as the board-size sheet, which reads `records.best(size)` when it opens, already showed.
+  - Reset runs on the Statistics entry, while the Game entry is not composed (F21-AC2), so the returning Game entry composes the new values from the collectors' current values (ARCHITECTURE.md §4.11 item 2).
+  - Tests: `GameViewModelTest.resetStatisticsShowsCurrentScoreAsBest` (F08-AC23, the ViewModel's values) and `GameScreenTest.bestChipShowsCurrentScoreAfterStatisticsReset` (F08-AC24, the BEST chip after Menu → Statistics → Reset → Back under Full motion). Both fail without the collector: the chip kept 24680.
+- **Rationale:** `header.best` was assigned only with a move or an epoch, and a card's `summary.best` only when the card was built. After a reset the BEST chip kept the old best until the next accepted move, where it dropped to the score, and it contradicted the board-size sheet. No data was wrong: `records.json` and the game files were already correct.
+- **Rejected:** recomputing the best when the Game entry resumes: that value arrives after the returning entry's first composition, and under Full motion a move's header shows its deferred `displayedBest` (MOTION_SPEC.md §3.5), which a later value with the same `deltaMoveId` does not reach. A new epoch for a reset: it would end a running new-best moment and re-key the header for a change that is not a move.
+- **Source:** [ORCH] O17 (D-173 change control, M6 review).
 
 ---
 
@@ -4203,9 +4287,11 @@ Resolved during planning:
 - items 5 and 10 (QUALITY.md V4, V5; ATF with D-174);
 - item 8, replaced by `OpaquePngWriter` (D-190).
 
-Still open:
-- **Item 1.** Local and CI screenshots are bit-identical (research/07 U7). The M0 CI run proves it. (Fallback: commit the CI-produced images after Reading them, then threshold 0.001, D-147.)
-- **Item 2.** The session token can push `.github/workflows/*` (research/07 U8). The plan PR's first push proves it. (Fallback: D-172.)
-- **Item 6.** ktfmt 0.65 through Spotless 8.10.4 is idempotent on the real sources. Checked in M1 and M3 by running `spotlessApply` twice, then `spotlessCheck`. (Fallback: 0.64, D-141.)
+Resolved during execution (D-260):
+- **Item 1.** Local and CI screenshots are bit-identical (research/07 U7). The M0 CI run on `511aee7` compared the locally recorded golden and passed, and every later CI run compared all goldens. (Fallback, not used: commit the CI-produced images after Reading them, then threshold 0.001, D-147.)
+- **Item 2.** The session token can push `.github/workflows/*` (research/07 U8). The plan PR pushed `.github/workflows/ci.yml`. (Fallback, not used: D-172.)
+- **Item 6.** ktfmt 0.65 through Spotless 8.10.4 is idempotent on the real sources. On the M6 sources, `./gradlew spotlessApply --rerun-tasks` run twice (so ktfmt formatted every file each time), then `spotlessCheck --rerun-tasks`, left the tree unchanged (`git diff --exit-code` clean after each run); ktfmt 0.65 is kept, and PLAN.md §5.7 A1 prints nothing. (Fallback, not used: 0.64, D-141.)
+
+Checked on the plan PR's Codex loop, whose conversation records the outcome (QUALITY.md §7.3):
 - **Item 11.** Codex follows the `## Code Review Rules` section (D-192). Checked on the plan PR's Codex round: no item under "Intentional, do not flag" is raised. (Fallback: narrow or remove the noisy rule group in a `docs:` commit.)
 - **Item 12.** The bot's reactions can be read with their author through the unauthenticated REST reactions endpoints, and comment objects expose reaction counts (D-196). Checked on the plan PR's Codex loop. (Fallback: use only the review or no-issue-comment clean signal. If the bot signals clean only by reaction and that cannot be read, apply D-172 item 2 once.)

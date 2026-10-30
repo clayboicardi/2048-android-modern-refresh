@@ -794,6 +794,53 @@ class GameViewModelTest {
         assertThat(saved.gameId).isEqualTo(GoldenFixtures.FIX_MID_4.gameId)
     }
 
+    /** F08-AC23 */
+    @Test
+    fun resetStatisticsShowsCurrentScoreAsBest() = runTest {
+        // Case 1: the game in progress, after a move.
+        val playing =
+            rig(tmp.newFolder()) {
+                seedRecords(GoldenFixtures.FIX_RECORDS)
+                seedGame(GoldenFixtures.FIX_MID_4)
+            }
+        val vm = playing.loadedViewModel()
+        vm.playAcceptedMove()
+        testScheduler.runCurrent()
+        val header = vm.header.value
+        val board = vm.board.value
+        assertThat(header.best).isEqualTo(24_680)
+        val gameSaves = playing.gameSaves {
+            playing.records.resetAll()
+            testScheduler.runCurrent()
+        }
+
+        assertThat(vm.header.value).isEqualTo(header.copy(best = header.score))
+        assertThat(vm.board.value).isSameInstanceAs(board)
+        assertThat(vm.overlay.value).isEqualTo(OverlayUi.None)
+        assertThat(gameSaves).isEmpty()
+
+        // Case 2: a restored game-over card.
+        val over =
+            rig(tmp.newFolder()) {
+                seedRecords(GoldenFixtures.FIX_RECORDS)
+                seedGame(GoldenFixtures.FIX_OVER_4)
+            }
+        val overVm = over.loadedViewModel()
+        val card = overVm.overlay.value as OverlayUi.GameOver
+        val overHeader = overVm.header.value
+        assertThat(card.summary.best).isEqualTo(24_680)
+        assertThat(card.entry).isEqualTo(OverlayEntry.Restored)
+        val overSaves = over.gameSaves {
+            over.records.resetAll()
+            testScheduler.runCurrent()
+        }
+
+        assertThat(overVm.overlay.value)
+            .isEqualTo(card.copy(summary = card.summary.copy(best = 3012)))
+        assertThat(overVm.header.value).isEqualTo(overHeader.copy(best = 3012))
+        assertThat(overSaves).isEmpty()
+    }
+
     /** F09-AC1 */
     @Test
     fun newBestFiresOnceAboveBestAtStart() = runTest {

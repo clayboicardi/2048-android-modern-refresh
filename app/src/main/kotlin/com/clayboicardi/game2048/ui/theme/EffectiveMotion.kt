@@ -30,8 +30,8 @@ interface AnimatorScaleSource {
  * `applicationScope`, which outlives every activity.
  *
  * Construction reads the setting once (the read Compose's own `MotionDurationScale` makes for each
- * window) and registers the observer; nothing else, and never `PackageManager`. The observer has no
- * handler, so a change notification re-reads the setting on the notifying thread and updates
+ * window) and registers the observer; nothing else, and never the package manager. The observer has
+ * no handler, so a change notification re-reads the setting on the notifying thread and updates
  * [scale] at once. The observer is unregistered when [scope] completes.
  */
 class SystemAnimatorScaleSource(context: Context, scope: CoroutineScope) : AnimatorScaleSource {

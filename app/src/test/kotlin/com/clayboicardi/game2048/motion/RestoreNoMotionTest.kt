@@ -76,7 +76,7 @@ class RestoreNoMotionTest {
     /** AC-RESTORE-1 */
     @Test
     fun restoredWonBoardIsStaticOnItsFirstFrame() {
-        // The board case; M3.11 adds the win card's end state with OverlayController.
+        // The board case; the win card's end state is restoredWinCardIsInItsEndState's.
         assertRestoredStatic(GoldenFixtures.FIX_WON_4, scale = 1f, saturation = 1f)
     }
 
