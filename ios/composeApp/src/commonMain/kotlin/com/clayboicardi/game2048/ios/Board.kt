@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -31,6 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.clayboicardi.game2048.engine.Board
@@ -68,17 +71,24 @@ fun BoardView(
         val tile: Dp = maxWidth / (n + (n + 1) * GAP_RATIO)
         val gap: Dp = tile * GAP_RATIO
         val radius = tile * RADIUS_FRACTION
-        Column(
-            Modifier.fillMaxSize()
-                .clip(RoundedCornerShape(gap))
-                .background(colors.board)
-                .padding(gap),
-            verticalArrangement = Arrangement.spacedBy(gap),
-        ) {
-            for (row in 0 until n) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    for (col in 0 until n) {
-                        TileCell(board[row, col], row, col, tile, radius, fontScale, colors)
+        // The board never mirrors (D-104): column 0 is the engine's left edge and swipes are
+        // physical, so even in a right-to-left locale the grid lays out left to right.
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Column(
+                Modifier.fillMaxSize()
+                    .clip(RoundedCornerShape(gap))
+                    .background(colors.board)
+                    .padding(gap),
+                verticalArrangement = Arrangement.spacedBy(gap),
+            ) {
+                for (row in 0 until n) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(gap),
+                    ) {
+                        for (col in 0 until n) {
+                            TileCell(board[row, col], row, col, tile, radius, fontScale, colors)
+                        }
                     }
                 }
             }

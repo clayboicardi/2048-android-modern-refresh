@@ -32,6 +32,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,12 +46,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.clayboicardi.game2048.engine.BoardSize
@@ -238,17 +241,20 @@ private fun moveAnnouncement(direction: Direction, outcome: MoveOutcome, score: 
  */
 @Composable
 private fun DirectionPad(enabled: Boolean, onMove: (Direction) -> Unit) {
-    Column(
-        Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        PadButton(Direction.UP, "↑", enabled, onMove)
-        Row(horizontalArrangement = Arrangement.spacedBy(64.dp)) {
-            PadButton(Direction.LEFT, "←", enabled, onMove)
-            PadButton(Direction.RIGHT, "→", enabled, onMove)
+    // Like the board, the pad never mirrors (D-104): ← is always on the left.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            PadButton(Direction.UP, "↑", enabled, onMove)
+            Row(horizontalArrangement = Arrangement.spacedBy(64.dp)) {
+                PadButton(Direction.LEFT, "←", enabled, onMove)
+                PadButton(Direction.RIGHT, "→", enabled, onMove)
+            }
+            PadButton(Direction.DOWN, "↓", enabled, onMove)
         }
-        PadButton(Direction.DOWN, "↓", enabled, onMove)
     }
 }
 
