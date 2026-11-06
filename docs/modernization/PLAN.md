@@ -44,6 +44,8 @@ Audience: the orchestrator and the implementer agents (milestone integrator and 
 
 Replace the 2014 WebView shell (`MainActivity.java` around the `assets/2048` web game) with a native Kotlin + Jetpack Compose + Material 3 app, `com.clayboicardi.game2048` "2048" 3.0.0 (30000): offline, permission-free, accessible, localized in 21 locales, verified on the JVM locally and in GitHub Actions, and merged into `master` through one execution PR that passes CI and the Codex review gate (U1–U7).
 
+A standalone iOS port (D-272) was added after this plan, in an isolated `ios/` Compose Multiplatform build that shares `:core:engine`. It is outside this execution plan: it does not change the Android two-module shape or `scripts/verify.sh` (whose only contact with `ios/` is the repo-wide Spotless formatting check), and it ships through its own non-gating `ios.yml` workflow. See DECISIONS.md D-272 and `ios/DISTRIBUTION.md`.
+
 ### 1.2 Success criteria (all measurable; checked in M6.1 and at merge)
 
 | # | Criterion | Measured by |
