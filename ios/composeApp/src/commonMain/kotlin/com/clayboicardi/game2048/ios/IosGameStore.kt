@@ -44,9 +44,12 @@ data class LoadedState(val current: GameState?, val best: Map<Int, Long>)
  * JSON-on-a-file persistence for the iOS app (D-272). Blocking: callers run it off the main thread
  * ([GameModel] uses a background dispatcher).
  *
- * Never loses the previous save:
- * - **Writes are atomic.** The new JSON goes to a sibling temp file, is flushed to disk, and only
- *   then renamed over the save. A kill or a failed write leaves the old save intact.
+ * Never loses the previous save to a crash, a kill or a failed write:
+ * - **Writes are atomic.** The new JSON goes to a sibling temp file that is only then renamed over
+ *   the save, so a process kill or a failed write leaves the old save intact. Durability across a
+ *   sudden power loss is not promised on iOS: okio's `flush()` is `fflush()` there (no `fsync`;
+ *   only the JVM syncs), and a real fsync would need C interop. A save torn that way is caught by
+ *   the next point rather than overwritten.
  * - **An unreadable save is moved aside, never overwritten.** If the file cannot be read or
  *   decoded, it is renamed to [CORRUPT_NAME] before the app starts fresh, so best scores remain
  *   recoverable instead of being replaced by the next write.

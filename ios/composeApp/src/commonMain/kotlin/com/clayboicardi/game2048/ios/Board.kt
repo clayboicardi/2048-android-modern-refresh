@@ -23,6 +23,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -42,12 +47,23 @@ private const val POP_FROM = 0.72f
  * slide animation is a follow-up (D-272).
  */
 @Composable
-fun BoardView(board: Board, colors: TileColors, modifier: Modifier = Modifier) {
+fun BoardView(
+    board: Board,
+    colors: TileColors,
+    modifier: Modifier = Modifier,
+    /** The four "Move …" screen-reader actions; empty while moves are not allowed. */
+    moveActions: List<CustomAccessibilityAction> = emptyList(),
+) {
     val n = board.size.n
     // Tile numerals are sized to the tile, not to the reader's text-size setting: scaling them
     // with it would only push the digits out of the tile.
     val fontScale = LocalDensity.current.fontScale
-    BoxWithConstraints(modifier.fillMaxWidth().aspectRatio(1f)) {
+    BoxWithConstraints(
+        modifier.fillMaxWidth().aspectRatio(1f).semantics {
+            contentDescription = "Game board, $n by $n"
+            if (moveActions.isNotEmpty()) customActions = moveActions
+        },
+    ) {
         // total = tile*(n + (n+1)*gapRatio); gap = gapRatio*tile.
         val tile: Dp = maxWidth / (n + (n + 1) * GAP_RATIO)
         val gap: Dp = tile * GAP_RATIO
@@ -62,7 +78,7 @@ fun BoardView(board: Board, colors: TileColors, modifier: Modifier = Modifier) {
             for (row in 0 until n) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
                     for (col in 0 until n) {
-                        TileCell(board[row, col], tile, radius, fontScale, colors)
+                        TileCell(board[row, col], row, col, tile, radius, fontScale, colors)
                     }
                 }
             }
@@ -77,7 +93,15 @@ fun BoardView(board: Board, colors: TileColors, modifier: Modifier = Modifier) {
  * leave a cell at an intermediate scale.
  */
 @Composable
-private fun TileCell(exp: Int, tile: Dp, radius: Dp, fontScale: Float, colors: TileColors) {
+private fun TileCell(
+    exp: Int,
+    row: Int,
+    col: Int,
+    tile: Dp,
+    radius: Dp,
+    fontScale: Float,
+    colors: TileColors,
+) {
     val scale = remember { Animatable(1f) }
     // Plain holder, not State: read and written only inside the effect.
     val shownExp = remember { intArrayOf(exp) }
@@ -99,7 +123,13 @@ private fun TileCell(exp: Int, tile: Dp, radius: Dp, fontScale: Float, colors: T
                 scaleY = scale.value
             }
             .clip(shape)
-            .background(if (exp == 0) colors.empty else colors.fill(exp)),
+            .background(if (exp == 0) colors.empty else colors.fill(exp))
+            // One screen-reader element per cell, read as its position and value.
+            .clearAndSetSemantics {
+                contentDescription =
+                    "Row ${row + 1}, column ${col + 1}, " +
+                        if (exp == 0) "empty" else tileLabel(exp)
+            },
         contentAlignment = Alignment.Center,
     ) {
         if (exp != 0) {

@@ -51,5 +51,6 @@ with a free Apple ID via SideStore.
 - **iOS-only, v1:** a fresh Compose UI reusing the Android Classic Refined palette/geometry;
   English strings; JSON-on-file persistence (current game + best score per size), written
   atomically off the main thread, with a damaged save moved aside rather than overwritten;
-  simplified haptics; snap-with-pop tiles; text that respects the system text size.
+  simplified haptics; snap-with-pop tiles; text that respects the system text size; VoiceOver
+  play (cell labels, "Move …" actions, a direction pad while VoiceOver runs, spoken results).
 - **Follow-ups (not v1):** slide motion, the full resource/i18n set, Android save compatibility.

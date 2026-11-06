@@ -6,6 +6,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -44,13 +45,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.clayboicardi.game2048.engine.BoardSize
+import com.clayboicardi.game2048.engine.Direction
 import com.clayboicardi.game2048.engine.GameState
 import com.clayboicardi.game2048.engine.GameStatus
 import com.clayboicardi.game2048.engine.MoveOutcome
@@ -110,6 +114,30 @@ private fun GameScreen(model: GameModel, colors: TileColors) {
         if (hasProgress(state)) confirmSize = size else model.newGame(size)
     }
 
+    // Moves are allowed only while no card or dialog is up (D-054); every input route checks it.
+    val canMove = !overlayUp && confirmSize == null
+    val screenReader = rememberScreenReaderOn()
+
+    // A screen-reader move (pad button or board action) is also spoken, since the board itself
+    // gives no audible feedback.
+    fun accessibleMove(direction: Direction) {
+        val outcome = model.move(direction)
+        if (outcome is MoveOutcome.Moved) fireHaptics(haptics, outcome)
+        announceForAccessibility(moveAnnouncement(direction, outcome, model.state.score))
+    }
+
+    val moveActions =
+        if (canMove) {
+            Direction.entries.map { direction ->
+                CustomAccessibilityAction("Move ${direction.spoken}") {
+                    accessibleMove(direction)
+                    true
+                }
+            }
+        } else {
+            emptyList()
+        }
+
     Column(
         Modifier.fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -130,9 +158,9 @@ private fun GameScreen(model: GameModel, colors: TileColors) {
                 BoardView(
                     board = state.board,
                     colors = colors,
+                    moveActions = moveActions,
                     modifier =
-                        Modifier.swipeToMove(enabled = !overlayUp && confirmSize == null) {
-                            direction ->
+                        Modifier.swipeToMove(enabled = canMove) { direction ->
                             val outcome = model.move(direction)
                             if (outcome is MoveOutcome.Moved) fireHaptics(haptics, outcome)
                         },
@@ -146,6 +174,10 @@ private fun GameScreen(model: GameModel, colors: TileColors) {
                         modifier = Modifier.matchParentSize(),
                     )
                 }
+            }
+            if (screenReader) {
+                Spacer(Modifier.size(16.dp))
+                DirectionPad(enabled = canMove, onMove = { accessibleMove(it) })
             }
             Spacer(Modifier.size(16.dp))
             Text(
@@ -174,6 +206,68 @@ private fun GameScreen(model: GameModel, colors: TileColors) {
             },
             dismissButton = { TextButton(onClick = { confirmSize = null }) { Text("Cancel") } },
         )
+    }
+}
+
+private val Direction.spoken: String
+    get() =
+        when (this) {
+            Direction.UP -> "up"
+            Direction.RIGHT -> "right"
+            Direction.DOWN -> "down"
+            Direction.LEFT -> "left"
+        }
+
+/** What a screen reader says after a pad or board-action move. */
+private fun moveAnnouncement(direction: Direction, outcome: MoveOutcome, score: Long): String =
+    when (outcome) {
+        is MoveOutcome.Moved ->
+            buildString {
+                append("Moved ${direction.spoken}. Score $score.")
+                if (outcome.becameWon) append(" You win!")
+                if (outcome.becameOver) append(" Game over.")
+            }
+        is MoveOutcome.Invalid -> "Can't move ${direction.spoken}."
+        is MoveOutcome.Blocked -> "The game has ended."
+    }
+
+/**
+ * Up, left, right and down buttons, shown only while VoiceOver is running: with it on, swipes drive
+ * the screen reader rather than the board (the Android app shows the same pad under TalkBack). Each
+ * button is at least 56 dp and reads as "Move …".
+ */
+@Composable
+private fun DirectionPad(enabled: Boolean, onMove: (Direction) -> Unit) {
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PadButton(Direction.UP, "↑", enabled, onMove)
+        Row(horizontalArrangement = Arrangement.spacedBy(64.dp)) {
+            PadButton(Direction.LEFT, "←", enabled, onMove)
+            PadButton(Direction.RIGHT, "→", enabled, onMove)
+        }
+        PadButton(Direction.DOWN, "↓", enabled, onMove)
+    }
+}
+
+@Composable
+private fun PadButton(
+    direction: Direction,
+    arrow: String,
+    enabled: Boolean,
+    onMove: (Direction) -> Unit,
+) {
+    Button(
+        onClick = { onMove(direction) },
+        enabled = enabled,
+        modifier =
+            Modifier.size(56.dp).semantics { contentDescription = "Move ${direction.spoken}" },
+        contentPadding = PaddingValues(0.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.White),
+    ) {
+        Text(arrow, fontSize = 22.sp, modifier = Modifier.clearAndSetSemantics {})
     }
 }
 
