@@ -17,12 +17,20 @@ on:
       - 'ios/**'
       - 'core/engine/src/main/**'
       - '.github/workflows/ios.yml'
+  # Also on PRs that touch the iOS app or the shared engine, so the macOS link and the .ipa are
+  # exercised before merge. Still never a required check (D-272).
+  pull_request:
+    branches: [master]
+    paths:
+      - 'ios/**'
+      - 'core/engine/src/main/**'
+      - '.github/workflows/ios.yml'
 
 permissions:
   contents: read
 
 concurrency:
-  group: ios-${{ github.ref }}
+  group: ios-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -52,6 +60,9 @@ jobs:
           cache-provider: basic
           cache-read-only: false
           validate-wrappers: true
+
+      - name: Shared-code tests (engine parity, save store)
+        run: ./gradlew -p ios :composeApp:jvmTest
 
       - name: Compile Kotlin for iOS (surface errors before xcodebuild)
         run: ./gradlew -p ios :composeApp:compileKotlinIosArm64

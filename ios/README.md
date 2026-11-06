@@ -3,8 +3,12 @@
 A standalone [Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/) app that
 shares the exact game engine (`:core:engine`) with the Android app, so the rules are identical on
 both. This is a **separate Gradle build** from the Android project (decision D-272): it is not in
-the root `settings.gradle.kts`, and `scripts/verify.sh` never touches it. Run it with the repo's
-root Gradle wrapper and `-p ios`.
+the root `settings.gradle.kts`, and `scripts/verify.sh` runs none of its tasks. Run it with the
+repo's root Gradle wrapper and `-p ios`.
+
+One shared rule: the root `spotlessCheck` (part of `verify.sh`) formats `ios/**/*.kt` and
+`*.gradle.kts` with ktfmt too. Run `./gradlew -p ios spotlessApply` before committing — it applies
+the identical formatter and needs no Android SDK.
 
 ## Layout
 
@@ -29,8 +33,8 @@ Most development needs a Mac with Xcode (the Kotlin/Native iOS toolchain and `xc
 macOS-only). From the repo root:
 
 ```bash
-# Typecheck the shared code + run the engine-parity test on any OS (no Xcode needed):
-./gradlew -p ios :composeApp:jvmTest
+# Format, typecheck the shared code and run its tests on any OS (no Xcode needed):
+./gradlew -p ios spotlessApply :composeApp:jvmTest
 
 # On a Mac: open the Xcode project and run on a simulator or device:
 open ios/iosApp/iosApp.xcodeproj
@@ -45,6 +49,7 @@ with a free Apple ID via SideStore.
 - **Shared verbatim:** `:core:engine` — board, moves, merges, spawning, win/over, the seeded
   SplitMix64 RNG. Same bytes, same outcomes as Android.
 - **iOS-only, v1:** a fresh Compose UI reusing the Android Classic Refined palette/geometry;
-  English strings; JSON-on-file persistence (current game + best score per size); simplified
-  haptics; snap-with-pop tiles.
+  English strings; JSON-on-file persistence (current game + best score per size), written
+  atomically off the main thread, with a damaged save moved aside rather than overwritten;
+  simplified haptics; snap-with-pop tiles; text that respects the system text size.
 - **Follow-ups (not v1):** slide motion, the full resource/i18n set, Android save compatibility.

@@ -18,9 +18,18 @@ import kotlin.test.assertTrue
 class EngineParityTest {
     private val moves =
         listOf(
-            Direction.UP, Direction.LEFT, Direction.DOWN, Direction.RIGHT,
-            Direction.UP, Direction.LEFT, Direction.DOWN, Direction.RIGHT,
-            Direction.UP, Direction.LEFT, Direction.DOWN, Direction.RIGHT,
+            Direction.UP,
+            Direction.LEFT,
+            Direction.DOWN,
+            Direction.RIGHT,
+            Direction.UP,
+            Direction.LEFT,
+            Direction.DOWN,
+            Direction.RIGHT,
+            Direction.UP,
+            Direction.LEFT,
+            Direction.DOWN,
+            Direction.RIGHT,
         )
 
     @Test

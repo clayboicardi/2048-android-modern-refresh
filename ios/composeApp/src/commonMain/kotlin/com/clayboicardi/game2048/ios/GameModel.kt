@@ -10,42 +10,62 @@ import com.clayboicardi.game2048.engine.GameState
 import com.clayboicardi.game2048.engine.GameStatus
 import com.clayboicardi.game2048.engine.MoveOutcome
 import kotlin.random.Random
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Holds the current [GameState] and best-score-per-size, drives moves through the shared engine,
- * and persists after every change through [IosGameStore]. Plain state holder (no Android
- * ViewModel): created once and remembered by the root composable.
+ * and persists after every change. Plain state holder (no Android ViewModel), remembered by the
+ * root composable.
+ *
+ * All file I/O runs on [io], never on the main thread: [load] reads there before the board is
+ * shown, and saves go through a single conflated writer, so they stay in order and only the newest
+ * pending state is written.
  */
-class GameModel(private val store: IosGameStore, private val random: Random = Random.Default) {
-    private val best: MutableMap<Int, Long>
+class GameModel(
+    private val store: IosGameStore,
+    scope: CoroutineScope,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val random: Random = Random.Default,
+) {
+    private val best = mutableMapOf<Int, Long>()
+    private val pendingSaves = Channel<PendingSave>(Channel.CONFLATED)
 
-    var state by mutableStateOf(initialState())
+    /** False until [load] finishes; the UI shows no board before then, so no move can race it. */
+    var loaded by mutableStateOf(false)
+        private set
+
+    var state by mutableStateOf(Game.newGame(BoardSize.DEFAULT, 0L))
         private set
 
     var bestScore by mutableStateOf(0L)
         private set
 
-    /** Increments on every accepted move or new game, so the board can key its animations. */
-    var generation by mutableStateOf(0)
-        private set
-
     init {
-        val loaded = store.load()
-        best = loaded.best.toMutableMap()
-        state = loaded.current ?: Game.newGame(BoardSize.DEFAULT, random.nextLong())
-        bestScore = best[state.size.n] ?: 0L
-        updateBest()
-        persist()
+        scope.launch(io) { for (save in pendingSaves) store.save(save.state, save.best) }
     }
 
-    private fun initialState(): GameState = Game.newGame(BoardSize.DEFAULT, 0L)
+    /** Reads the save off the main thread; a fresh random game when there is none. */
+    suspend fun load() {
+        if (loaded) return
+        val saved = withContext(io) { store.load() }
+        best.putAll(saved.best)
+        state = saved.current ?: Game.newGame(BoardSize.DEFAULT, random.nextLong())
+        bestScore = best[state.size.n] ?: 0L
+        updateBest()
+        loaded = true
+    }
 
     /** Applies a swipe. Returns the outcome so the caller can fire the matching haptics. */
     fun move(direction: Direction): MoveOutcome {
         val outcome = Game.move(state, direction)
         if (outcome is MoveOutcome.Moved) {
             state = outcome.state
-            generation++
             updateBest()
             persist()
         }
@@ -54,7 +74,6 @@ class GameModel(private val store: IosGameStore, private val random: Random = Ra
 
     fun newGame(size: BoardSize = state.size) {
         state = Game.newGame(size, random.nextLong())
-        generation++
         bestScore = best[size.n] ?: 0L
         persist()
     }
@@ -62,14 +81,6 @@ class GameModel(private val store: IosGameStore, private val random: Random = Ra
     fun keepGoing() {
         if (state.status == GameStatus.WON) {
             state = Game.keepGoing(state)
-            persist()
-        }
-    }
-
-    fun undo() {
-        Game.undo(state)?.let {
-            state = it
-            generation++
             persist()
         }
     }
@@ -82,5 +93,10 @@ class GameModel(private val store: IosGameStore, private val random: Random = Ra
         }
     }
 
-    private fun persist() = store.save(state, best)
+    /** Hands an immutable snapshot to the writer; never blocks the caller. */
+    private fun persist() {
+        pendingSaves.trySend(PendingSave(state, best.toMap()))
+    }
+
+    private class PendingSave(val state: GameState, val best: Map<Int, Long>)
 }

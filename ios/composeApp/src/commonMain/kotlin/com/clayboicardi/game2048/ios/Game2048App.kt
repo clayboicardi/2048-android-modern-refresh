@@ -1,7 +1,7 @@
 package com.clayboicardi.game2048.ios
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,41 +11,62 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.clayboicardi.game2048.engine.BoardSize
+import com.clayboicardi.game2048.engine.GameState
 import com.clayboicardi.game2048.engine.GameStatus
 import com.clayboicardi.game2048.engine.MoveOutcome
 
-/** Warm "classic 2048" accent for buttons, in both schemes. */
+/**
+ * Warm "classic 2048" accent for buttons and the selected size. White on it is 4.08:1, which passes
+ * for the bold ≥ 14 pt labels it carries (large text, 3:1).
+ */
 private val Accent = Color(0xFF8F7A66)
 
 /** Entry composable shared by the iOS app and the desktop/CI harness. */
 @Composable
 fun MainView() {
-    val model = remember { GameModel(IosGameStore()) }
+    val scope = rememberCoroutineScope()
+    val model = remember { GameModel(IosGameStore(), scope) }
+    LaunchedEffect(model) { model.load() }
     Game2048App(model)
 }
 
@@ -55,61 +76,113 @@ fun Game2048App(model: GameModel) {
     val colors: TileColors = if (dark) ClassicDark else ClassicLight
     val scheme =
         if (dark) {
-            darkColorScheme(primary = Accent, onPrimary = Color.White, background = colors.background)
+            darkColorScheme(
+                primary = Accent,
+                onPrimary = Color.White,
+                background = colors.background,
+            )
         } else {
-            lightColorScheme(primary = Accent, onPrimary = Color.White, background = colors.background)
+            lightColorScheme(
+                primary = Accent,
+                onPrimary = Color.White,
+                background = colors.background,
+            )
         }
     MaterialTheme(colorScheme = scheme) {
-        val state = model.state
-        val haptics = LocalHapticFeedback.current
-        val overlayUp = state.status == GameStatus.WON || state.status == GameStatus.OVER
-
-        Box(
-            Modifier.fillMaxSize()
-                .background(colors.background)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            Column(Modifier.fillMaxWidth().widthIn(max = 520.dp)) {
-                Header(score = state.score, best = model.bestScore, colors = colors)
-                Spacer(Modifier.size(12.dp))
-                Controls(current = state.size, colors = colors, onNewGame = { model.newGame() }, onSize = { model.newGame(it) })
-                Spacer(Modifier.size(16.dp))
-                Box {
-                    BoardView(
-                        board = state.board,
-                        colors = colors,
-                        modifier =
-                            Modifier.swipeToMove(enabled = !overlayUp) { direction ->
-                                when (val outcome = model.move(direction)) {
-                                    is MoveOutcome.Moved -> fireHaptics(haptics, outcome)
-                                    else -> Unit
-                                }
-                            },
-                    )
-                    if (overlayUp) {
-                        GameOverlay(
-                            won = state.status == GameStatus.WON,
-                            colors = colors,
-                            onKeepGoing = { model.keepGoing() },
-                            onNewGame = { model.newGame() },
-                        )
-                    }
-                }
-                Spacer(Modifier.size(16.dp))
-                Text(
-                    "Join the tiles, get to 2048!",
-                    color = colors.onBackground,
-                    fontSize = 15.sp,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                )
-            }
+        Box(Modifier.fillMaxSize().background(colors.background)) {
+            // Nothing interactive until the save is read (off the main thread), so no move can race
+            // the load.
+            if (model.loaded) GameScreen(model, colors)
         }
     }
 }
 
-private fun fireHaptics(haptics: androidx.compose.ui.hapticfeedback.HapticFeedback, moved: MoveOutcome.Moved) {
+@Composable
+private fun GameScreen(model: GameModel, colors: TileColors) {
+    val state = model.state
+    val haptics = LocalHapticFeedback.current
+    val overlayUp = state.status == GameStatus.WON || state.status == GameStatus.OVER
+    // A pending "start over" (New Game or a size chip) that needs confirming; null when none.
+    var confirmSize by remember { mutableStateOf<BoardSize?>(null) }
+
+    // Mirrors the Android app (D-007): only a game with progress asks before it is replaced.
+    fun requestNewGame(size: BoardSize) {
+        if (hasProgress(state)) confirmSize = size else model.newGame(size)
+    }
+
+    Column(
+        Modifier.fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            // Only scrolls when content outgrows the screen (large text sizes, small phones). The
+            // board's swipe detector claims its drags first, so a swipe never scrolls the page.
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Column(Modifier.fillMaxWidth().widthIn(max = 520.dp)) {
+            Header(colors = colors, onNewGame = { requestNewGame(state.size) })
+            Spacer(Modifier.size(12.dp))
+            Scores(score = state.score, best = model.bestScore, colors = colors)
+            Spacer(Modifier.size(12.dp))
+            SizeChips(current = state.size, colors = colors, onSize = { requestNewGame(it) })
+            Spacer(Modifier.size(16.dp))
+            Box {
+                BoardView(
+                    board = state.board,
+                    colors = colors,
+                    modifier =
+                        Modifier.swipeToMove(enabled = !overlayUp && confirmSize == null) {
+                            direction ->
+                            val outcome = model.move(direction)
+                            if (outcome is MoveOutcome.Moved) fireHaptics(haptics, outcome)
+                        },
+                )
+                if (overlayUp) {
+                    GameOverlay(
+                        won = state.status == GameStatus.WON,
+                        colors = colors,
+                        onKeepGoing = { model.keepGoing() },
+                        onNewGame = { model.newGame() },
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
+            }
+            Spacer(Modifier.size(16.dp))
+            Text(
+                "Join the tiles, get to 2048!",
+                color = colors.onBackground,
+                fontSize = 15.sp,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            )
+        }
+    }
+
+    confirmSize?.let { size ->
+        AlertDialog(
+            onDismissRequest = { confirmSize = null },
+            title = { Text("Start a new game?") },
+            text = { Text("Your current game will be lost.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmSize = null
+                        model.newGame(size)
+                    },
+                ) {
+                    Text("New game")
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmSize = null }) { Text("Cancel") } },
+        )
+    }
+}
+
+/** A game worth confirming before it is discarded: still playable and with a score. */
+private fun hasProgress(state: GameState): Boolean =
+    state.score > 0 &&
+        (state.status == GameStatus.PLAYING || state.status == GameStatus.KEEP_PLAYING)
+
+private fun fireHaptics(haptics: HapticFeedback, moved: MoveOutcome.Moved) {
     when {
         moved.becameWon -> haptics.performHapticFeedback(HapticFeedbackType.Confirm)
         moved.becameOver -> haptics.performHapticFeedback(HapticFeedbackType.Reject)
@@ -117,84 +190,140 @@ private fun fireHaptics(haptics: androidx.compose.ui.hapticfeedback.HapticFeedba
     }
 }
 
+/** Title and New Game. The title shrinks to the space the button leaves, so neither is clipped. */
 @Composable
-private fun Header(score: Long, best: Long, colors: TileColors) {
+private fun Header(colors: TileColors, onNewGame: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("2048", color = colors.title, fontWeight = FontWeight.ExtraBold, fontSize = 48.sp)
-        Spacer(Modifier.weight(1f))
-        StatBox("SCORE", score.toString(), colors)
+        FitText(
+            "2048",
+            maxSize = 48.sp,
+            color = colors.title,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.weight(1f),
+            alignment = Alignment.CenterStart,
+        )
         Spacer(Modifier.size(8.dp))
-        StatBox("BEST", best.toString(), colors)
+        Button(
+            onClick = onNewGame,
+            colors =
+                ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.White),
+        ) {
+            Text("New Game", fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+        }
+    }
+}
+
+/** SCORE and BEST share the row equally; each figure shrinks to its card rather than overflow. */
+@Composable
+private fun Scores(score: Long, best: Long, colors: TileColors) {
+    Row(Modifier.fillMaxWidth()) {
+        StatBox("SCORE", score.toString(), colors, Modifier.weight(1f))
+        Spacer(Modifier.size(8.dp))
+        StatBox("BEST", best.toString(), colors, Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun StatBox(label: String, value: String, colors: TileColors) {
+private fun StatBox(label: String, value: String, colors: TileColors, modifier: Modifier) {
     Column(
-        Modifier.clip(RoundedCornerShape(6.dp)).background(colors.board).padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(colors.scoreCard)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .semantics(mergeDescendants = true) { contentDescription = "$label $value" },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(label, color = Color.White.copy(alpha = 0.72f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text(value, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+        FitText(label, 12.sp, Color.White, FontWeight.Bold, Modifier.fillMaxWidth())
+        FitText(value, 24.sp, Color.White, FontWeight.ExtraBold, Modifier.fillMaxWidth())
     }
 }
 
+/** Board sizes 3×3–8×8 as a radio group; each chip takes an equal share and is ≥ 48 dp tall. */
 @Composable
-private fun Controls(current: BoardSize, colors: TileColors, onNewGame: () -> Unit, onSize: (BoardSize) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (size in BoardSize.ALL) {
-                val selected = size == current
-                Box(
-                    Modifier.clip(RoundedCornerShape(6.dp))
-                        .background(if (selected) Accent else colors.board.copy(alpha = 0.55f))
-                        .clickable { onSize(size) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                ) {
-                    Text(
-                        "${size.n}",
-                        color = Color.White,
-                        fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
-                        fontSize = 14.sp,
-                    )
-                }
+private fun SizeChips(current: BoardSize, colors: TileColors, onSize: (BoardSize) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        for (size in BoardSize.ALL) {
+            val selected = size == current
+            val shape = RoundedCornerShape(8.dp)
+            val fill =
+                if (selected) Modifier.background(Accent, shape)
+                else Modifier.border(1.5.dp, colors.title, shape)
+            Box(
+                Modifier.weight(1f)
+                    .heightIn(min = 48.dp)
+                    .clip(shape)
+                    .then(fill)
+                    .selectable(selected = selected, role = Role.RadioButton) { onSize(size) }
+                    .semantics { contentDescription = "${size.n} by ${size.n} board" },
+                contentAlignment = Alignment.Center,
+            ) {
+                FitText(
+                    "${size.n}×${size.n}",
+                    maxSize = 16.sp,
+                    color = if (selected) Color.White else colors.title,
+                    fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                )
             }
         }
-        Spacer(Modifier.weight(1f))
-        Button(onClick = onNewGame, colors = ButtonDefaults.buttonColors(containerColor = Accent)) {
-            Text("New Game", fontWeight = FontWeight.Bold)
-        }
     }
 }
 
 @Composable
-private fun GameOverlay(won: Boolean, colors: TileColors, onKeepGoing: () -> Unit, onNewGame: () -> Unit) {
+private fun GameOverlay(
+    won: Boolean,
+    colors: TileColors,
+    onKeepGoing: () -> Unit,
+    onNewGame: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Box(
-        Modifier.matchParentSizeOrFill().clip(RoundedCornerShape(8.dp)).background(colors.background.copy(alpha = 0.78f)),
+        modifier.clip(RoundedCornerShape(8.dp)).background(colors.background.copy(alpha = 0.86f)),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
+        Column(
+            Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            FitText(
                 if (won) "You win!" else "Game over",
+                maxSize = 40.sp,
                 color = colors.title,
                 fontWeight = FontWeight.ExtraBold,
-                fontSize = 40.sp,
+                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.size(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (won) {
-                    Button(onClick = onKeepGoing, colors = ButtonDefaults.buttonColors(containerColor = Accent)) {
-                        Text("Keep going", fontWeight = FontWeight.Bold)
-                    }
+            if (won) {
+                Button(
+                    onClick = onKeepGoing,
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = Accent,
+                            contentColor = Color.White,
+                        ),
+                ) {
+                    Text("Keep going", fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                 }
-                Button(onClick = onNewGame, colors = ButtonDefaults.buttonColors(containerColor = Accent)) {
-                    Text(if (won) "New game" else "Try again", fontWeight = FontWeight.Bold)
-                }
+                Spacer(Modifier.size(8.dp))
+            }
+            Button(
+                onClick = onNewGame,
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = Accent,
+                        contentColor = Color.White,
+                    ),
+            ) {
+                Text(
+                    if (won) "New game" else "Try again",
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
         }
     }
 }
-
-/** The overlay fills the board Box it is stacked into. */
-@Composable
-private fun Modifier.matchParentSizeOrFill(): Modifier = this.fillMaxSize()

@@ -11,9 +11,10 @@ SideStore does.
 ## What CI gives you
 
 The `iOS build` GitHub Actions workflow (`.github/workflows/ios.yml`) builds an **unsigned** IPA on
-a free macOS runner and uploads it as the artifact `game2048-ios-unsigned-ipa-<sha>`. Trigger it
-from the repo's **Actions** tab ("Run workflow"), or it runs on pushes that touch `ios/`. Download
-and unzip the artifact to get `Game2048-unsigned.ipa`.
+a free macOS runner and uploads it as the artifact `game2048-ios-unsigned-ipa-<sha>`. It runs on
+its own for pull requests and `master` pushes that touch `ios/` or the game engine; you can also
+start it from the repo's **Actions** tab ("Run workflow"). Download and unzip the artifact to get
+`Game2048-unsigned.ipa`.
 
 Unsigned is correct here: SideStore strips and re-signs on import, so a signature from CI would
 just be thrown away.

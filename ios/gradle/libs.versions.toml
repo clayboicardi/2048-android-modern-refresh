@@ -6,6 +6,11 @@ composeMultiplatform = "1.12.2"   # Jetpack Compose 1.12.1 — same base the And
 kotlinxSerialization = "1.12.0"   # matches the root project
 kotlinxCoroutines = "1.11.0"      # matches the root project
 okio = "3.9.1"
+# The root build's `spotlessCheck` (run by scripts/verify.sh) also formats ios/**, so these two
+# must stay equal to the root gradle/libs.versions.toml: `./gradlew -p ios spotlessApply` then
+# produces exactly what the root gate expects, without needing an Android SDK.
+spotless = "8.10.4"
+ktfmt = "0.65"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
@@ -17,3 +22,4 @@ kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref =
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
