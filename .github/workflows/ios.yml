@@ -1,0 +1,87 @@
+# Builds the standalone iOS app (ios/, D-272) into an UNSIGNED .ipa artifact.
+#
+# This is deliberately separate from the Android gate (ci.yml / scripts/verify.sh, D-151): it
+# builds nothing the Android merge depends on, is never a required check, and runs on a macOS
+# runner because Xcode and the Kotlin/Native iOS toolchain are macOS-only. Standard GitHub-hosted
+# macOS runners are free for public repositories.
+#
+# The .ipa is intentionally unsigned: SideStore (or AltStore) re-signs it on-device with a free
+# Apple ID. See ios/DISTRIBUTION.md.
+name: iOS build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'ios/**'
+      - 'core/engine/src/main/**'
+      - '.github/workflows/ios.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ios:
+    name: build-unsigned-ipa
+    runs-on: macos-15 # Apple Silicon; free for public repos
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle (validates every wrapper JAR checksum)
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+          cache-read-only: false
+          validate-wrappers: true
+
+      - name: Compile Kotlin for iOS (surface errors before xcodebuild)
+        run: ./gradlew -p ios :composeApp:compileKotlinIosArm64
+
+      - name: Build unsigned .ipa
+        run: |
+          set -euo pipefail
+          ARCHIVE="$RUNNER_TEMP/Game2048.xcarchive"
+          xcodebuild \
+            -project ios/iosApp/iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            archive
+          APP="$ARCHIVE/Products/Applications/Game2048.app"
+          test -d "$APP"
+          rm -rf "$RUNNER_TEMP/Payload"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          ( cd "$RUNNER_TEMP" && zip -qry Game2048-unsigned.ipa Payload )
+          ls -lh "$RUNNER_TEMP/Game2048-unsigned.ipa"
+
+      - name: Upload unsigned IPA
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: game2048-ios-unsigned-ipa-${{ github.sha }}
+          path: ${{ runner.temp }}/Game2048-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30

@@ -1,5 +1,7 @@
 package com.clayboicardi.game2048.engine
 
+import kotlin.jvm.JvmInline
+
 /** Square board side N in 3..8 and its win target (D-030, D-036). */
 @JvmInline
 value class BoardSize private constructor(val n: Int) {

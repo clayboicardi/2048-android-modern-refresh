@@ -49,7 +49,7 @@
 
 ## Commits and pull requests
 
-- Subjects of at most 72 characters, imperative: `M<n>: …` for milestone work, `review(r<k>): …` for fixes in Codex round k, `release: …` for a version bump (D-271), `ci: …`, `docs: …`.
+- Subjects of at most 72 characters, imperative: `M<n>: …` for milestone work, `review(r<k>): …` for fixes in Codex round k, `release: …` for a version bump (D-271), `ios: …` for the standalone iOS sub-project under `ios/` (D-272), `ci: …`, `docs: …`.
 - Body: `D-IDs: …`; `Gates: scripts/verify.sh passed (engine=<n> tests, app=<m> tests)`; `Screenshots: <names> (all inspected)` or `Screenshots: none`.
 - A change to decided behavior carries its D-173 entry in `docs/modernization/DECISIONS.md` in the same commit.
 - No AI model names or model identifiers in tracked files (code, docs, resources, test names, golden metadata). Commit trailers and PR footers are exactly what the execution environment supplies, kept verbatim (D-164, D-180).

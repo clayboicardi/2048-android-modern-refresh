@@ -1,0 +1,19 @@
+# iOS sub-project version catalog (D-272). Separate from the root gradle/libs.versions.toml
+# (D-016), which stays exactly as decided. Only this file governs the iOS build.
+[versions]
+kotlin = "2.4.21"                 # matches the root project's Kotlin
+composeMultiplatform = "1.12.2"   # Jetpack Compose 1.12.1 — same base the Android app ships
+kotlinxSerialization = "1.12.0"   # matches the root project
+kotlinxCoroutines = "1.11.0"      # matches the root project
+okio = "3.9.1"
+
+[libraries]
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+
+[plugins]
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

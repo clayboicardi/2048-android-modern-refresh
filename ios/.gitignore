@@ -1,0 +1,13 @@
+# Gradle / Kotlin
+.gradle/
+build/
+**/build/
+local.properties
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.xcarchive
+Payload/
+*.ipa

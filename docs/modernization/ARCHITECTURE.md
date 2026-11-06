@@ -135,6 +135,8 @@ Before writing the build sections, a scratch copy of `research/smoke-build/` was
 
 There is no `buildSrc/`, `build-logic/`, `androidTest/`, `:baselineprofile` or `.github/dependabot.yml` (D-017, D-020, D-153). `release.yml` exists only since D-271, after the execution PR, and gates nothing.
 
+The top-level `ios/` directory (D-272) is a **separate** Gradle build — a Compose Multiplatform iOS app that shares `:core:engine` by a `commonMain` source directory. It is not part of this Android build: the root `settings.gradle.kts` does not `include` it, `scripts/verify.sh` never touches it, and it has its own `ios/gradle/libs.versions.toml` and plugins. It is driven as `./gradlew -p ios …` and built to an unsigned IPA by the non-gating `.github/workflows/ios.yml`. So the Android project still has exactly `:app` and `:core:engine` (D-020). The one Android-tree change it required is `import kotlin.jvm.JvmInline` in `core/engine/src/main/kotlin/.../BoardSize.kt` (needed to compile the engine's `@JvmInline value class` in a multiplatform `commonMain`; not a forbidden token for `EngineImportsGuardTest`).
+
 ### 1.2 What exists after M0
 
 M0 (D-162, D-211) leaves a buildable, gated skeleton. `.github/workflows/ci.yml`, root `AGENTS.md`, `CLAUDE.md` and the planning documents already exist from the plan PR and M0 leaves them unchanged (D-177). M0 adds:
