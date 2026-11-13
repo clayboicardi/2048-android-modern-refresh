@@ -16,6 +16,12 @@ val storeAssetsDir: String =
         .asFile
         .absolutePath
 
+// Private release key (D-272). Only release.yml sets these, from GitHub Actions secrets, for its
+// second assembleRelease after the gate; every other build signs with ciSideload.
+val releaseKeystore: Provider<String> = providers.environmentVariable("GAME2048_RELEASE_KEYSTORE")
+val releaseStorePassword: Provider<String> =
+    providers.environmentVariable("GAME2048_RELEASE_STORE_PASSWORD")
+
 android {
     namespace = "com.clayboicardi.game2048"
     compileSdk = 37
@@ -39,6 +45,16 @@ android {
             keyPassword = "game2048-ci-sideload"
             storeType = "PKCS12"
         }
+        // The owner's private release key (D-272): never committed; GitHub Releases only.
+        if (releaseKeystore.isPresent) {
+            create("release") {
+                storeFile = file(releaseKeystore.get())
+                storePassword = releaseStorePassword.get()
+                keyAlias = "game2048-release"
+                keyPassword = releaseStorePassword.get()
+                storeType = "PKCS12"
+            }
+        }
     }
 
     buildTypes {
@@ -55,6 +71,8 @@ android {
                 "proguard-rules.pro",
             )
             signingConfig = signingConfigs.getByName("ciSideload")
+            // A separate statement, so the line above stays the one the F-Droid recipe deletes.
+            if (releaseKeystore.isPresent) signingConfig = signingConfigs.getByName("release")
         }
     }
 

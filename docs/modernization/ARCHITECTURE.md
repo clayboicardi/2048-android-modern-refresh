@@ -76,12 +76,14 @@ Before writing the build sections, a scratch copy of `research/smoke-build/` was
 │   ├── check-metadata.sh                        [M0, assertions added M4/M5] (D-152, D-179, D-190)
 │   ├── check-test-counts.sh                     [M0] (D-149, D-179)
 │   ├── repro-probe.sh                           [M6] report-only reproducibility probe (D-191)
+│   ├── check-release-apk.sh                     release.yml only: release-key APK gate (D-272)
 │   ├── fonts/subset-google-sans-flex.sh         [M4] (D-076)
 │   └── signing/generate-ci-sideload-keystore.sh [M0] (D-131, TC-1, §2.9)
 ├── signing/
 │   ├── README.md                                [M0] "public password, CI/sideload only, never for stores"
 │   ├── ci-sideload.p12                          [M0] PKCS12, committed on purpose (D-131)
-│   └── ci-sideload.sha256                       [M0] certificate SHA-256, lowercase hex, one line
+│   ├── ci-sideload.sha256                       [M0] certificate SHA-256, lowercase hex, one line
+│   └── release.sha256                           the private release key's certificate SHA-256 (D-272)
 ├── docs/
 │   └── modernization/
 │       ├── README.md                            from the plan PR (D-177); index of the planning set
@@ -410,6 +412,12 @@ val storeAssetsDir: String =
         .asFile
         .absolutePath
 
+// Private release key (D-272). Only release.yml sets these, from GitHub Actions secrets, for its
+// second assembleRelease after the gate; every other build signs with ciSideload.
+val releaseKeystore: Provider<String> = providers.environmentVariable("GAME2048_RELEASE_KEYSTORE")
+val releaseStorePassword: Provider<String> =
+    providers.environmentVariable("GAME2048_RELEASE_STORE_PASSWORD")
+
 android {
     namespace = "com.clayboicardi.game2048"
     compileSdk = 37
@@ -433,6 +441,16 @@ android {
             keyPassword = "game2048-ci-sideload"
             storeType = "PKCS12"
         }
+        // The owner's private release key (D-272): never committed; GitHub Releases only.
+        if (releaseKeystore.isPresent) {
+            create("release") {
+                storeFile = file(releaseKeystore.get())
+                storePassword = releaseStorePassword.get()
+                keyAlias = "game2048-release"
+                keyPassword = releaseStorePassword.get()
+                storeType = "PKCS12"
+            }
+        }
     }
 
     buildTypes {
@@ -449,6 +467,8 @@ android {
                 "proguard-rules.pro",
             )
             signingConfig = signingConfigs.getByName("ciSideload")
+            // A separate statement, so the line above stays the one the F-Droid recipe deletes.
+            if (releaseKeystore.isPresent) signingConfig = signingConfigs.getByName("release")
         }
     }
 

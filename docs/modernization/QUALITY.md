@@ -1803,20 +1803,23 @@ No expression interpolates untrusted event text into a `run:` script; `HEAD_SHA`
 | Goldens | Recorded here | Verified only; never recorded or committed |
 
 
-### 5.11 Release workflow (D-271)
+### 5.11 Release workflow (D-271, D-272)
 
 `.github/workflows/release.yml` publishes one GitHub Release per version, after the execution PR (D-271 supersedes D-133's "no release workflow" rule). The committed file is the source of truth; it is small and commented. It is not a merge gate: it never runs on a pull request or a push, and `ci.yml` stays the only gate (§5.1).
 
 | # | Step | Notes |
 |---|---|---|
-| — | Trigger | `workflow_dispatch` only, with a required string input `version` (for example `1.0.0`). `permissions: contents: write`; `concurrency: release` (one release at a time); one job `release` on `ubuntu-24.04`, `timeout-minutes: 45` |
+| — | Trigger | `workflow_dispatch` only, with a required string input `version` (for example `1.0.0`). `permissions: contents: write`; `concurrency: release` (one release at a time); one job `release` on `ubuntu-24.04`, `timeout-minutes: 45`, `environment: release` (its secrets limited to `master`, D-272) |
 | 1 | Refuse to run off `master` | Fails with an error annotation unless `GITHUB_REF` is `refs/heads/master` |
 | 2 | `actions/checkout` v7.0.1 | `persist-credentials: false`; gh uses `GH_TOKEN`, never git credentials |
 | 3 | Check the version | `version` matches `MAJOR.MINOR.PATCH` (MINOR and PATCH in 0..99, no leading zeros); `app/build.gradle.kts` has that `versionName` and the D-130 `versionCode`; `fastlane/metadata/android/en-US/changelogs/<code>.txt` exists; `gh api …/git/matching-refs/tags/v<version>` lists no such tag and `gh release list` no such release. Both lookups fail the step on an API error |
+| 3a | Require the release key (D-272) | Fails unless `GAME2048_RELEASE_KEYSTORE_BASE64` and `GAME2048_RELEASE_STORE_PASSWORD` are non-empty and `signing/release.sha256` exists; never falls back to the CI key |
 | 4–7 | JDK 21, setup-gradle, Robolectric cache, SDK packages | Copied from `ci.yml` (§5.2 steps 3–6), with the same pins (§5.8) |
 | 8 | `./scripts/verify.sh` | The full gate, exactly as in CI and locally (D-140) |
+| 8a | Sign with the release key (D-272) | Decodes the keystore into `$RUNNER_TEMP` (umask 077), copies the gated `app-release.apk` aside, runs `./gradlew --no-configuration-cache --no-build-cache :app:assembleRelease` with `GAME2048_RELEASE_KEYSTORE` and `GAME2048_RELEASE_STORE_PASSWORD`, then `scripts/check-release-apk.sh <gated> <signed>`: only signer `signing/release.sha256`, not debuggable or test-only, 16 KB-aligned, entries equal to the gated APK's in name, order and bytes |
+| 8b | Delete the keystore | `if: always()` |
 | 9 | Name the APK | `app/build/outputs/apk/release/app-release.apk` → `2048-<version>.apk`; `sha256sum` writes its SHA-256 |
-| 10 | Write the notes | `notes.md`: the en-US changelog (`• ` bullets as Markdown `- ` items), a Download line, the APK SHA-256, the signer certificate SHA-256 from `signing/ci-sideload.sha256` marked as the public CI sideload key (D-131), not a store identity, and "Updates signed with this key install over each other; the F-Droid build, when it comes, is signed by F-Droid and needs a fresh install." Also appended to the job summary |
+| 10 | Write the notes | `notes.md`: the en-US changelog (`• ` bullets as Markdown `- ` items), a Download line, the APK SHA-256, the signer certificate SHA-256 from `signing/release.sha256` named as the private release key that every release after 1.0.0 carries (D-272), and that an install of 1.0.0 or of a CI build must be uninstalled first, which deletes its data unless Android backup restores it. Also appended to the job summary |
 | 11 | Publish | `gh release create "v<version>" "2048-<version>.apk" --target "$GITHUB_SHA" --title "2048 <version>" --notes-file notes.md` with `GH_TOKEN: ${{ github.token }}` and `GH_REPO: ${{ github.repository }}`; gh creates the tag at the built commit |
 
 `version` reaches the scripts only as the environment variable `VERSION`, never spliced into script text, and step 3 validates it before any API path uses it. The owner dispatches the workflow after the version's `release:` commit has merged into `master` (D-164, D-271): from the Actions tab, or `gh workflow run release.yml -R clayboicardi/2048-android-modern-refresh --ref master -f version=<version>` (§6.8 "Dispatch `release.yml`"). A failed run creates no tag and no release, so it can be dispatched again after the fix.

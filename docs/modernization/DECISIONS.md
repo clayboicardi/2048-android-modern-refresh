@@ -37,7 +37,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-100–D-106 | Localization & RTL | en + 20 locales complete; `MissingTranslation` = error; plurals; Latin digits; forced-LTR board; system per-app language page |
 | D-110–D-116 | Identity & store | `com.clayboicardi.game2048` "2048"; adaptive icon `#3A2900` on `#E6A11A`; splash gated on load; fastlane tree with 22 locales; store art rendered from code |
 | D-120–D-124 | Legal & privacy | MIT with 3 copyright lines; NOTICE; in-app licenses with a coverage check; PRIVACY.md; credits |
-| D-130–D-134 | Signing & versioning | 1.0.0 / 10000 (D-271); committed public sideload keystore for debug and release; R8; no store signing; a GitHub Release per version by hand (D-271) |
+| D-130–D-134 | Signing & versioning | 1.0.0 / 10000 (D-271); committed public sideload keystore for debug and CI release builds; R8; no store signing; a GitHub Release per version by hand (D-271), signed with the private release key after 1.0.0 (D-272) |
 | D-140–D-153 | Quality & CI | `verify.sh` = CI; Spotless + ktfmt 0.65; Lint warnings as errors; `allWarningsAsErrors`; detekt optional; Kover 90/85; Robolectric + Roborazzi goldens Read by the agent; APK gates; `ubuntu-24.04` with SHA-pinned actions |
 | D-160–D-173 | Process | Plan PR, then one execution PR on the re-cut branch; M0–M6 commits; `verify.sh` before every push; `@codex review` after M2 and at the end; merge on clean Codex + green CI, valve after 5 rounds; stop conditions |
 | D-174–D-211 | Planning additions | Opt-in isolation; test-task inputs; check-script additions; no model names in tracked files; epoch boards, motion timing (`MoveTimeline`, `delayedSpec`), level-dependent `MotionScheme`, haptic ownership; layout, theme, contrast and golden refinements; card fit, keys on cards, TalkBack completeness; store and legal checks with opaque PNGs; Codex heading, PR lifecycle, roles, GitHub API operations, review rounds and escalation; milestone refinements |
@@ -276,6 +276,7 @@ Repository: `clayboicardi/2048-android-modern-refresh`, a GitHub fork of `ubersp
 | D-269 | Accessibility | The Statistics tabs and the game menu's items draw the focus ring (`RectangleShape`); M3's 10 % focused state layer is below 3:1 |
 | D-270 | Data | A tile exponent above the size's reachable maximum N² + 1 (`BoardSize.maxReachableExp`; `GameInvariants.reachability`, beside the invariants) is corruption: the game decoder rejects it on the board, in a snapshot or as a recovery entry's `maxExp`, and `GameViewModel` handles a move or undo result above it like D-214's engine check failure; a `records.json` `bestTileExp` outside 0..N² + 1 reads as 0, and the Statistics hero draws the best tile only when ≥ 1 |
 | D-271 | Signing | The first release is 1.0.0 / versionCode 10000 (D-130's scheme; the owner's 30000 sideload is uninstalled once; the v1 fixture's 30000 shows no What's new); `release.yml`, dispatched on `master` with a version, runs `verify.sh` and publishes a GitHub Release tagged `v<version>` with the release APK; `release:` commit prefix |
+| D-272 | Signing | Releases after 1.0.0 are signed with the owner's private release key (environment `release` secrets; `signing/release.sha256` committed); release.yml re-packages the gated release with it and `check-release-apk.sh` proves same entries, sole signer; CI, debug and `verify.sh` keep the CI key; no fallback to it |
 
 ---
 
@@ -2299,7 +2300,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** U5. The default debug keystore and ephemeral keys differ per runner (research/06 §3.5, §8 risk 1).
 - **Rejected:** unsigned release artifacts (research/07 G18); ephemeral keys; GitHub secrets (none exist).
 - **Source:** [USER] U5.
-- **Note:** Technical correction TC-1.
+- **Note:** Technical correction TC-1. Amended by D-272 (the private release key signs GitHub Releases after 1.0.0; this key keeps CI, debug and `verify.sh` builds).
 
 #### D-132 — Build types
 - **Decision:**
@@ -2316,6 +2317,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** smoke-verified DSL (a 1,034,747 B release; research/03 §6). The `optimization {}` DSL has not been smoke-built (research/07 C6).
 - **Rejected:** `optimization { enable = true }` for v1.0; `proguard-android.txt` (disallowed in AGP 9).
 - **Source:** [ORCH] O14.
+- **Note:** Amended by D-272 (release.yml's second `assembleRelease` signs release with `signingConfigs.release`).
 
 #### D-133 — No release workflow or store signing
 - **Decision:**
@@ -2325,7 +2327,7 @@ Snapshot binary layout (big-endian, `21 + N²` bytes, 85 B for 8×8):
 - **Rationale:** U5; research/07 G18.
 - **Rejected:** research/06 §3.5's release workflow.
 - **Source:** [USER] U5.
-- **Note:** Clarified by D-257; superseded by D-271 in its release-workflow, tag and GitHub Release rule (owner decision of 2026-10-30); no store uploads and no store signing stay.
+- **Note:** Clarified by D-257; superseded by D-271 in its release-workflow, tag and GitHub Release rule (owner decision of 2026-10-30); no store uploads and no store signing stay. Amended by D-272 (real release signing for GitHub Releases; still no store uploads).
 
 #### D-134 — Reproducibility hygiene and R8 rules
 - **Decision.** The build:
@@ -4272,6 +4274,25 @@ jobs:
   - attaching the debug APK or `mapping.txt` (the CI artifacts keep them; a release offers the build players install);
   - signing releases with a real key (it needs secrets; L10N_STORE_LEGAL.md §5.7).
 - **Source:** [USER] owner decisions of 2026-10-30, relayed by the orchestrator · [ORCH] O17 (D-173 change control). D-133 and D-004 item 1 are [USER] U5; the owner changes their own decision, so D-173's rule that no one else supersedes a [USER] decision holds.
+- **Note:** Amended by D-272 (releases after 1.0.0 are signed with the private release key; the notes name `signing/release.sha256`).
+
+#### D-272 — Releases after 1.0.0 are signed with the owner's private release key (amends D-131, D-132, D-133, D-271; amends L10N_STORE_LEGAL.md §2.7, §4.9 item 5, §5.1, §5.3–§5.8; QUALITY.md §5.11; FEATURES.md F30, N10; ARCHITECTURE.md §1.1, §2.6)
+- **Decision:**
+  - **Key.** The owner generates a private release key on their own machine (PKCS12, alias `game2048-release`, RSA 4096, validity 10,000 days, one password for store and key). The keystore and its password never enter the repository; they live in the owner's offline backup and in two GitHub Actions secrets of the repository environment `release`, whose deployment branches are limited to `master`: `GAME2048_RELEASE_KEYSTORE_BASE64` (the keystore, base64 on one line) and `GAME2048_RELEASE_STORE_PASSWORD`. Only the certificate's SHA-256 is committed, as `signing/release.sha256` (the format of `signing/ci-sideload.sha256`). The commands are in `signing/README.md`. `.gitignore` ignores every `*.p12`, `*.jks` and `*.keystore` except `signing/ci-sideload.p12`.
+  - **Gradle.** `app/build.gradle.kts` reads the environment variables `GAME2048_RELEASE_KEYSTORE` (a keystore path) and `GAME2048_RELEASE_STORE_PASSWORD` through `providers.environmentVariable`. When the first is set it creates `signingConfigs.release` and a separate statement after the release build type's unchanged `signingConfig = signingConfigs.getByName("ciSideload")` line switches release to it; a set path without a password fails the build. Nothing else sets them, so CI, local builds, debug and `scripts/verify.sh` keep `ciSideload` exactly as before (D-131), and the F-Droid recipe's `sed` of that line still leaves an unsigned release (L10N_STORE_LEGAL.md §2.7 item 2).
+  - **release.yml.** The job runs in the environment `release`. A step before the build fails unless both secrets are non-empty and `signing/release.sha256` exists: a release is never signed with the public CI key. After the unchanged `./scripts/verify.sh`, a step decodes the keystore into `$RUNNER_TEMP` (umask 077), copies the gated `app-release.apk` aside, runs `./gradlew --no-configuration-cache --no-build-cache :app:assembleRelease` with the two variables (only packaging reruns; no cache stores the password or the signed output), and runs `scripts/check-release-apk.sh <gated> <signed>`. An `if: always()` step deletes the keystore. The notes name the signer digest from `signing/release.sha256` as the private release key and say that an install of 1.0.0 or of a CI build must be uninstalled first.
+  - **Gate.** `scripts/check-release-apk.sh` (new; release.yml only, not part of `verify.sh`) fails unless `signing/release.sha256` is 64 lowercase hex digits and differs from `signing/ci-sideload.sha256`, `apksigner verify --print-certs` passes with that digest as the only signer, the APK is `com.clayboicardi.game2048`, neither debuggable nor test-only, passes `zipalign -c -P 16`, and its zip entries equal the gated APK's in name, order and bytes. So the published APK is the gated build with only its signature changed. `check-apk.sh` is unchanged and still pins both gated APKs to the CI key.
+  - **Players.** 1.0.0 stays as published, signed with the CI key. Android refuses a release-key APK over a CI-key install (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`) and the reverse, so a 1.0.0 or CI install is uninstalled once, which deletes its data unless Android backup restores it (D-048). README and L10N_STORE_LEGAL.md §5 say so.
+  - **Unchanged.** No store upload and no AAB (D-133, D-257). The CI key keeps signing debug, the CI release artifact and every `verify.sh` build, and is never registered, shipped in a release after 1.0.0, or used for any distribution (L10N_STORE_LEGAL.md §5.6). Registration with Android developer verification, if wanted, uses the release key and is the owner's step.
+- **Evidence:** with a throwaway key made by the `keytool` commands of `signing/README.md` (outside the repository, never committed) and its digest as a temporary `signing/release.sha256`: the plain `assembleRelease` signs with the CI key (V2 signer digest = `signing/ci-sideload.sha256`); the second `./gradlew --no-configuration-cache --no-build-cache :app:assembleRelease` with the two variables executed 4 of 54 tasks (packaging only; R8 up to date), and `check-release-apk.sh <gated> <signed>` passed. It failed, as intended, on the gated APK in place of the signed one (CI signer), on a copy with one entry (`res/0K.xml`) changed, zip-aligned and re-signed with the release key (`differs: res/0K.xml`), with `signing/release.sha256` holding the CI digest, and with `signing/release.sha256` missing. `GAME2048_RELEASE_KEYSTORE` without `GAME2048_RELEASE_STORE_PASSWORD` fails configuration. The digest piped from `keytool -exportcert` with the password typed at its prompt equals the one with `-storepass` (the prompt goes to stderr). `release.yml` parses with PyYAML; actionlint was not available in the sandbox.
+- **Rationale:** the owner's request of 2026-11-13. A key with a public password gives no authenticity: anyone can publish an update that Android accepts over a release install (L10N_STORE_LEGAL.md §5.3). Distribution outside Google Play (GitHub Releases, Obtainium, IzzyOnDroid, which pins the developer's certificate) needs a key only the owner holds. Signing in a second packaging pass after the unchanged gate keeps `ci.yml` and `release.yml` running the same `verify.sh`, and the byte-for-byte entry comparison proves the published APK is the gated one.
+- **Rejected:**
+  - key rotation (APK Signature Scheme v3 lineage) from the CI key: on API 24–27, and below the v3.1 rotation minimum, the APK would still be verified with the public key, so the public key would keep acting as a distribution identity, and anyone holding it can sign a lineage of their own;
+  - passing the release key into `verify.sh` and teaching `check-apk.sh` a second digest (the release gate would differ from CI's);
+  - re-signing the gated APK with `apksigner` outside Gradle (the owner asked for the Gradle signing config; one signing path for every build);
+  - repository-level secrets (readable by a workflow on any branch with write access);
+  - falling back to the CI key when the secrets are missing.
+- **Source:** [USER] owner request of 2026-11-13, relayed by the orchestrator · [ORCH] O17 (D-173 change control). D-131 and D-133 are [USER] U5; the owner changes their own decision.
 
 ---
 

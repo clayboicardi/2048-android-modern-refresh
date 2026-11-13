@@ -6,3 +6,8 @@ local.properties
 *.iml
 captures/
 .DS_Store
+# Private signing keys are never committed (D-272); the public CI key is the one exception.
+*.p12
+*.jks
+*.keystore
+!/signing/ci-sideload.p12
