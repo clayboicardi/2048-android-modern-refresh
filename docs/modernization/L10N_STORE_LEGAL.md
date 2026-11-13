@@ -1099,7 +1099,7 @@ No F-Droid submission is part of this overhaul (D-004 item 10). D-133 forbade ta
 
 Items for a later submission (not done now):
 1. A `v1.0.0` tag on the release commit: `release.yml` creates it with the GitHub Release (D-271), and the recipe's build entry can point at it.
-2. **Signing.** F-Droid signs with its own key, so its APK cannot update a CI sideload install, and the reverse is also true; users switch by uninstalling. The recipe strips the release signing line in `prebuild`, e.g. `sed -i '/signingConfig = signingConfigs.getByName("ciSideload")/d' app/build.gradle.kts`, which leaves debug untouched because the recipe builds release only. Reproducible builds with a developer signature would need the real key of §5.7, never the public sideload key.
+2. **Signing.** F-Droid signs with its own key, so its APK cannot update a CI sideload install, and the reverse is also true; users switch by uninstalling. The recipe strips the release signing line in `prebuild`, e.g. `sed -i '/signingConfig = signingConfigs.getByName("ciSideload")/d' app/build.gradle.kts`, which leaves debug untouched because the recipe builds release only. The release-key override of D-272 is a separate statement that only `GAME2048_RELEASE_KEYSTORE` enables, so this `sed` still leaves the release unsigned. Reproducible builds with a developer signature would use the release key of §5.7 (`signing/release.sha256`), never the public sideload key.
 3. `signing/ci-sideload.p12` is a committed binary. If `fdroid scanner` flags it, the recipe lists it under `scandelete`.
 4. The listing shows androidx.core's signature permission under "Permissions"; the "no runtime permissions" wording (§4.8) stays accurate.
 
@@ -1890,7 +1890,7 @@ These sentences match the D-148 allowlists and are true for both APKs.
 2. **Features:** a short list (sizes, unlimited undo, themes, accessibility, 21 languages, offline).
 3. **A new app:** "This is a new app with a new package name (`com.clayboicardi.game2048`); the old app can stay installed side by side; scores do not carry over." (D-005)
 4. **Privacy and permissions:** a link to [PRIVACY.md](PRIVACY.md), the §4.8 paragraph verbatim, and the exported-components line.
-5. **Releases** (D-271): download `2048-<version>.apk` from GitHub Releases, with the APK's SHA-256 and the signer digest in the release notes; releases and CI release builds share the sideload key and install over each other; a 30000 CI build from before 1.0.0 is uninstalled once (§5.4, §5.5).
+5. **Releases** (D-271, D-272): download `2048-<version>.apk` from GitHub Releases, with the APK's SHA-256 and the signer digest in the release notes; releases after 1.0.0 are signed with the private release key (`signing/release.sha256`) and install over each other; 1.0.0 and CI builds carry the CI key, and an install of them is uninstalled once before a later release; a 30000 CI build from before 1.0.0 is uninstalled once (§5.4, §5.5).
 6. **Install a CI build:** the steps of §5.4 in short form, and the sentence "CI builds are signed with a key whose password is public (see `signing/README.md`); install them only from this repository's Actions runs."
 7. **Build from source:** JDK 21; Android SDK with `platforms;android-37.0` and `build-tools;37.0.0`; `./scripts/verify.sh` (the same gate as CI); `./gradlew :app:assembleDebug`; recording goldens; store graphics (`ARCHITECTURE.md` §2.11).
 8. **Saved games:** "The game is saved after every move. If Android stops the app while a save is being written, at most that one change is lost." (D-043)
@@ -1914,13 +1914,13 @@ The README never contains `com.uberspot.a2048` store links, "WebView" or "port".
 
 ## 5. Signing and distribution
 
-### 5.1 Policy (U5, D-131, D-133, D-271)
+### 5.1 Policy (U5, D-131, D-133, D-271, D-272)
 
-- One key, `signing/ci-sideload.p12`, signs **both** the debug and the release build types. The key is committed on purpose, and its password is public.
+- One key, `signing/ci-sideload.p12`, signs **both** the debug and the release build types in every build except release.yml's release-key pass (D-272). The key is committed on purpose, and its password is public.
 - Purpose: every CI-built APK installs over the previous CI build of the same variant, keeping the player's data.
 - It is **never** used for Google Play, F-Droid or any other store, and never registered with Android developer verification (§5.6).
 - There was no release workflow, no tag, no GitHub Release and no store upload in this overhaul (D-133). Its deliverables are the CI artifacts: debug APK, release APK and `mapping.txt` (D-151).
-- After it, `.github/workflows/release.yml`, dispatched by hand on `master`, publishes a GitHub Release for each version, tagged `v<version>`, with the release APK `2048-<version>.apk` signed by this same key (D-271; `QUALITY.md` §5.11). There is still no store upload.
+- After it, `.github/workflows/release.yml`, dispatched by hand on `master`, publishes a GitHub Release for each version, tagged `v<version>`, with the release APK `2048-<version>.apk` (D-271; `QUALITY.md` §5.11). 1.0.0 was signed by this key; every later release is signed by the owner's private release key (§5.7, D-272), and release.yml fails rather than fall back to this key. There is still no store upload.
 
 ### 5.2 Key material (M0)
 
@@ -1950,7 +1950,7 @@ If GitHub push protection rejects the keystore, D-172 condition 5 applies: stop 
 - **Integrity across CI builds:** Android installs an update only if its signer matches, so a CI APK always replaces a CI APK, and the installed data stays.
 - **No authenticity:** anyone can build an APK with package `com.clayboicardi.game2048` signed by this key. Android would accept it as an update and give it the app's private files (game state, records and settings, nothing else). This is why README says to install CI builds only from this repository's Actions runs.
 - **Low-value data.** The app holds no secrets, accounts or personal data (D-123), so a malicious same-key update could read only scores.
-- A store build, signed with a different key, can never update a CI install (and vice versa). Switching channels means uninstalling, which deletes local data unless Android backup restores it (D-048).
+- A release-key build (every GitHub Release after 1.0.0, D-272) or a store build, signed with a different key, can never update a CI-key install, 1.0.0 included (and vice versa). Switching channels means uninstalling, which deletes local data unless Android backup restores it (D-048).
 
 ### 5.4 Installing CI APKs
 
@@ -1964,14 +1964,16 @@ If GitHub push protection rejects the keystore, D-172 condition 5 applies: stop 
    - computer: `adb install -r apk/release/app-release.apk`;
    - device: copy the APK, open it in a file manager, and allow "Install unknown apps" for that file manager when Android asks. Play Protect may show a scan prompt for an app from an unknown developer; choosing to install anyway is the user's decision.
 
-**From a GitHub Release (D-271).** Each version's release on `https://github.com/clayboicardi/2048-android-modern-refresh/releases` carries `2048-<version>.apk`: the release build of the tagged commit, passed by `scripts/verify.sh` and signed with the same key as the CI artifacts. It needs no account and does not expire. The release notes give the APK's SHA-256 and the signer certificate digest; check them with `sha256sum` and step 3, then install as in step 4.
+**From a GitHub Release (D-271, D-272).** Each version's release on `https://github.com/clayboicardi/2048-android-modern-refresh/releases` carries `2048-<version>.apk`: the release build of the tagged commit, passed by `scripts/verify.sh`. 1.0.0 is signed with the CI key; every later release with the private release key, whose digest is `signing/release.sha256`. It needs no account and does not expire. The release notes give the APK's SHA-256 and the signer certificate digest; check them with `sha256sum` and step 3, then install as in step 4.
 
 ### 5.5 Update in place
 
 | From → to | Result |
 |---|---|
 | CI release → newer CI release (same versionCode, 10000 for 1.0.0) | Updates in place. Android accepts an equal versionCode; only a lower one is a downgrade |
-| GitHub Release APK ↔ CI release APK | Same package and key: each updates the other at an equal or higher versionCode (D-271) |
+| GitHub Release 1.0.0 ↔ CI release APK | Same package and key: each updates the other at an equal or higher versionCode (D-271) |
+| GitHub Release after 1.0.0 → a later one | Same release key: updates in place (D-272) |
+| 1.0.0 or CI build ↔ GitHub Release after 1.0.0 | Signature mismatch (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`): uninstall first (D-272) |
 | A 30000 CI build of the execution PR → 1.0.0 (10000) | Refused as a downgrade: uninstall the 30000 build once (D-271) |
 | CI debug → newer CI debug | Updates in place (`.debug` package) |
 | CI release ↔ CI debug | Independent apps; both can be installed |
@@ -1990,12 +1992,12 @@ Status on 2026-10-28 (§0.3 item 13):
 
 Consequences:
 - §5.4 works today everywhere. `adb install` remains the path that is guaranteed to keep working.
-- **Never register `com.clayboicardi.game2048` together with the public sideload key.** Registration binds a package and signing key to a verified identity, and with a public key anyone could sign malware that passes that check. Registration, if wanted, belongs with the real key of §5.7.
+- **Never register `com.clayboicardi.game2048` together with the public sideload key.** Registration binds a package and signing key to a verified identity, and with a public key anyone could sign malware that passes that check. Registration, if wanted, belongs with the release key of §5.7, and is the owner's step.
 - When the global rollout covers sideloading, the README's install section gains a note about `adb` or the advanced flow. That is a docs change, not a signing change.
 
-### 5.7 When real signing secrets are added (future; needs D-173 entries)
+### 5.7 Release key (D-272)
 
-None of this is part of the execution PR (U5, D-133). When the owner adds secrets, a follow-up PR:
+D-272 implements this for GitHub Releases; `signing/README.md` has the commands and the secret names (`GAME2048_RELEASE_KEYSTORE_BASE64`, `GAME2048_RELEASE_STORE_PASSWORD`, in the environment `release`), and `QUALITY.md` §5.11 the workflow steps. Where D-272 differs from the plan below, D-272 wins: the key's alias is fixed (`game2048-release`) and PKCS12 has one password, so there are two secrets, not four; release.yml signs in a second `assembleRelease` after the unchanged gate; `scripts/check-release-apk.sh`, not `check-apk.sh`, checks the release-key APK against `signing/release.sha256` and against the gated APK; release.yml fails without the secrets. Items 5 and 6 below remain the owner's. The original plan, not part of the execution PR (U5, D-133):
 1. Adds an upload/release key held only in GitHub secrets, for example `GAME2048_RELEASE_KEYSTORE_BASE64`, `GAME2048_RELEASE_STORE_PASSWORD`, `GAME2048_RELEASE_KEY_ALIAS` and `GAME2048_RELEASE_KEY_PASSWORD`. It is never committed.
 2. Adds `signingConfigs.create("release")`, read from Gradle properties or environment variables. It is used only by a new release-only path, a signed release APK (no AAB: there is no Google Play listing, D-257). Debug and the CI `assembleRelease` artifact keep `ciSideload`, so sideload users keep updating in place.
 3. Changes `check-apk.sh` step 6 for the store artifact only: its digest is checked against a new committed public certificate digest, while the CI APKs keep checking `signing/ci-sideload.sha256`.
@@ -2008,6 +2010,7 @@ None of this is part of the execution PR (U5, D-133). When the owner adds secret
 | AC | Given | When | Then | Test or gate |
 |---|---|---|---|---|
 | — | Both APKs | `apksigner verify --print-certs` | Digest = `signing/ci-sideload.sha256` | F30-AC2 (D-148 step 6) |
+| — | release.yml's release-key APK | `check-release-apk.sh` | Only signer = `signing/release.sha256`; entries equal the gated APK's | D-272 (release.yml only) |
 | — | Both APKs | `aapt2 dump badging` | Release `com.clayboicardi.game2048` / "2048"; debug `…game2048.debug` / "2048 Debug" | F30-AC1 |
 | L-AC14 | `signing/README.md` | Read in M0 | Contains the 5 items of §5.2 in order | Inspection, M0 commit body |
 
